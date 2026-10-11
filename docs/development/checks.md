@@ -18,3 +18,16 @@ script on pushes and pull requests. It uses the Go 1.27.1 toolchain and only
 read access to repository contents. A successful local run does not establish
 that the remote workflow has completed; check the workflow result for the
 commit under review.
+
+## Run focused benchmarks
+
+To reproduce the local validation, reusable-match, and compilation benchmark
+samples, run:
+
+```sh
+go test -run '^$' -bench . -benchmem ./engine ./backends/local
+```
+
+These measurements depend on the Go version, hardware, schema, and query shape.
+Treat short benchmark runs as comparisons for the measured cases, not as
+performance guarantees or evidence for changing default limits.
