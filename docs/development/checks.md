@@ -1,0 +1,20 @@
+# Development Checks
+
+Run the repository's local verification entry point from the repository root:
+
+```sh
+sh hack/check.sh
+```
+
+The script requires Go 1.27.1. It runs all Go tests with the race detector and
+`go vet`, regenerates the PEGO parser and checks that the generated parser has
+no diff, runs every `examples/*/main.go` program, tests and vets the site
+module, builds the documentation site (including its local-link checks), and
+finishes with `git diff --check`. Parser generation pins PEGO to a revision;
+`PEGO_BIN` can be set to a local compatible PEGO executable.
+
+The GitHub Actions workflow in `.github/workflows/check.yml` runs the same
+script on pushes and pull requests. It uses the Go 1.27.1 toolchain and only
+read access to repository contents. A successful local run does not establish
+that the remote workflow has completed; check the workflow result for the
+commit under review.

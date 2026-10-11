@@ -7,4 +7,5 @@ guides intended for applications using HFF.
 - [Parser generation and maintenance](parser.md)
 - [Inspect the internal syntax parser](parsing.md)
 - [Build and maintain the documentation site](site.md)
+- [Run development checks](checks.md)
 - [Commit message format](../commit-messages.md)
