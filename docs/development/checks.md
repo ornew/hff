@@ -45,3 +45,23 @@ Run the target for 30 seconds with two workers:
 ```sh
 go test ./backends/local -run '^$' -fuzz '^FuzzLocalMatch$' -fuzztime=30s -parallel=2
 ```
+
+## Run shared semantic conformance cases
+
+The shared fixture in [`cases.go`](https://github.com/ornew/hff/blob/main/internal/conformance/cases.go)
+currently contains 43 cases. The parser, compiler, and local evaluator use the
+same sources through [`shared_conformance_test.go`](https://github.com/ornew/hff/blob/main/internal/syntax/shared_conformance_test.go),
+[`shared_conformance_test.go`](https://github.com/ornew/hff/blob/main/engine/shared_conformance_test.go),
+and [`shared_conformance_test.go`](https://github.com/ornew/hff/blob/main/backends/local/shared_conformance_test.go).
+These tests assert observable parse/compile errors and match results rather
+than internal IR structure.
+
+Run all three suites with the race detector:
+
+```sh
+go test -race ./internal/syntax ./engine ./backends/local -run '^TestShared'
+```
+
+The fixture covers the current parser/compiler/local contract. SQL parity,
+JSON conversion methods, extension evaluators, and a comprehensive runtime
+budget matrix remain outside its coverage.
