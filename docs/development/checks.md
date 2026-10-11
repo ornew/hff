@@ -73,6 +73,17 @@ than a benchmark; see the [finite-limit review](finite-limits.md#verify-the-comp
 go test -race ./engine -run '^TestDefaultCompileBudgetForRepeatedStructuralChecks$'
 ```
 
+To measure a deliberately repeated structural-check workload close to the
+default compile-work ceiling, run:
+
+```sh
+go test -benchtime=3x -count=3 -run '^$' -bench '^BenchmarkDefaultCompileWorkCeiling$' -benchmem ./engine
+```
+
+The finite-limit review records the schema shape, calibrated step boundary,
+sample costs, and remaining evidence gaps. This is one controlled workload,
+not a service performance guarantee.
+
 The collection benchmark in [`collections_bench_test.go`](https://github.com/ornew/hff/blob/main/backends/local/collections_bench_test.go)
 measures `MatchInput` on one-, 100-, and 1,000-element inputs for `any` first,
 last, and miss cases, `all`, `map`, `fold`, `sort`, and nested search. Input

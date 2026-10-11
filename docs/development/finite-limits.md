@@ -113,13 +113,42 @@ byte ceiling and the syntax is shallow, so this isolates semantic compile
 work from query-byte and syntax-depth limits. It is a correctness boundary
 check, not a timing measurement or evidence for tuning the default.
 
+## Measure a compile workload at the default step ceiling
+
+Run the benchmark with Go 1.27.1 and allocation reporting:
+
+```sh
+go test -benchtime=3x -count=3 -run '^$' -bench '^BenchmarkDefaultCompileWorkCeiling$' -benchmem ./engine
+```
+
+The workload repeats `x=y` 1,000 times in a 3,999-byte, shallow query. It
+compares schemas with 496 and 497 integer fields in each operand and disables
+`ListEquality`, so compilation must perform the structural permission checks.
+The required compile-work boundary is calibrated outside the timed loop with
+the public limit: the 496-field case completes with 998,002 required steps
+under the default 1,000,000; the 497-field case requires 1,000,002 and returns
+a typed limit error.
+
+One baseline on Go 1.27.1, Darwin arm64, Apple M3 Max, with three iterations per
+case and three benchmark runs produced these medians:
+
+| Case | Median time | Allocated bytes | Allocations |
+|:--|--:|--:|--:|
+| 496 fields, completed | 40.477 ms/op | 88,881,802 B/op | 29,134 allocs/op |
+| 497 fields, limit error | 40.412 ms/op | 88,872,080 B/op | 29,130 allocs/op |
+
+The high `B/op` is cumulative allocation for this deliberately repeated
+structural-check workload, not peak or resident memory. This one schema/query
+shape demonstrates behavior near the default compile-work ceiling; it does
+not establish that the default suits every service or query workload.
+
 ## Remaining evidence gaps
 
 Boundary correctness and selected depth-64 workload costs are now measured.
-The compile-step test establishes completion/rejection behavior for the
-selected repeated structural-check workload, not the cost or behavior of
-every query near the default `MaxCompileSteps`; existing compile benchmarks
-cover representative query shapes and sizes, not a one-million-step boundary.
+The compile-step benchmark measures one repeated structural-check workload
+near the default `MaxCompileSteps`; existing compile benchmarks cover
+representative query shapes and sizes, not a broad range of schemas and
+service workloads near that ceiling.
 Runtime benchmarks include one successful
 nested-search shape and one near-limit generated collection, plus explicit
 abort cases; they do not cover a broader set of query shapes or service
