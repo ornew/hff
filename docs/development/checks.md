@@ -32,6 +32,19 @@ These measurements depend on the Go version, hardware, schema, and query shape.
 Treat short benchmark runs as comparisons for the measured cases, not as
 performance guarantees or evidence for changing default limits.
 
+The collection benchmark in [`collections_bench_test.go`](https://github.com/ornew/hff/blob/main/backends/local/collections_bench_test.go)
+measures `MatchInput` on one-, 100-, and 1,000-element inputs for `any` first,
+last, and miss cases, `all`, `map`, `fold`, `sort`, and nested search. Input
+validation, compilation, and building are outside the measured loop. At 1,000
+elements, nested search verifies that the finite default `MaxSteps` budget
+returns a limit error instead of disabling the limit.
+
+Run this benchmark alone with allocation reporting:
+
+```sh
+go test ./backends/local -run '^$' -bench '^BenchmarkCollections$' -benchmem
+```
+
 ## Fuzz local matching
 
 The local matcher fuzz target compiles a query, builds a filter, and generates
