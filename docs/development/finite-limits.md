@@ -42,12 +42,29 @@ them with representative service workloads on the target Go version and
 hardware before using them to justify a default. A benchmark result is not a
 wall-clock deadline or a performance promise.
 
+## Verify default depth boundaries
+
+Run the engine boundary tests with the race detector:
+
+```sh
+go test -race ./engine -run '^TestDefaultDepthBoundaries$'
+```
+
+The tests accept and reject the exact configured boundaries for syntax depth,
+input depth, callback depth, and JSON parse/serialization depth, and assert the
+typed limit errors. They also verify that a deeply nested callback expression
+can hit the default syntax-depth limit before its separate callback-depth
+limit. The callback-depth cases raise syntax depth to isolate the callback
+limit. JSON serialization uses an input-depth allowance of 65 so the JSON
+depth limit is the one exercised. These are correctness checks, not latency or
+throughput measurements.
+
 ## Remaining evidence gaps
 
-The boundary benchmark does not yet exercise adversarial depth at the default
-`MaxInputDepth`, `MaxSyntaxDepth`, `MaxCallbackDepth`, or `MaxJSONDepth`. It also
-does not establish behavior near the default `MaxCompileSteps`; existing
-compile benchmarks cover representative query shapes and sizes, not a
-one-million-step boundary. The runtime abort cases do not measure successful
-work close to the `MaxSteps` or `MaxGeneratedValues` ceilings. Broader service
-workloads and a reasoned review of those limit values remain necessary.
+Depth-limit correctness is covered at the defaults, but those boundary tests
+do not measure performance. The evidence does not establish behavior near the
+default `MaxCompileSteps`; existing compile benchmarks cover representative
+query shapes and sizes, not a one-million-step boundary. Runtime abort cases
+also do not measure successful work close to the `MaxSteps` or
+`MaxGeneratedValues` ceilings. Broader service workloads and a reasoned review
+of those limit values remain necessary.
