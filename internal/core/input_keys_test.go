@@ -21,7 +21,7 @@ func TestInputKeysMatchLexicalOrder(t *testing.T) {
 			want = append(want, key)
 		}
 		sort.Strings(want)
-		got, err := objectKeys(context.Background(), m)
+		got, err := OrderedObjectKeys(context.Background(), m)
 		if err != nil || !reflect.DeepEqual(got, want) {
 			t.Fatalf("count=%d: order changed: %v %v", count, got, err)
 		}
@@ -46,7 +46,7 @@ func TestInputKeysCancellation(t *testing.T) {
 			// is triggered within the merge phase.
 			ctx.at = len(m) + 4
 			var keys []string
-			keys, err = objectKeys(ctx, m)
+			keys, err = OrderedObjectKeys(ctx, m)
 			if keys != nil {
 				t.Fatal("canceled sort exposed partially ordered keys")
 			}
@@ -76,7 +76,7 @@ func FuzzInputKeyOrder(f *testing.F) {
 			want = append(want, key)
 		}
 		sort.Strings(want)
-		got, err := objectKeys(context.Background(), m)
+		got, err := OrderedObjectKeys(context.Background(), m)
 		if err != nil || !reflect.DeepEqual(got, want) {
 			t.Fatalf("order differs from byte-lexical order: %v", err)
 		}

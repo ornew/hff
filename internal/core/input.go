@@ -81,7 +81,10 @@ func appendIndex(path location, index int) location {
 	return append(path, segment{index: index, indexed: true})
 }
 
-func objectKeys(ctx context.Context, m map[string]Value) ([]string, error) {
+// OrderedObjectKeys returns byte-lexically sorted keys and checks cancellation
+// during collection, merge passes, and long common-prefix comparisons.
+// It never exposes a partially sorted list on error.
+func OrderedObjectKeys(ctx context.Context, m map[string]Value) ([]string, error) {
 	if err := cancelError(ctx); err != nil {
 		return nil, err
 	}
@@ -196,7 +199,7 @@ func validateValue(ctx context.Context, v Value, path location, depth int, count
 			return locationError(LimitError, path, "input value count limit exceeded")
 		}
 		m := v.data.(map[string]Value)
-		keys, err := objectKeys(ctx, m)
+		keys, err := OrderedObjectKeys(ctx, m)
 		if err != nil {
 			return err
 		}
@@ -286,7 +289,7 @@ func checkValueType(ctx context.Context, v Value, t Type, path location) error {
 		}
 	case MapType:
 		m := v.data.(map[string]Value)
-		keys, err := objectKeys(ctx, m)
+		keys, err := OrderedObjectKeys(ctx, m)
 		if err != nil {
 			return err
 		}
@@ -311,7 +314,7 @@ func checkValueType(ctx context.Context, v Value, t Type, path location) error {
 				return err
 			}
 		}
-		keys, err := objectKeys(ctx, m)
+		keys, err := OrderedObjectKeys(ctx, m)
 		if err != nil {
 			return err
 		}

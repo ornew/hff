@@ -3,7 +3,6 @@ package local
 import (
 	"github.com/ornew/hff/internal/core"
 	"math/bits"
-	"sort"
 )
 
 func (e *evaluation) matchesType(v core.Value, t core.Type) (bool, error) {
@@ -103,15 +102,12 @@ func (e *evaluation) objectKeys(obj map[string]core.Value) ([]string, error) {
 			}
 		}
 	}
-	keys := make([]string, 0, n)
 	for k := range obj {
 		if err := e.charge(len(k)); err != nil {
 			return nil, err
 		}
-		keys = append(keys, k)
 	}
-	sort.Strings(keys)
-	return keys, nil
+	return core.OrderedObjectKeys(e.ctx, obj)
 }
 
 var primitiveKinds = [...]core.Kind{

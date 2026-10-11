@@ -145,7 +145,10 @@ host-supplied cause preserved; validation never returns a completed partial
 input. Map keys are still visited in byte-lexical order, matching Go's
 `sort.Strings`; the cancellable ordering checks context while collecting keys,
 merging runs, and comparing long common prefixes. Cancellation returns no
-partially ordered key list.
+partially ordered key list. Local evaluation uses the same ordering for object
+key enumeration such as `keys()`, structural type checks, and JSON object
+output. Its existing key-work budget charge is unchanged; cancellation during
+ordering returns no partial key list or encoded output.
 
 Local JSON parsing also checks context while scanning whitespace, quoted
 strings and object keys, and unquoted tokens, with context checks at
