@@ -52,6 +52,16 @@ These measurements depend on the Go version, hardware, schema, and query shape.
 Treat short benchmark runs as comparisons for the measured cases, not as
 performance guarantees or evidence for changing default limits.
 
+The parser benchmark covers empty and representative service queries, type
+guards, nested callbacks, Unicode, conjunctions of 10/100/1,000 terms, and
+parenthesis depths 4/16. It measures `ParseQuery`, including source preflight
+and tree checks, but excludes schema inference, capability checks, and backend
+construction.
+
+```sh
+go test ./internal/syntax -run '^$' -bench '^BenchmarkParseQuery$' -benchmem
+```
+
 The collection benchmark in [`collections_bench_test.go`](https://github.com/ornew/hff/blob/main/backends/local/collections_bench_test.go)
 measures `MatchInput` on one-, 100-, and 1,000-element inputs for `any` first,
 last, and miss cases, `all`, `map`, `fold`, `sort`, and nested search. Input
