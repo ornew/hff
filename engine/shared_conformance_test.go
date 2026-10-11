@@ -13,7 +13,7 @@ import (
 func TestSharedCompileConformance(t *testing.T) {
 	for _, tc := range conformance.Cases() {
 		t.Run(tc.Name, func(t *testing.T) {
-			e, err := engine.New(engine.WithSchema(tc.Schema), engine.WithCapabilities(tc.Capabilities))
+			e, err := engine.New(engine.WithSchema(tc.Schema), engine.WithCapabilities(tc.Capabilities), engine.WithLimits(tc.Limits))
 			if err != nil {
 				t.Fatal(err)
 			}

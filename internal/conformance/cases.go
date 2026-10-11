@@ -20,6 +20,7 @@ type Case struct {
 	Source       string
 	Schema       hff.Type
 	Capabilities capabilities.Set
+	Limits       hff.Limits
 	ParseError   hff.ErrorCode
 	CompileError hff.ErrorCode
 	Records      []Record
@@ -41,6 +42,7 @@ func record(name string, fields map[string]hff.Value, match bool) Record {
 func Cases() []Case {
 	common := schema.Struct(schema.Int("age"), schema.String("name"), schema.Bool("flag"),
 		schema.Any("x"), schema.Any("y"), schema.List("items", schema.AnyType), schema.Map("labels", schema.AnyType))
+	budgetedItems := hff.List(hff.Int(1), hff.Int(2), hff.Int(3), hff.Int(4), hff.Int(5), hff.Int(6), hff.Int(7), hff.Int(8))
 	cases := []Case{
 		{Name: "json_preserves_float", Source: `x:tojson:fromjson:[float]=1`, Records: []Record{
 			record("float", map[string]hff.Value{"x": hff.Float(1)}, true),
@@ -176,6 +178,49 @@ func Cases() []Case {
 			record("negative", map[string]hff.Value{"name": hff.String("-1ns")}, true),
 		}},
 		{Name: "compact_operator_required", Source: `age > 10`, ParseError: hff.SyntaxError, CompileError: hff.SyntaxError},
+		{Name: "map_preserves_null_and_order", Source: `items:map(v=>v+1)=[2,null]`, Records: []Record{
+			record("matches", map[string]hff.Value{"items": hff.List(hff.Int(1), hff.Null())}, true),
+			record("reversed", map[string]hff.Value{"items": hff.List(hff.Null(), hff.Int(1))}, false),
+			record("empty", nil, false),
+		}},
+		{Name: "flatmap_preserves_order", Source: `items:flatmap(v=>[v,v])=[1,1,2,2]`, Records: []Record{
+			record("matches", map[string]hff.Value{"items": hff.List(hff.Int(1), hff.Int(2))}, true),
+			record("reversed", map[string]hff.Value{"items": hff.List(hff.Int(2), hff.Int(1))}, false),
+			record("empty", nil, false),
+		}},
+		{Name: "sort_mixed_numbers_and_reject_null", Source: `items:sort=[1,2,3]`, Records: []Record{
+			record("mixed_numbers", map[string]hff.Value{"items": hff.List(hff.Int(3), hff.Float(1), hff.Int(2))}, true),
+			record("null_element", map[string]hff.Value{"items": hff.List(hff.Int(3), hff.Null(), hff.Int(1))}, false),
+			record("empty", nil, false),
+		}},
+		{Name: "concat_preserves_order", Source: `items:concat([3])=[1,2,3]`, Records: []Record{
+			record("matches", map[string]hff.Value{"items": hff.List(hff.Int(1), hff.Int(2))}, true),
+			record("reversed", map[string]hff.Value{"items": hff.List(hff.Int(2), hff.Int(1))}, false),
+			record("empty", nil, false),
+		}},
+		{Name: "object_lookup_distinguishes_missing", Source: `labels:has("a") labels:get("a")=null`, Records: []Record{
+			record("present_null", map[string]hff.Value{"labels": hff.Object(map[string]hff.Value{"a": hff.Null()})}, true),
+			record("missing", nil, false),
+			record("present_zero", map[string]hff.Value{"labels": hff.Object(map[string]hff.Value{"a": hff.Int(0)})}, false),
+		}},
+		{Name: "object_dynamic_key_lookup", Source: `labels[name]=1`, Records: []Record{
+			record("matches", map[string]hff.Value{"name": hff.String("é"), "labels": hff.Object(map[string]hff.Value{"é": hff.Int(1)})}, true),
+			record("not_normalized", map[string]hff.Value{"name": hff.String("e\u0301"), "labels": hff.Object(map[string]hff.Value{"é": hff.Int(1)})}, false),
+			record("missing", nil, false),
+		}},
+		{Name: "object_enumeration_key_order", Source: `labels:keys=["a","b"] labels:values=[1,null] labels:items=[["a",1],["b",null]]`, Records: []Record{
+			record("matches", map[string]hff.Value{"labels": hff.Object(map[string]hff.Value{"b": hff.Null(), "a": hff.Int(1)})}, true),
+			record("different_values", map[string]hff.Value{"labels": hff.Object(map[string]hff.Value{"a": hff.Null(), "b": hff.Int(1)})}, false),
+			record("empty", nil, false),
+		}},
+		{Name: "decisive_or_skips_budgeted_callback", Source: `flag | items:map(v=>v+1):size>0`, Limits: hff.Limits{MaxSteps: 16}, Records: []Record{
+			record("decisive", map[string]hff.Value{"flag": hff.Bool(true), "items": budgetedItems}, true),
+			{Name: "evaluated_branch_aborts", Value: record("", map[string]hff.Value{"items": budgetedItems}, false).Value, Error: hff.LimitError},
+		}},
+		{Name: "decisive_and_skips_budgeted_callback", Source: `flag items:map(v=>v+1):size>0`, Limits: hff.Limits{MaxSteps: 16}, Records: []Record{
+			record("decisive", map[string]hff.Value{"items": budgetedItems}, false),
+			{Name: "evaluated_branch_aborts", Value: record("", map[string]hff.Value{"flag": hff.Bool(true), "items": budgetedItems}, false).Value, Error: hff.LimitError},
+		}},
 		{Name: "comparisons_do_not_chain", Source: `age<10<20`, ParseError: hff.SyntaxError, CompileError: hff.SyntaxError},
 		{Name: "constant_left_comparison_rejected", Source: `10<age`, CompileError: hff.TypeError},
 		{Name: "known_type_rejects_method", Source: `age:contains("x")`, CompileError: hff.TypeError},

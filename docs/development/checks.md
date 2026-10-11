@@ -266,13 +266,33 @@ go test ./internal/core -run '^$' -fuzz '^FuzzInputKeyOrder$' -fuzztime=30s -par
 
 ## Run shared semantic conformance cases
 
-The shared fixture in [`cases.go`](https://github.com/ornew/hff/blob/main/internal/conformance/cases.go)
-currently contains 43 cases. The parser, compiler, and local evaluator use the
-same sources through [`shared_conformance_test.go`](https://github.com/ornew/hff/blob/main/internal/syntax/shared_conformance_test.go),
+The shared fixture is provided by [`Cases`](https://github.com/ornew/hff/blob/main/internal/conformance/cases.go)
+and companion [`CompositeCases`](https://github.com/ornew/hff/blob/main/internal/conformance/composites.go).
+It currently contains 56 base cases and five typed-composite cases.
+The parser, compiler, and local evaluator use the same sources through
+[`shared_conformance_test.go`](https://github.com/ornew/hff/blob/main/internal/syntax/shared_conformance_test.go),
 [`shared_conformance_test.go`](https://github.com/ornew/hff/blob/main/engine/shared_conformance_test.go),
 and [`shared_conformance_test.go`](https://github.com/ornew/hff/blob/main/backends/local/shared_conformance_test.go).
 These tests assert observable parse/compile errors and match results rather
 than internal IR structure.
+
+The current shared-fixture coverage maps to the contract this way:
+
+| Contract area | Representative fixture cases | Verification |
+|:--|:--|:--|
+| Numeric behavior | `exact_mixed_number_comparison`, `fractional_integer_division`, `overflow_is_null` | Shared parser/compiler/local suites; `TestPostgreSQLScalarParity` covers the wider PostgreSQL numeric matrix. |
+| Null, no-value, and missing values | `null_inequality_is_false`, `two_null_values_are_not_equal`, `type_guard_failure_is_not_null`, `guard_failure_is_not_null`, `structural_equality_ignores_key_order`, `typed_composite_null_identity` | Shared parser/compiler/local suites; typed-composite SQL parity below. |
+| Unicode and time conversions | `unicode_code_points`, `duration_compound_fraction`, `timestamp_utc_components`, `epoch_is_truthy`, `zero_duration_is_falsy` | Shared parser/compiler/local suites; named-zone profile behavior remains in local temporal tests. |
+| Predicates, callbacks, collections | `empty_filter`, `any_and_all_empty_lists`, `callback_predicate_guard`, `nested_callback_captures`, `fold_argument_order`, `contains_requires_all_arguments`, `unique_is_a_predicate`, `map_preserves_null_and_order`, `flatmap_preserves_order`, `sort_mixed_numbers_and_reject_null`, `concat_preserves_order` | Shared parser/compiler/local suites. |
+| Object access and enumeration | `object_lookup_distinguishes_missing`, `object_dynamic_key_lookup`, `object_enumeration_key_order` | Shared parser/compiler/local suites. |
+| Short-circuit and budgets | `decisive_or_skips_budgeted_callback`, `decisive_and_skips_budgeted_callback` | Shared compiler/local suites; confirms the evaluated branch hits `LimitError` when reached and no partial match is returned. |
+| Capability and input diagnostics | `disabled_structural_equality`, `disabled_callback_nesting`, `type_guard_limits_method_permissions`, `invalid_host_input_is_rejected` | Shared compile/local suites and SQL Build classification. |
+
+The shared cases now exercise `contains`, `unique`, `any`, `all`, `map`,
+`flatmap`, `foldl`, `foldr`, `sort`, `concat`, and object lookup/enumeration,
+along with decisive `AND`/`OR` budget short-circuiting. SQL explicitly
+classifies unsupported `Any`-based shapes instead of narrowing their schemas;
+the SQL execution-parity counts below remain limited to the supported cases.
 
 Run all three suites with the race detector:
 

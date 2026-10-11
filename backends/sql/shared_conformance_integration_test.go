@@ -48,7 +48,7 @@ func TestPostgreSQLSharedScalarConformance(t *testing.T) {
 				continue
 			}
 			seen[tc.Name] = true
-			e, err := engine.New(engine.WithSchema(tc.Schema), engine.WithCapabilities(tc.Capabilities))
+			e, err := engine.New(engine.WithSchema(tc.Schema), engine.WithCapabilities(tc.Capabilities), engine.WithLimits(tc.Limits))
 			if err != nil {
 				t.Fatal(err)
 			}

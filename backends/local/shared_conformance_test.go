@@ -18,7 +18,7 @@ func TestSharedLocalConformance(t *testing.T) {
 			continue // Common compilation verifies rejected language features.
 		}
 		t.Run(tc.Name, func(t *testing.T) {
-			e, err := engine.New(engine.WithSchema(tc.Schema), engine.WithCapabilities(tc.Capabilities))
+			e, err := engine.New(engine.WithSchema(tc.Schema), engine.WithCapabilities(tc.Capabilities), engine.WithLimits(tc.Limits))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -37,6 +37,9 @@ func TestSharedLocalConformance(t *testing.T) {
 						var detail *hff.Error
 						if !errors.As(err, &detail) || detail.Code != row.Error {
 							t.Fatalf("expected %s, got %v", row.Error, err)
+						}
+						if matched {
+							t.Fatal("failed evaluation returned a partial match")
 						}
 						return
 					}

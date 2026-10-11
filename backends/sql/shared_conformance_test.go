@@ -30,6 +30,9 @@ func TestSharedConformanceJSONBuildContracts(t *testing.T) {
 		"nested_callback_captures", "fold_argument_order", "regex_partial_match", "invalid_regex_does_not_match_negation",
 		"null_type_is_observable", "strict_base64", "duration_compound_fraction", "timestamp_utc_components", "epoch_is_truthy",
 		"zero_duration_is_falsy", "type_guard_limits_method_permissions",
+		"map_preserves_null_and_order", "flatmap_preserves_order", "sort_mixed_numbers_and_reject_null", "concat_preserves_order",
+		"object_lookup_distinguishes_missing", "object_dynamic_key_lookup", "object_enumeration_key_order", "decisive_or_skips_budgeted_callback",
+		"decisive_and_skips_budgeted_callback",
 	} {
 		rejected[name] = true
 	}
@@ -39,7 +42,7 @@ func TestSharedConformanceJSONBuildContracts(t *testing.T) {
 			for _, field := range tc.Schema.Fields() {
 				bindings = append(bindings, hffsql.BindJSON(hff.Path{field.Name}, hffsql.Column("records", field.Name), hffsql.JSON))
 			}
-			e, err := engine.New(engine.WithSchema(tc.Schema), engine.WithCapabilities(tc.Capabilities))
+			e, err := engine.New(engine.WithSchema(tc.Schema), engine.WithCapabilities(tc.Capabilities), engine.WithLimits(tc.Limits))
 			if err != nil {
 				t.Fatal(err)
 			}
