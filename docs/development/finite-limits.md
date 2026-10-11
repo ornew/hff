@@ -214,6 +214,30 @@ or resident memory. `MaxGeneratedValues` counts logical HFF values, not bytes
 or peak memory. This timing and allocation sample does not describe other
 queries or establish a universal limit-safety or latency guarantee.
 
+## Evidence and coverage matrix
+
+The table separates what each limit counts from the workloads checked so far.
+Benchmark figures above are single-host samples; they describe those inputs,
+not generally acceptable service latency or a reason to change a default.
+
+| Limit | Counting unit | Boundary evidence | Measured cost and remaining coverage |
+|:--|:--|:--|:--|
+| `MaxQueryBytes` (65,536) | UTF-8 source bytes | Exact byte boundary accepted and the next byte rejected. | Padded bare-predicate scan/reject is measured above. Dense conjunction parsing and compilation have separate size benchmarks; no representative query corpus. |
+| `MaxSyntaxDepth` (64) | Nested syntax constructs | Exact 64/65 accept/reject. | One depth-64 parse/compile shape measured; no broad grammar or large-query combination matrix. |
+| `MaxCallbackDepth` (64) | Lexically nested callbacks; root callback is depth 1 | Exact 64/65 tested with syntax depth raised to isolate this limit; normal syntax depth can reject first. | One depth-64 nested callback workload measured with syntax limit raised; no broad callback-body/schema workload. |
+| `MaxCompileSteps` (1,000,000) | Semantic compiler visits, including repeated inference and checking work | Repeated structural checks: 400 fields complete, 600 reject, and raising only this limit to 2,000,000 completes. Calibrated case: 998,002 steps complete; 1,000,002 reject. | One deliberately repeated structural-check workload has before/after timing and allocation measurements. Other compiler benchmarks cover common query shapes, not diverse service schemas near the ceiling. |
+| `MaxInputDepth` (64) | Host input root is depth 0; each nested value adds one | Exact depth boundary tested. | One depth-64 validation shape measured; no varied wide/deep record corpus. |
+| `MaxInputValues` (100,000) | Root, collection containers, entries, and nested values | 100,000 accepted and 100,001 rejected in correctness tests and benchmarks. | One flat `list[int]` admission workload measured. Record construction, retained memory, transport, and nested/wide service records are outside scope. |
+| `MaxJSONDepth` (64) | JSON root is depth 1; applies to decoding and serialization | Exact boundary tested for parsing and output. | One depth-64 `fromjson` and `tojson` shape measured; no broad JSON shape or size matrix. |
+| `MaxSteps` (1,000,000) | Local runtime work, including evaluated nodes, traversed data, key bytes, and declared-field checks | Selected completion and limit-error workloads exercise nested search and step exhaustion. | One 600-item nested search and one abort workload are measured. No representative mix of application queries or hot-path records near the ceiling. |
+| `MaxGeneratedValues` (100,000) | Generated HFF collection containers and entries; logical values, not bytes | 99,999 generated values complete; 100,001 reject. Flatmap also checks 99,996 complete versus 100,001 rejected. | One identity-map and one flatmap shape are measured. `B/op` is cumulative allocation, not peak memory; other collection patterns and retained output sizes are not covered. |
+
+These checks establish counter behavior for the named cases. They do not prove
+that defaults are safe for every service, constrain SQL execution, or predict
+database planning, transport, peak memory, or caller-specific latency. SQL
+backends reject explicit execution-budget requirements they cannot enforce;
+local runtime limits do not become database limits.
+
 ## Remaining evidence gaps
 
 Boundary correctness and selected depth-64 workload costs are now measured.
