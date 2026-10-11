@@ -10,7 +10,7 @@ The website's public URL is [hff.ornew.net](https://hff.ornew.net/).
 ## Netlify deployment
 
 The repository's [netlify.toml](https://github.com/ornew/hff/blob/main/netlify.toml) builds the site with
-`sh site/build.sh` and publishes `site/dist/`. It pins Go 1.24.2, compatible
+`sh site/build.sh` and publishes `site/dist/`. It pins Go 1.27.1, compatible
 with the generator's Go module. Browser scripts and styles are served locally;
 the configuration includes a Content Security Policy and response headers.
 
@@ -22,7 +22,7 @@ configure Netlify or verify a production deployment.
 
 ## Build and preview
 
-Use Go 1.24 or later, from the repository root:
+Use Go 1.27.1, from the repository root:
 
 ```sh
 sh site/build.sh
@@ -53,7 +53,7 @@ output directories.
 ## Rendering and link checks
 
 The site includes a README-derived landing page, top navigation, documentation
-sidebar grouped into Language, Design Records, and Development,
+sidebar grouped into Language, Guides, Design Records, and Development,
 heading links, adjacent-page links, and GitHub source links. Design Records and
 Development use collapsible groups. Small
 screens use a modal navigation drawer instead of a horizontally scrolling menu.

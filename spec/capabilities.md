@@ -13,7 +13,9 @@ different syntax.
 
 HFF aims to ship engines that services can use by supplying a schema and a
 capability selection. Backend support is extensible without introducing a
-service-specific grammar. The concrete integration APIs are not yet defined.
+service-specific grammar. The [Go API record](../docs/design/004-go-api.md) defines configuration, common
+compilation, and separate backend construction. The implemented configuration
+APIs are described in the [Go guides](../docs/guides/README.md).
 
 ## Compilation
 
@@ -22,8 +24,9 @@ The intended compilation flow is:
 1. Parse the entire query with the PEGO-generated typed Go parser.
 2. Resolve variables and fields against the supplied schema.
 3. Validate operator and method types and the field-related filter restriction.
-4. Check the enabled capabilities and the selected backend's support.
-5. Produce a local evaluation plan or a backend query.
+4. Check enabled capabilities and produce a backend-independent typed program.
+5. Build the selected backend artifact, checking its support without constructing
+   artifacts for other backends.
 
 These are responsibilities, not a mandated implementation pass order.
 Diagnostics should identify the relevant source expression and explain syntax,

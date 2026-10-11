@@ -1,0 +1,32 @@
+package hff
+
+import "fmt"
+
+// ErrorCode identifies a host-level failure, never a completed false match.
+type ErrorCode string
+
+const (
+	ConfigurationError ErrorCode = "configuration"
+	InputError         ErrorCode = "input"
+	LimitError         ErrorCode = "limit"
+	CancelledError     ErrorCode = "cancelled"
+)
+
+// Path is a sequence of literal names, not a dot-separated identifier.
+type Path []string
+
+// Error supports errors.As; Cause supports errors.Is for context cancellation.
+type Error struct {
+	Code    ErrorCode
+	Path    Path
+	Message string
+	Cause   error
+}
+
+func (e *Error) Error() string {
+	if len(e.Path) > 0 {
+		return fmt.Sprintf("hff %s at %q: %s", e.Code, []string(e.Path), e.Message)
+	}
+	return fmt.Sprintf("hff %s: %s", e.Code, e.Message)
+}
+func (e *Error) Unwrap() error { return e.Cause }

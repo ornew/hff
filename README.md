@@ -76,8 +76,11 @@ requirement to compile grammars at runtime.
 
 ## Specification
 
-This repository provides the language specification. The parser, runtime, and
-backend translators are not yet available.
+This repository provides the language specification and the Go configuration
+foundation: immutable values, schemas, capabilities, and validated input.
+The parser, evaluator, and backend translators are not yet available.
+Start with the [Go guides](docs/guides/README.md) and
+[engine configuration tutorial](docs/guides/getting-started.md).
 
 Read the [language specification](spec/README.md), beginning with
 [syntax](spec/syntax.md), [types and schemas](spec/types.md), and
