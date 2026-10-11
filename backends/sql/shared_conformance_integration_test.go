@@ -27,7 +27,9 @@ func TestPostgreSQLSharedScalarConformance(t *testing.T) {
 		t.Fatal("integration tests require HFF_POSTGRES_CONTAINER")
 	}
 	supported := map[string]bool{
-		"empty_filter": true, "and_before_or": true, "grouped_or": true,
+		"nonnull_guards_preserve_zero": true, "nonnull_null_test_is_false": true,
+		"nullable_guards_keep_presence": true,
+		"empty_filter":                  true, "and_before_or": true, "grouped_or": true,
 		"implicit_truthiness": true, "fractional_integer_division": true,
 		"overflow_is_null": true, "regex_partial_match": true,
 		"invalid_regex_does_not_match_negation": true, "unicode_code_points": true,

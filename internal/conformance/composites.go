@@ -23,6 +23,13 @@ func CompositeCases() []Case {
 		return Record{Name: name, Value: hff.Object(map[string]hff.Value{"profile": value}), Match: match}
 	}
 	return []Case{
+		{Name: "typed_array_identical_guard", Source: `profile!.scores!:[list[int|null]]:exists`, Schema: shape, Capabilities: capabilities.Standard(), Records: []Record{
+			row("null_parent", hff.Null(), false),
+			row("null_array", profile(hff.Null(), hff.Null()), false),
+			row("empty_array", profile(hff.Null(), hff.List()), true),
+			row("last_integer", profile(hff.Null(), hff.List(hff.Null(), hff.Int(2))), true),
+			row("last_null", profile(hff.Null(), hff.List(hff.Int(2), hff.Null())), true),
+		}},
 		{Name: "typed_composite_null_identity", Source: `profile=null`, Schema: shape, Capabilities: capabilities.Standard(), Records: []Record{
 			row("null_parent", hff.Null(), true),
 			row("null_child", profile(hff.Null(), hff.Null()), false),

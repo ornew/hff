@@ -152,6 +152,38 @@ func TestRepeatedJSONPathsShareOuterExtraction(t *testing.T) {
 	}
 }
 
+func TestIdenticalListGuardUsesTheDeclaredSchema(t *testing.T) {
+	ctx := context.Background()
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.List("items", schema.IntType))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := e.Compile(ctx, `items:[list[int]]:exists`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
+		q, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindJSON(hff.Path{"items"}, hffsql.Column("records", "items"), format)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(q.Where(), "_array_elements") {
+			t.Fatal("identical schema guard rescans list elements:", q.Where())
+		}
+		p, err := e.Compile(ctx, `items:[list[string]]:exists`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		q, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindJSON(hff.Path{"items"}, hffsql.Column("records", "items"), format)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(q.Where(), "_array_elements") {
+			t.Fatal("different element constraint lost its runtime checks:", q.Where())
+		}
+	}
+}
+
 func TestJSONBindingBuildsTypedAccess(t *testing.T) {
 	e := jsonEngine(t)
 	for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {

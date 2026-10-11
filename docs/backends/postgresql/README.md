@@ -156,6 +156,12 @@ same schema-known path can share extraction within an outer projection scope.
 Guarded, dynamic, and callback scopes remain separate so their aliases and
 presence behavior do not escape their scope. This also changes SQL shape only;
 it makes no measured performance claim.
+The declared schema also permits limited check elimination: a non-nullable
+child does not need a redundant SQL null test, and a type guard needs no second
+type check when its constraint exactly matches the child's inferred type.
+Nullable, `Any`, and differently constrained values keep their checks. These
+rules assume stored rows honor the declared schema; `Build` does not inspect or
+validate database rows, and presence remains distinct from null/no-value.
 
 ## Add a PostgreSQL translator
 

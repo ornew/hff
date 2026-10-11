@@ -20,6 +20,10 @@ func TestSharedConformanceJSONBuildContracts(t *testing.T) {
 	}
 	supported["typed_array_structural_equality"] = true
 	supported["typed_array_null_membership"] = true
+	supported["nonnull_guards_preserve_zero"] = true
+	supported["nonnull_null_test_is_false"] = true
+	supported["nullable_guards_keep_presence"] = true
+	supported["typed_array_identical_guard"] = true
 	rejected := map[string]bool{}
 	for _, name := range []string{
 		"json_preserves_float", "json_duplicate_keys_fail", "json_null_is_observable", "json_guard_stays_absent",

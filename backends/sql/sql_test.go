@@ -68,6 +68,33 @@ func TestConstantPresenceDoesNotCreateProjectionColumns(t *testing.T) {
 	}
 }
 
+func TestSchemaProvenGuardsOmitRedundantNullChecks(t *testing.T) {
+	ctx := context.Background()
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Int("age"))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := e.Compile(ctx, `age!:[int]!=null`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()[0]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(q.Where(), "IS NOT NULL") || strings.Contains(q.Where(), " AS p") {
+		t.Fatal("non-null schema retains redundant guard checks:", q.Where())
+	}
+	p = compile(t, `age!:[int]!=null`)
+	q, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(q.Where(), "IS NOT NULL") || !strings.Contains(q.Where(), " AS p") {
+		t.Fatal("nullable schema lost its dynamic presence check:", q.Where())
+	}
+}
+
 func TestBuildConfigurationAndOwnership(t *testing.T) {
 	ctx := context.Background()
 	p := compile(t, `age>=18 name="O'Reilly"`)

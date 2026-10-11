@@ -42,8 +42,27 @@ func record(name string, fields map[string]hff.Value, match bool) Record {
 func Cases() []Case {
 	common := schema.Struct(schema.Int("age"), schema.String("name"), schema.Bool("flag"),
 		schema.Any("x"), schema.Any("y"), schema.List("items", schema.AnyType), schema.Map("labels", schema.AnyType))
+	nullableFields := common.Fields()
+	for i := range nullableFields {
+		if nullableFields[i].Name == "age" {
+			nullableFields[i] = schema.Nullable(nullableFields[i])
+		}
+	}
+	nullableAge := schema.Struct(nullableFields...)
 	budgetedItems := hff.List(hff.Int(1), hff.Int(2), hff.Int(3), hff.Int(4), hff.Int(5), hff.Int(6), hff.Int(7), hff.Int(8))
 	cases := []Case{
+		{Name: "nullable_guards_keep_presence", Source: `age!:[int]!=null`, Schema: nullableAge, Records: []Record{
+			record("null", map[string]hff.Value{"age": hff.Null()}, false), record("zero", nil, true),
+			record("positive", map[string]hff.Value{"age": hff.Int(18)}, true),
+		}},
+		{Name: "nonnull_guards_preserve_zero", Source: `age!:[int]!=null`, Records: []Record{
+			record("zero", nil, true), record("positive", map[string]hff.Value{"age": hff.Int(18)}, true),
+			record("negative", map[string]hff.Value{"age": hff.Int(-1)}, true),
+		}},
+		{Name: "nonnull_null_test_is_false", Source: `age=null | flag`, Records: []Record{
+			record("zero_false", nil, false), record("zero_true", map[string]hff.Value{"flag": hff.Bool(true)}, true),
+			record("positive_false", map[string]hff.Value{"age": hff.Int(18)}, false),
+		}},
 		{Name: "json_preserves_float", Source: `x:tojson:fromjson:[float]=1`, Records: []Record{
 			record("float", map[string]hff.Value{"x": hff.Float(1)}, true),
 			record("int", map[string]hff.Value{"x": hff.Int(1)}, false),
@@ -240,7 +259,9 @@ func Cases() []Case {
 		}}},
 	}
 	for i := range cases {
-		cases[i].Schema = common
+		if cases[i].Schema.Kind() == hff.InvalidType {
+			cases[i].Schema = common
+		}
 		if !cases[i].Capabilities.Specified() {
 			cases[i].Capabilities = capabilities.Standard()
 		}

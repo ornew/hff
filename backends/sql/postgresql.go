@@ -241,7 +241,9 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		if err != nil {
 			return expression{}, err
 		}
-		value.present = both(value.present, "("+value.code+" IS NOT NULL)")
+		if acceptsKind(child.Type(), hff.NullType) {
+			value.present = both(value.present, "("+value.code+" IS NOT NULL)")
+		}
 		return value, nil
 	case hff.IndexNode:
 		return b.jsonIndex(n)
@@ -252,6 +254,11 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 			return expression{}, err
 		}
 		constraint, _ := n.Constraint()
+		// A schema-compatible value already satisfies an identical constraint.
+		// Preserve its existing no-value state without rechecking its contents.
+		if child.Type().Equal(constraint) {
+			return value, nil
+		}
 		if format, structured := b.jsonValues[value.code]; structured {
 			return b.jsonTypeGuard(n, value, format, child.Type(), constraint)
 		}
@@ -261,9 +268,14 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		if acceptNull && acceptValue {
 			test = "TRUE"
 		} else if acceptNull {
-			test = "(" + value.code + " IS NULL)"
+			if acceptsKind(child.Type(), hff.NullType) {
+				test = "(" + value.code + " IS NULL)"
+			}
 		} else if acceptValue {
-			test = "(" + value.code + " IS NOT NULL)"
+			test = "TRUE"
+			if acceptsKind(child.Type(), hff.NullType) {
+				test = "(" + value.code + " IS NOT NULL)"
+			}
 		}
 		value.present = both(value.present, test)
 		kind, ok := scalarKind(n.Type())
@@ -312,6 +324,12 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		}
 		test := " IS NULL"
 		op, _ := n.Operator()
+		if !acceptsKind(child.Type(), hff.NullType) {
+			if op == hff.NotEqual {
+				return boolean(value.present), nil
+			}
+			return boolean("FALSE"), nil
+		}
 		if op == hff.NotEqual {
 			test = " IS NOT NULL"
 		}

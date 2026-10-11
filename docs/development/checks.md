@@ -277,7 +277,7 @@ go test ./internal/core -run '^$' -fuzz '^FuzzInputKeyOrder$' -fuzztime=30s -par
 
 The shared fixture is provided by [`Cases`](https://github.com/ornew/hff/blob/main/internal/conformance/cases.go)
 and companion [`CompositeCases`](https://github.com/ornew/hff/blob/main/internal/conformance/composites.go).
-It currently contains 56 base cases and five typed-composite cases.
+It currently contains 59 base cases and six typed-composite cases.
 The parser, compiler, and local evaluator use the same sources through
 [`shared_conformance_test.go`](https://github.com/ornew/hff/blob/main/internal/syntax/shared_conformance_test.go),
 [`shared_conformance_test.go`](https://github.com/ornew/hff/blob/main/engine/shared_conformance_test.go),
@@ -290,7 +290,7 @@ The current shared-fixture coverage maps to the contract this way:
 | Contract area | Representative fixture cases | Verification |
 |:--|:--|:--|
 | Numeric behavior | `exact_mixed_number_comparison`, `fractional_integer_division`, `overflow_is_null` | Shared parser/compiler/local suites; `TestPostgreSQLScalarParity` covers the wider PostgreSQL numeric matrix. |
-| Null, no-value, and missing values | `null_inequality_is_false`, `two_null_values_are_not_equal`, `type_guard_failure_is_not_null`, `guard_failure_is_not_null`, `structural_equality_ignores_key_order`, `typed_composite_null_identity` | Shared parser/compiler/local suites; typed-composite SQL parity below. |
+| Null, no-value, and missing values | `null_inequality_is_false`, `two_null_values_are_not_equal`, `type_guard_failure_is_not_null`, `guard_failure_is_not_null`, `nullable_guards_keep_presence`, `nonnull_guards_preserve_zero`, `nonnull_null_test_is_false`, `structural_equality_ignores_key_order`, `typed_composite_null_identity` | Shared parser/compiler/local suites; typed-composite SQL parity below. |
 | Unicode and time conversions | `unicode_code_points`, `duration_compound_fraction`, `timestamp_utc_components`, `epoch_is_truthy`, `zero_duration_is_falsy` | Shared parser/compiler/local suites; named-zone profile behavior remains in local temporal tests. |
 | Predicates, callbacks, collections | `empty_filter`, `any_and_all_empty_lists`, `callback_predicate_guard`, `nested_callback_captures`, `fold_argument_order`, `contains_requires_all_arguments`, `unique_is_a_predicate`, `map_preserves_null_and_order`, `flatmap_preserves_order`, `sort_mixed_numbers_and_reject_null`, `concat_preserves_order` | Shared parser/compiler/local suites. |
 | Object access and enumeration | `object_lookup_distinguishes_missing`, `object_dynamic_key_lookup`, `object_enumeration_key_order` | Shared parser/compiler/local suites. |
@@ -327,8 +327,8 @@ go test ./engine -run '^$' -fuzz '^FuzzCompile$' -fuzztime=30s -parallel=2
 The shared fixture covers the parser/compiler/local contract. SQL tests classify
 every shared case by its expected compile outcome and PostgreSQL Build support;
 adding an unclassified case fails the tests. Execution parity currently covers
-seven supported cases across 14 query/record pairs in each of the native,
-JSON, and JSONB binding forms (42 comparisons total), checking fixture
+ten supported scalar cases across 69 query/record pairs in each of the native,
+JSON, and JSONB binding forms (207 comparisons total), checking fixture
 expectations against both local matches and PostgreSQL results. The two shared
 regex cases produce typed unsupported-backend errors for all three forms. The
 remaining classifications do not claim PostgreSQL execution parity, and broader
@@ -342,14 +342,15 @@ HFF_POSTGRES_CONTAINER=<container-name-or-id> \
 go test -tags=integration ./backends/sql -run '^TestPostgreSQLSharedScalarConformance$'
 ```
 
-The shared fixture also exercises five typed-composite cases across native,
+The shared fixture also exercises six typed-composite cases across native,
 JSON, and JSONB storage: null-composite identity versus a present row with
 null attributes; guarded access to a null child and an empty name; negative
-array indexing with a nondefault PostgreSQL lower bound; order-sensitive
-structural equality for a typed array; and order-insensitive `contains()` for
-the same typed array. The last two cases distinguish `[null, 2]` from
-`[2, null]` for equality while checking membership independently. Across 22
-fixture records and three storage forms, the integration test checks 66
+array indexing with a nondefault PostgreSQL lower bound; a repeated identical
+nullable-array type guard; order-sensitive structural equality for a typed
+array; and order-insensitive `contains()` for the same typed array. The last
+two cases distinguish `[null, 2]` from `[2, null]` for equality while checking
+membership independently. Across 27 fixture records and three storage forms,
+the integration test checks 81
 PostgreSQL comparisons against shared expectations and local evaluation.
 These cases cover the declared typed mappings in the fixtures; they do not
 establish general support for dynamic `Any` or ambiguous numeric unions in
