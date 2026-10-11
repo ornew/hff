@@ -157,7 +157,8 @@ dialog::backdrop { background: #0009; backdrop-filter: blur(3px); }
 @media(prefers-reduced-motion:reduce) { html { scroll-behavior: auto; } }
 
 .nav-section { margin: 0 0 24px; }
-.nav-section>h2,.nav-section>summary { margin: 0 0 8px; padding: 0 10px; font-size: 12px; font-weight: 650; line-height: 21px; color: var(--text); }
+.nav-section>h2,.nav-section>summary>h2 { margin: 0; padding: 0; font-size: 12px; font-weight: 650; line-height: 21px; color: var(--text); }
+.nav-section>h2,.nav-section>summary { margin: 0 0 8px; padding: 0 10px; }
 .nav-section summary { cursor: pointer; display: flex; align-items: center; gap: 12px; list-style: none; }
 .nav-section summary::-webkit-details-marker { display: none; }
 .nav-section summary::marker { content: ""; }

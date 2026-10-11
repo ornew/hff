@@ -204,7 +204,7 @@ func TestGroupedNavigationAndRemovedPages(t *testing.T) {
 	}
 	for _, name := range []string{"spec/syntax.html", "docs/design/001-test.html"} {
 		page := read(t, out, name)
-		for _, want := range []string{"<h2>Specification</h2>", "<summary>Design Records</summary>"} {
+		for _, want := range []string{"<h2>Specification</h2>", "<summary><h2>Design Records</h2></summary>"} {
 			if !strings.Contains(page, want) {
 				t.Errorf("%s lacks grouped navigation %q", name, want)
 			}
