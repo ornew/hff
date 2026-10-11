@@ -82,7 +82,7 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 	if err := checkContext(b.ctx); err != nil {
 		return expression{}, err
 	}
-	key, share := b.shareableJSONPath(n)
+	key, share := b.shareablePath(n)
 	if share {
 		if value, exists := b.sharedPaths[key]; exists {
 			return value, nil
@@ -133,9 +133,9 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 	return value, nil
 }
 
-// Share unguarded JSON paths only inside their current projection scope.
+// Share unguarded bound paths only inside their current projection scope.
 // Parameter identity distinguishes captures from shadowed callback names.
-func (b *builder) shareableJSONPath(n hff.Node) (string, bool) {
+func (b *builder) shareablePath(n hff.Node) (string, bool) {
 	root := n
 	var fields []string
 	for root.Kind() == hff.FieldNode {
@@ -159,6 +159,9 @@ func (b *builder) shareableJSONPath(n hff.Node) (string, bool) {
 	path, ok := n.Path()
 	if !ok {
 		return "", false
+	}
+	if _, bound := b.bindings[pathKey(path)]; bound {
+		return "schema:" + pathKey(path) + ":" + n.Type().Key(), true
 	}
 	for size := len(path); size > 0; size-- {
 		if _, bound := b.jsonBindings[pathKey(path[:size])]; bound {

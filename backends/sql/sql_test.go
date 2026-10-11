@@ -89,6 +89,16 @@ func TestScalarLiteralsRemainTypedParametersWithoutProjections(t *testing.T) {
 	}
 }
 
+func TestRepeatedScalarPathsShareTheirProjection(t *testing.T) {
+	query, err := hffsql.Build(context.Background(), compile(t, `age>=18 age<=100 age:exists`), hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count := strings.Count(query.Where(), `"records"."age"`); count != 1 {
+		t.Fatalf("scalar column is read %d times, want one shared projection: %s", count, query.Where())
+	}
+}
+
 func TestSchemaProvenGuardsOmitRedundantNullChecks(t *testing.T) {
 	ctx := context.Background()
 	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Int("age"))), engine.WithCapabilities(capabilities.Standard()))
@@ -345,6 +355,7 @@ func parityCases() []parityCase {
 	var cases []parityCase
 	queries := []string{
 		`age+1>18 name="O'Reilly" flag=true factor<1.5`,
+		`age>=18 age<=100 age:exists`,
 		`factor:tojson="1.25"`, `factor:tostring="-0.0"`, `factor:tojson="5e-324"`, `factor:tojson="1.7976931348623157e+308"`,
 		`name:tojson="\"Alice\""`, `name:tostring="Alice"`, `age:tojson="18"`, `flag:tojson="true"`,
 		`name!:tojson="null"`, `!name!:tostring="null"`, `name:[int]:tojson:exists`,

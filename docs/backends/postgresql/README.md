@@ -155,13 +155,15 @@ that constant instead of projecting a separate presence column. Presence that
 depends on null or type guards remains explicit, as do value projections, so
 this simplification preserves null and no-value behavior. It is a conservative
 SQL-shape optimization; no performance improvement is claimed.
-For JSON, JSONB, and composite-backed values, each projection scope has its own
-path cache. Repeated unguarded schema-known accesses can share extraction within
-that scope, including callback parameter field reads keyed by binding identity,
-field path, and type. Captures, shadowed bindings, and separate callbacks do not
-share entries across scopes. Guarded paths, dynamic indexes, and method calls
-are not cache entries. This preserves scope and presence behavior while
-changing SQL shape only; no measured performance improvement is claimed.
+For explicitly bound scalar-column paths and schema-backed JSON, JSONB, and
+composite values, each projection scope has its own path cache. Repeated
+unguarded schema-known accesses can share projections within that scope,
+including callback parameter field reads keyed by binding identity, field path,
+and type. Captures, shadowed bindings, and separate callbacks do not share
+entries across scopes. Guarded paths, dynamic indexes, and method calls are not
+cache entries. This preserves scope and presence behavior while changing SQL
+shape only; it assumes bound rows honor the declared HFF schema, and no
+measured performance improvement is claimed.
 The declared schema also permits limited check elimination: a non-nullable
 child does not need a redundant SQL null test, and a type guard needs no second
 type check when its constraint exactly matches the child's inferred type.
