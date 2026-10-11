@@ -60,6 +60,9 @@ func TestPostgreSQLJSONParity(t *testing.T) {
 		} else if i == 4 {
 			value = hff.List(hff.List(hff.Int(10)), hff.List(hff.Int(10)), hff.Null(), hff.Null())
 			document = `[[10],[10],null,null]`
+		} else if i == 5 {
+			value = hff.List(hff.Null(), hff.List())
+			document = `[null,[]]`
 		}
 		rows[i].values = append(rows[i].values, value)
 		rows[i].documents = append(rows[i].documents, document)

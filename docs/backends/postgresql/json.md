@@ -79,8 +79,9 @@ and propagates through the ordinary HFF evaluation rules.
 For schema-known JSON objects, the backend supports `size()`, `has(key)`,
 `get(key)`, `keys()`, `values()`, and `items()`. Enumeration orders keys with
 PostgreSQL's `C` collation. For schema-known JSON lists, it supports `size()`,
-`has(index)`, `contains()`, `unique()`, `sort()`, `concat(list)`, `any()`, and
-`all()`. `contains()` requires every supplied needle to be present; a null
+`has(index)`, `contains()`, `unique()`, `sort()`, `concat(list)`, `any()`,
+`all()`, `map()`, and `flatmap()`. `contains()` requires every supplied needle
+to be present; a null
 needle is an ordinary value, while a null list receiver propagates null. A
 no-value argument propagates even if an earlier needle matched. `unique()`
 compares each element
@@ -102,6 +103,17 @@ JSON- or JSONB-backed lists can be concatenated with schema-compatible list
 values, including a list from the other physical format, or query-side list
 literals. A null argument produces a typed JSON null, so subsequent indexing or
 list methods propagate null; no-value propagates by the ordinary HFF rules.
+
+`map()` preserves input order and retains null callback results as elements. A
+guarded no-value result propagates to the whole method. `flatmap()` appends
+each callback list in input order and preserves each inner list's order. A null
+or non-list callback result produces null for the whole method; guarded
+no-value propagates as no-value. Evaluation stops at the first callback result
+that determines a whole-method result, so a later guard cannot override an
+earlier null or no-value result. This is HFF result precedence; it does not
+promise PostgreSQL's physical callback evaluation order. Callback result types
+must be determined by the schema; dynamic `Any` and ambiguous int/float unions
+remain Build errors.
 
 Nested callbacks can capture outer callback values and schema fields, with
 lexical shadowing:
@@ -152,6 +164,8 @@ profile.scores:unique
 profile.scores:sort=[80,90]
 profile.scores:concat([100])=[80,90,100]
 profile.scores:any(score=>score:in(80,90))
+profile.scores:map(score=>score+1)=[81,91]
+profile.scores:flatmap(score=>[score,score])=[80,80,90,90]
 ```
 
 The following operations remain unsupported for JSON-backed values and return
@@ -159,8 +173,7 @@ a source-located `hff.BackendError` from `Build`:
 
 - Dynamic `Any` decoding and unions with multiple non-null families when the
   stored representation cannot determine the HFF type.
-- Transforming callbacks such as `map()`, `flatmap()`, `foldl()`, and `foldr()`;
-  other unsupported collection transformations.
+- `foldl()`, `foldr()`, and other unsupported collection transformations.
 - JSON parsing/serialization methods, conversions to bytes/timestamps/durations,
   and operations requiring a runtime type not fixed by the schema.
 
@@ -194,7 +207,7 @@ the service remains responsible for database timeouts and cancellation.
 ## Verification
 
 The repository's tagged integration suite compares JSON and JSONB bindings
-against local evaluation on PostgreSQL 18.6. The verified matrix covers 3,454
+against local evaluation on PostgreSQL 18.6. The verified matrix covers 4,092
 JSON/JSONB query-record pairs for scalar and nested access, null and missing-key
 cases, list indexing, object/list inspection and equality, callbacks, type
 guards, and type/truthiness predicates.

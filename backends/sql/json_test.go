@@ -39,6 +39,19 @@ func jsonBindings(format hffsql.JSONFormat) []hffsql.Binding {
 
 func jsonQueries() []string {
 	return []string{
+		`scores:map(x=>x)=scores`, `scores:map(x=>x+1)=[11,21,null]`, `scores:map(x=>null)=[null,null,null]`,
+		`scores:map(x=>x!)=null`, `!scores:map(x=>x!)=null`, `scores:map(x=>[x,null]):size=scores:size`,
+		`people:map(x=>x.age)=[18,null]`, `people:map(x=>x!.age)=null`, `!people:map(x=>x!.age)=null`,
+		`people:map(x=>{"name":x.name,"age":x.age}):size=people:size`, `scores:map(x=>x>10)=[false,true,false]`,
+		`groups:map(xs=>xs:map(x=>x+1))=[[11,21],[],null,[null]]`,
+		`people:map(x=>scores:map(y=>y+x.age)):size=people:size`, `people:map(x=>scores:map(x=>x+1)):size=people:size`,
+		`groups:flatmap(xs=>xs)=null`, `groups:flatmap(xs=>xs!)=null`, `!groups:flatmap(xs=>xs!)=null`,
+		`groups:flatmap(xs=>xs:concat([xs[0]!]))=null`, `!groups:flatmap(xs=>xs:concat([xs[0]!]))=null`,
+		`scores:map(x=>x+1)[0]=null`, `scores:map(x=>profile!.age)=[]`,
+		`scores:flatmap(x=>[x,null]):size=scores:size*2`, `scores:flatmap(x=>[x])=scores`,
+		`scores:flatmap(x=>[x!])=null`, `scores:flatmap(x=>[])=[]`, `scores:flatmap(x=>scores):size=scores:size*scores:size`,
+		`scores:map(x=>[x,null]):flatmap(xs=>xs)=[10,null,20,null,null,null]`,
+		`people:flatmap(x=>[x,x]):size=people:size*2`, `people:any(x=>scores:map(y=>y+x.age):contains(28))`,
 		`scores:sort=[]`, `scores:sort=null`, `scores:sort=scores`, `scores:sort=[2,2,10,20]`, `scores:sort:has(-1)`,
 		`factors:sort=[1.0,1.0]`, `factors:sort=factors`, `labels:keys:sort=labels:keys`, `labels:values:sort=null`,
 		`scores:concat([30,null])[-1]=null`, `scores:concat([])=scores`, `scores:concat(scores):size=scores:size*2`,
@@ -153,7 +166,7 @@ func TestJSONUnsupportedSemanticsAreExplicitBuildErrors(t *testing.T) {
 
 func TestJSONCallbacksConcurrentBuildsPreserveScopes(t *testing.T) {
 	ctx := context.Background()
-	p, err := jsonEngine(t).Compile(ctx, `people:any(x=>scores:any(y=>y<x.age) x.name="Alice" scores:contains(x.age,null)) groups:all(xs=>xs:all(x=>x!=null) xs:unique)`)
+	p, err := jsonEngine(t).Compile(ctx, `people:any(x=>scores:any(y=>y<x.age) x.name="Alice" scores:contains(x.age,null)) groups:all(xs=>xs:all(x=>x!=null) xs:unique) scores:map(x=>[x,null]):flatmap(xs=>xs):contains(null)`)
 	if err != nil {
 		t.Fatal(err)
 	}

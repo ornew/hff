@@ -485,6 +485,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 	if name == "any" || name == "all" {
 		return b.jsonPredicate(n, name)
 	}
+	if name == "map" || name == "flatmap" {
+		return b.jsonTransform(n, name)
+	}
 	switch name {
 	case "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
 	default:

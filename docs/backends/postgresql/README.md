@@ -77,8 +77,8 @@ String methods currently supported are `len()`, `contains()`, `startswith()`,
 `endswith()`, and `concat()`; boolean `not()`, `and()`, and `or()` are supported.
 The generic scalar `in()` method is supported for membership among its
 arguments. For JSON-backed lists, the backend also supports `contains()`,
-`unique()`, `sort()`, `concat(list)`, `any()`, and `all()`; callbacks may use
-scalar `in()`. See the
+`unique()`, `sort()`, `concat(list)`, `any()`, `all()`, `map()`, and
+`flatmap()`; callbacks may use scalar `in()`. See the
 [JSON guide](json.md) for equality capabilities and collection semantics.
 
 Integer arithmetic supports `+`, `-`, `*`, `%`, and integer/integer `/`:
@@ -122,7 +122,9 @@ callbacks, and representations whose runtime HFF type cannot be recovered
 remain unsupported there. JSON list/object structural equality, list
 `contains()` and `unique()`, `sort()`, `concat(list)`, and `any()`/`all()` are
 available for schema-known values when their required capabilities are enabled;
-transforming callbacks and JSON conversions remain unsupported.
+`map()` and `flatmap()` are supported when callback result types are known.
+Folds, other collection transformations, and JSON conversions remain
+unsupported.
 Unsupported operations do not fall back to local evaluation.
 PostgreSQL is the only currently supported SQL dialect.
 
