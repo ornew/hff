@@ -14,7 +14,9 @@ func (b *builder) jsonRepresentation(n hff.Node, value expression) (string, JSON
 		return "'null'::json", JSON, nil
 	}
 	switch value.kind {
-	case hff.BoolType, hff.IntType, hff.FloatType, hff.StringType:
+	case hff.FloatType:
+		return b.floatText(value.code) + "::json", JSON, nil
+	case hff.BoolType, hff.IntType, hff.StringType:
 		return "to_json(" + value.code + ")", JSON, nil
 	}
 	return "", "", b.failure(n, "membership requires a supported JSON value representation")

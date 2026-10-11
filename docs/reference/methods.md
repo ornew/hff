@@ -87,10 +87,12 @@ The PostgreSQL backend currently supports schema-known JSON/JSONB list
 `contains()`, `unique()`, `sort()`, `concat(list)`, `any()`, and `all()`, plus
 `map()` and `flatmap()` when callback result types are known; scalar `in()` is
 also supported inside callbacks. Folds are supported with known accumulator
-types. `tojson()` and `tostring()` support null, bool, int64, and string values
-in the schema-known profile; float serialization and `fromjson()` remain
-unsupported. Structural comparisons require the corresponding equality
-capability. See the
+types. `tojson()` and `tostring()` support null, bool, int64, string, and finite
+float values from scalar columns and native JSON in the schema-known profile.
+JSONB-origin floats remain unsupported because JSONB loses signed-zero
+information; query-generated floats use canonical shortest round-tripping
+serialization. `fromjson()` remains unsupported. Structural comparisons
+require the corresponding equality capability. See the
 [PostgreSQL JSON support matrix](../backends/postgresql/json.md) for the exact
 supported profile and restrictions.
 

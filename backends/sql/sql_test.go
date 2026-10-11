@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"math"
+	"math/rand/v2"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -208,8 +210,8 @@ func TestDeferredSQLTypesAndMethodsRejectAtBuild(t *testing.T) {
 	}
 	for _, source := range []string{
 		`name:matches("A")`, `name!~"A"`, `name:number>0`, `name:bool`, `name:fromjson`,
-		`name:frombase64`, `name:timestamp`, `name:duration`, `factor:tojson`, `factor:tostring`,
-		`age:round=1`, `age:floor=1`, `factor:ceil=1`,
+		`name:frombase64`, `name:timestamp`, `name:duration`,
+		`factor:round=1`, `age:round=1`, `age:floor=1`, `factor:ceil=1`,
 	} {
 		_, err := hffsql.Build(ctx, compile(t, source), hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
 		detail := requireCode(t, err, hff.BackendError)
@@ -275,6 +277,7 @@ func TestArithmeticReferenceExpectations(t *testing.T) {
 func parityCases() []parityCase {
 	var cases []parityCase
 	queries := []string{
+		`factor:tojson="1.25"`, `factor:tostring="-0.0"`, `factor:tojson="5e-324"`, `factor:tojson="1.7976931348623157e+308"`,
 		`name:tojson="\"Alice\""`, `name:tostring="Alice"`, `age:tojson="18"`, `flag:tojson="true"`,
 		`name!:tojson="null"`, `!name!:tostring="null"`, `name:[int]:tojson:exists`,
 		`name:tojson="null"`, `age:tostring="-9223372036854775808"`, `flag:tostring="false"`,
@@ -345,6 +348,32 @@ func parityCases() []parityCase {
 		}
 	}
 	cases = append(cases, serializationEscapes()...)
+
+	floatValues := []float64{math.Copysign(0, -1), 0, math.SmallestNonzeroFloat64, math.MaxFloat64}
+	for _, exponent := range []int{-324, -323, -308, -20, -5, -4, -3, 0, 5, 6, 7, 15, 16, 23, 100, 307, 308} {
+		value := math.Pow10(exponent)
+		if value > 0 && !math.IsInf(value, 0) {
+			floatValues = append(floatValues, value, math.Nextafter(value, 0), math.Nextafter(value, math.Inf(1)))
+		}
+	}
+	for exponent := -1074; exponent <= 1023; exponent += 17 {
+		value := math.Ldexp(1, exponent)
+		floatValues = append(floatValues, value, math.Nextafter(value, 0), math.Nextafter(value, math.Inf(1)))
+	}
+	random := rand.New(rand.NewPCG(91, 73))
+	for i := 0; i < 1024; i++ {
+		value := math.Float64frombits(random.Uint64())
+		if !math.IsNaN(value) && !math.IsInf(value, 0) {
+			floatValues = append(floatValues, value)
+		}
+	}
+	for _, value := range floatValues {
+		text := strconv.FormatFloat(value, 'g', -1, 64)
+		if !strings.ContainsAny(text, ".eE") {
+			text += ".0"
+		}
+		cases = append(cases, parityCase{`factor:tojson="` + text + `"`, hff.Null(), hff.Null(), hff.Null(), hff.Float(value)})
+	}
 	integers := []int64{math.MinInt64, math.MinInt64 + 1, -9007199254740993, -9007199254740992, -2, -1, 0, 1, 2, 9007199254740992, 9007199254740993, math.MaxInt64 - 1, math.MaxInt64}
 	floats := []float64{
 		-math.MaxFloat64, math.Nextafter(float64(math.MinInt64), math.Inf(-1)), float64(math.MinInt64), math.Nextafter(float64(math.MinInt64), 0),

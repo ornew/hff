@@ -73,9 +73,10 @@ mixed int64/float64 ordering without rounding the integer through float64;
 string ordering uses PostgreSQL's `C` collation. Boolean literals and operators,
 implicit AND, explicit null comparisons, numeric unary negation, postfix guards
 at scalar leaves, scalar type guards, `exists()`, and `type()` are supported.
-The generic `tojson()` and `tostring()` methods are supported for the scalar
-and collection profile described in the JSON guide; float serialization and
-`fromjson()` remain unsupported.
+The generic `tojson()` and `tostring()` methods support the scalar and
+collection profile described in the JSON guide, including finite float values
+from scalar columns and native JSON. Serialization of float values read from
+JSONB and `fromjson()` remain unsupported.
 String methods currently supported are `len()`, `contains()`, `startswith()`,
 `endswith()`, and `concat()`; boolean `not()`, `and()`, and `or()` are supported.
 The generic scalar `in()` method is supported for membership among its

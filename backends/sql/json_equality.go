@@ -33,6 +33,8 @@ func (b *builder) jsonLiteral(n hff.Node) (expression, error) {
 		code := v.code
 		if v.kind == hff.NullType {
 			code = "NULL::text"
+		} else if v.kind == hff.FloatType {
+			code = b.floatText(code) + "::json"
 		}
 		args = append(args, code)
 	}

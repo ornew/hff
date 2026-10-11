@@ -135,8 +135,9 @@ evaluation order or local `MaxSteps`/`MaxGeneratedValues` enforcement; unsupport
 explicit execution-budget requirements are rejected by `Build`.
 
 For schema-known scalar columns and JSON/JSONB values, `tojson()` and
-`tostring()` support null, bool, int64, and string values, including recursive
-lists, maps, and structs containing those types. `tojson()` emits compact JSON;
+`tostring()` support null, bool, int64, string, and finite float64 values,
+including recursive lists, maps, and structs containing those types when their
+numeric representation is available. `tojson()` emits compact JSON;
 `tostring()` leaves strings unquoted and uses compact JSON for collections.
 Object keys are sorted with PostgreSQL's `C` collation, arrays retain element
 order, and stored nulls remain JSON nulls. A null receiver returns the text
@@ -147,10 +148,21 @@ profile.scores:tojson="[80,90]"
 profile.name:tostring="Ada"
 ```
 
-Float64 serialization remains unsupported: JSONB can lose numeric spelling or
-signed-zero information, and this profile does not guarantee an encoding that
-preserves those distinctions. Dynamic `Any`, ambiguous unions,
-bytes/timestamp/duration conversions, and `fromjson()` remain rejected.
+Float serialization uses a canonical shortest round-tripping decimal with a
+float marker, canonical exponent form, and preserved negative zero. Its output
+does not depend on PostgreSQL's `extra_float_digits` setting. The formatter
+reconstructs the exact IEEE value and searches decimal precisions from one to
+seventeen using nearest, ties-to-even rounding; this correctness-first SQL
+lowering is a baseline, not a performance guarantee.
+
+Float values read from JSONB remain rejected for serialization because JSONB
+can discard the original numeric spelling and signed-zero distinction. This
+also applies when a callback merely returns a stored JSONB float. Float values
+created by query literals or transformations, including an integer-to-float
+result, can be serialized because they use the canonical HFF formatter. Native
+JSON preserves the stored spelling needed by this profile. Dynamic `Any`,
+ambiguous unions, bytes/timestamp/duration conversions, and `fromjson()` remain
+rejected.
 
 Nested callbacks can capture outer callback values and schema fields, with
 lexical shadowing:
@@ -230,12 +242,13 @@ without NUL; int64 values must be in range, and float64 values must be finite.
 schema-incompatible stored values can fail during database evaluation.
 
 JSONB normalizes some input spelling, including numeric exponent notation and
-the distinction between integer and floating spellings. This profile uses the
-explicit HFF schema to select numeric types when the schema determines them;
-ambiguous nested int/float unions and dynamic `Any` remain unsupported without
-type metadata. Conversions or operations that need discarded JSON spelling or
-signed-zero details are rejected. Keep the application schema authoritative
-for the bound column.
+the distinction between integer and floating spellings, and does not preserve
+negative zero. This profile uses the explicit HFF schema to select numeric
+types when the schema determines them; ambiguous nested int/float unions and
+dynamic `Any` remain unsupported without type metadata. Operations that need
+discarded JSONB float spelling or signed-zero details are rejected; generated
+float values use canonical HFF serialization instead. Keep the application
+schema authoritative for the bound column.
 
 PostgreSQL is the only supported SQL dialect. JSON and JSONB use their native
 operators; this support does not promise stable generated SQL text or database
@@ -245,10 +258,12 @@ the service remains responsible for database timeouts and cancellation.
 ## Verification
 
 The repository's tagged integration suite compares JSON and JSONB bindings
-against local evaluation on PostgreSQL 18.6. The verified matrix covers 4,906
-JSON/JSONB query-record pairs for scalar and nested access, null and missing-key
-cases, list indexing, object/list inspection and equality, callbacks,
-serialization, type guards, and type/truthiness predicates.
+against local evaluation on PostgreSQL 18.6. The verified matrix covers 5,556
+JSON/JSONB and 5,680 scalar query-record pairs, plus 152 extension cases. It
+covers scalar and nested access, null and missing-key cases, list indexing,
+object/list inspection and equality, callbacks, canonical serialization,
+type guards, and type/truthiness predicates. Float serialization tests include
+1,024 deterministic IEEE samples and run with `extra_float_digits=-3`.
 To run it against a PostgreSQL
 container with `psql` installed:
 

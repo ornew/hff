@@ -42,6 +42,8 @@ func TestPostgreSQLJSONParity(t *testing.T) {
 		rows = append(rows, row{[]hff.Value{obj(map[string]hff.Value{"name": hff.String("Alice"), "age": hff.Int(n), "father": obj(map[string]hff.Value{"name": hff.String("Bob")})}), hff.List(hff.Int(n)), obj(map[string]hff.Value{}), hff.List(hff.Float(math.SmallestNonzeroFloat64), hff.Float(math.MaxFloat64))}, []string{`{"name":"Alice","age":` + strconv.FormatInt(n, 10) + `,"father":{"name":"Bob"}}`, `[` + strconv.FormatInt(n, 10) + `]`, `{}`, `[5e-324,1.7976931348623157e308]`}, false})
 	}
 	rows = append(rows, row{[]hff.Value{obj(map[string]hff.Value{"name": hff.String("Carol"), "age": hff.Int(42)}), hff.List(hff.Int(10), hff.Int(2), hff.Int(20), hff.Int(2)), obj(map[string]hff.Value{"a": hff.String("z"), "b": hff.String("a")}), hff.List(hff.Float(3), hff.Float(1), hff.Float(1), hff.Float(2))}, []string{`{"name":"Carol","age":42}`, `[10,2,20,2]`, `{"a":"z","b":"a"}`, `[3.0,1.0,1.0,2.0]`}, false})
+
+	rows = append(rows, row{[]hff.Value{obj(map[string]hff.Value{}), hff.List(), obj(map[string]hff.Value{}), hff.List(hff.Float(math.Copysign(0, -1)))}, []string{`{}`, `[]`, `{}`, `[-0.0]`}, false})
 	for i := range rows {
 		if i == 4 {
 			rows[i].values[1] = hff.List(hff.Null(), hff.Null(), hff.Int(10), hff.Int(10))
@@ -96,7 +98,16 @@ func TestPostgreSQLJSONParity(t *testing.T) {
 			}
 			fmt.Fprintf(&script, "INSERT INTO %s VALUES (%d,%s);\n", table, ri, strings.Join(data, ","))
 		}
-		for _, source := range jsonQueries() {
+		queries := jsonQueries()
+		if format == hffsql.JSON {
+			queries = append(queries,
+				`factors:tojson="[-0.0]"`, `factors:tostring="[1.0]"`,
+				`factors[0]:tojson="5e-324"`, `factors[0]:tostring="-0.0"`,
+				`factors:map(x=>x):tojson="[-0.0]"`, `factors:map(x=>[x,null]):tojson="[[-0.0,null]]"`,
+				`factors:tojson="[5e-324,1.7976931348623157e+308]"`,
+			)
+		}
+		for _, source := range queries {
 			p, err := e.Compile(ctx, source)
 			if err != nil {
 				t.Fatal(source, err)

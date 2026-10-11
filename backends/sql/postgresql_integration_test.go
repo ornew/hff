@@ -28,7 +28,7 @@ func TestPostgreSQLScalarParity(t *testing.T) {
 	defer cancel()
 	e := sqlEngine(t)
 	var script strings.Builder
-	script.WriteString("SET standard_conforming_strings=on;\n")
+	script.WriteString("SET standard_conforming_strings=on; SET extra_float_digits=-3;\n")
 	var expected []string
 	for i, tc := range parityCases() {
 		p, err := e.Compile(ctx, tc.source)

@@ -39,6 +39,11 @@ func jsonBindings(format hffsql.JSONFormat) []hffsql.Binding {
 
 func jsonQueries() []string {
 	return []string{
+		`scores:map(x=>-0.0):tojson="[-0.0,-0.0,-0.0]"`,
+		`scores:map(x=>-0.0)[0]:tostring="-0.0"`,
+		`factors:map(x=>-0.0):tojson="[-0.0]"`,
+		`scores:map(x=>{"zero":-0.0}):tojson="[{\"zero\":-0.0},{\"zero\":-0.0},{\"zero\":-0.0}]"`,
+		`scores:foldl(-0.0,(acc,x)=>acc):tostring="-0.0"`,
 		`scores:tojson="[10,20,null]"`, `scores:tostring="null"`, `scores!:tojson="null"`, `!scores!:tojson="null"`,
 		`labels:tojson="{\"app\":\"auth\",\"team\":null}"`, `labels:tostring="{}"`,
 		`profile:tojson="{\"age\":18,\"name\":\"Alice\"}"`, `people:tojson:contains("Alice")`,
@@ -164,7 +169,7 @@ func TestJSONBindingRejectsConflictingPhysicalMappings(t *testing.T) {
 
 func TestJSONUnsupportedSemanticsAreExplicitBuildErrors(t *testing.T) {
 	ctx := context.Background()
-	for _, source := range []string{`factors:tojson="[]"`, `factors[0]:tostring="1.0"`, `scores=[10,20.0]`, `scores:foldl(0.0,(acc,x)=>x)>0`, `scores:foldl("",(acc,x)=>x):exists`} {
+	for _, source := range []string{`scores=[10,20.0]`, `scores:foldl(0.0,(acc,x)=>x)>0`, `scores:foldl("",(acc,x)=>x):exists`} {
 		p, err := jsonEngine(t).Compile(ctx, source)
 		if err != nil {
 			t.Fatal(source, err)
@@ -214,4 +219,21 @@ func TestJSONCallbacksConcurrentBuildsPreserveScopes(t *testing.T) {
 		})
 	}
 	workers.Wait()
+}
+
+func TestJSONFloatSerializationRepresentation(t *testing.T) {
+	for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
+		for _, source := range []string{`factors:tojson="[-0.0]"`, `factors[0]:tostring="-0.0"`, `factors:map(x=>x):tojson="[-0.0]"`} {
+			p, err := jsonEngine(t).Compile(context.Background(), source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(jsonBindings(format)...))
+			if format == hffsql.JSONB {
+				requireCode(t, err, hff.BackendError)
+			} else if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 }

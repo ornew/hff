@@ -10,6 +10,9 @@ func (b *builder) serialize(n hff.Node, value expression, name string) (expressi
 	var code string
 	if format, ok := b.jsonValues[value.code]; ok {
 		receiver, _ := n.Child(0)
+		if b.losesFloat(receiver, nil) {
+			return expression{}, b.failure(n, "JSONB cannot preserve signed zero for float serialization")
+		}
 		var err error
 		code, err = b.serializeJSON(n, value.code, format, receiver.Type())
 		if err != nil {
@@ -21,6 +24,12 @@ func (b *builder) serialize(n hff.Node, value expression, name string) (expressi
 			code = "'null'::text"
 		case hff.BoolType, hff.IntType:
 			code = "COALESCE(" + value.code + "::text,'null')"
+		case hff.FloatType:
+			receiver, _ := n.Child(0)
+			if b.losesFloat(receiver, nil) {
+				return expression{}, b.failure(n, "JSONB cannot preserve signed zero for float serialization")
+			}
+			code = b.floatText(value.code)
 		case hff.StringType:
 			code = value.code
 			if name == "tojson" {
@@ -32,6 +41,89 @@ func (b *builder) serialize(n hff.Node, value expression, name string) (expressi
 		}
 	}
 	return expression{code, value.present, hff.StringType}, nil
+}
+
+func jsonHasFloat(typ hff.Type) bool {
+	switch typ.Kind() {
+	case hff.FloatType:
+		return true
+	case hff.ListType, hff.MapType:
+		return jsonHasFloat(typ.Element())
+	case hff.StructType:
+		for _, field := range typ.Fields() {
+			if jsonHasFloat(field.Type) {
+				return true
+			}
+		}
+	case hff.UnionType:
+		for _, member := range typ.Members() {
+			if jsonHasFloat(member) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Track float provenance through callbacks: a map that returns a constant does
+// not inherit a representation loss from its receiver's unused elements.
+func (b *builder) losesFloat(n hff.Node, environment map[hff.BindingID]bool) bool {
+	if !jsonHasFloat(n.Type()) {
+		return false
+	}
+	if binding, ok := n.Binding(); ok {
+		if loss, exists := environment[binding.ID()]; exists {
+			return loss
+		}
+		if parameter, exists := b.parameters[binding.ID()]; exists && parameter.format == JSONB {
+			return true
+		}
+	}
+	if path, ok := n.Path(); ok {
+		for size := len(path); size > 0; size-- {
+			if b.jsonBindings[pathKey(path[:size])] == JSONB {
+				return true
+			}
+		}
+	}
+	if method, ok := n.Method(); ok {
+		name := method.Name()
+		if name == "map" || name == "flatmap" || name == "foldl" || name == "foldr" {
+			receiver, _ := n.Child(0)
+			callback, _ := n.Child(n.ChildCount() - 1)
+			parameters, _ := callback.Parameters()
+			nested := make(map[hff.BindingID]bool, len(environment)+len(parameters))
+			for id, loss := range environment {
+				nested[id] = loss
+			}
+			receiverLoss := b.losesFloat(receiver, environment)
+			seedLoss := false
+			if len(parameters) == 1 {
+				nested[parameters[0].ID()] = receiverLoss
+			} else if len(parameters) == 2 {
+				seed, _ := n.Child(1)
+				seedLoss = b.losesFloat(seed, environment)
+				acc, item := 0, 1
+				if name == "foldr" {
+					acc, item = 1, 0
+				}
+				nested[parameters[acc].ID()] = seedLoss
+				nested[parameters[item].ID()] = receiverLoss
+				body, _ := callback.Child(0)
+				// The accumulator's provenance is monotone across iterations.
+				nested[parameters[acc].ID()] = seedLoss || b.losesFloat(body, nested)
+			}
+			body, _ := callback.Child(0)
+			return seedLoss || b.losesFloat(body, nested)
+		}
+	}
+	for i := 0; i < n.ChildCount(); i++ {
+		child, _ := n.Child(i)
+		if b.losesFloat(child, environment) {
+			return true
+		}
+	}
+	return false
 }
 
 // Serialize from schema types, never from the storage document's spelling or
@@ -50,6 +142,8 @@ func (b *builder) serializeJSON(n hff.Node, raw string, format JSONFormat, typ h
 		switch member.Kind() {
 		case hff.IntType:
 			code = "((" + raw + " #>> '{}')::bigint)::text"
+		case hff.FloatType:
+			code = b.floatText("((" + raw + " #>> '{}')::double precision)")
 		case hff.BoolType:
 			code = "((" + raw + " #>> '{}')::boolean)::text"
 		case hff.StringType:
