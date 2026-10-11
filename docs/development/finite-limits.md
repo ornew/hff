@@ -156,6 +156,36 @@ accounting, and the public `Type.Fields()` copy behavior remains unchanged.
 This before/after comparison is specific to the benchmark's repeated
 structural checks; it does not predict gains for other compiler workloads.
 
+## Measure input admission at the default value ceiling
+
+Run the benchmark with Go 1.27.1 and allocation reporting:
+
+```sh
+go test -benchtime=100ms -count=3 -run '^$' -bench '^BenchmarkDefaultInputValueCeiling$' -benchmem ./engine
+```
+
+The record has schema `{items: list[int]}` and the query `items:exists`, which
+does not inspect individual list elements. The benchmark compares exactly
+100,000 values with 100,001 values; the root object and list count toward that
+total. Record construction, compilation, and filter building are outside the
+timed loop. `Validate` includes its result-compatibility check, while `Match`
+includes full input admission before evaluation.
+
+One baseline on Go 1.27.1, Darwin arm64, Apple M3 Max, with a 100 ms benchmark
+time and three runs produced these medians:
+
+| Case | Median time | Allocated bytes | Allocations |
+|:--|--:|--:|--:|
+| Validate, 100,000 values | 1.183 ms/op | 32 B/op | 2 allocs/op |
+| Match, 100,000 values | 1.232 ms/op | 208 B/op | 3 allocs/op |
+| Validate, 100,001 values rejected | 583 µs/op | 157 B/op | 5 allocs/op |
+| Match, 100,001 values rejected | 561 µs/op | 157 B/op | 5 allocs/op |
+
+This measures input-admission work for one flat list shape, not record
+construction, retained input memory, database or transport cost, or every
+service workload. It is evidence for this boundary only, not a universal
+budget-safety or latency claim.
+
 ## Remaining evidence gaps
 
 Boundary correctness and selected depth-64 workload costs are now measured.
@@ -165,5 +195,6 @@ representative query shapes and sizes, not a broad range of schemas and
 service workloads near that ceiling.
 Runtime benchmarks include one successful
 nested-search shape and one near-limit generated collection, plus explicit
-abort cases; they do not cover a broader set of query shapes or service
-workloads. A reasoned review of the default values remains necessary.
+abort cases; input-admission timing covers one flat list shape. These do not
+cover a broader set of query shapes or service workloads. A reasoned review of
+the default values remains necessary.

@@ -103,6 +103,16 @@ than a benchmark; see the [finite-limit review](finite-limits.md#verify-the-comp
 go test -race ./engine -run '^TestDefaultCompileBudgetForRepeatedStructuralChecks$'
 ```
 
+Measure `Validate` and `Match` around the default `MaxInputValues` ceiling with
+a flat list that the predicate does not inspect:
+
+```sh
+go test -benchtime=100ms -count=3 -run '^$' -bench '^BenchmarkDefaultInputValueCeiling$' -benchmem ./engine
+```
+
+The [finite-limit review](finite-limits.md) records the input shape, exact
+value counts, measured sample, and scope limits.
+
 To measure a deliberately repeated structural-check workload close to the
 default compile-work ceiling, run:
 
