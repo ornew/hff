@@ -140,7 +140,7 @@ func TestIdentifiersAndLiteralPaths(t *testing.T) {
 }
 
 func TestUnsupportedSQLHasSourceLocation(t *testing.T) {
-	for _, source := range []string{`age+1>2`, `age/2>factor`, `name~"a"`, `name:lower="a"`, `name:upper="A"`, `name="\u0000"`} {
+	for _, source := range []string{`age+1.0>2`, `factor/2>age`, `name~"a"`, `name:lower="a"`, `name:upper="A"`, `name="\u0000"`} {
 		p := compile(t, source)
 		_, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
 		detail := requireCode(t, err, hff.BackendError)
@@ -186,6 +186,39 @@ func TestRequiredNestedPathsAndUnrepresentableParents(t *testing.T) {
 	}
 }
 
+func TestDeferredSQLTypesAndMethodsRejectAtBuild(t *testing.T) {
+	ctx := context.Background()
+	for _, typ := range []hff.Type{
+		schema.BytesType, schema.TimestampType, schema.DurationType, schema.ListOf(schema.IntType),
+		schema.MapOf(schema.StringType), schema.Struct(schema.String("name")), schema.AnyType, schema.Union(schema.StringType, schema.IntType),
+	} {
+		e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("x", typ))), engine.WithCapabilities(capabilities.Standard()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		p, err := e.Compile(ctx, "x")
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.Bind(hff.Path{"x"}, hffsql.Column("x"))))
+		detail := requireCode(t, err, hff.BackendError)
+		if detail.Span == nil {
+			t.Fatal("type rejection lacks a source span")
+		}
+	}
+	for _, source := range []string{
+		`name:matches("A")`, `name!~"A"`, `name:number>0`, `name:bool`, `name:fromjson`,
+		`name:frombase64`, `name:timestamp`, `name:duration`, `name:tojson`, `name:tostring`,
+		`name:in("A")`, `age:round=1`, `age:floor=1`, `factor:ceil=1`,
+	} {
+		_, err := hffsql.Build(ctx, compile(t, source), hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
+		detail := requireCode(t, err, hff.BackendError)
+		if detail.Span == nil {
+			t.Fatal("method rejection lacks a source span")
+		}
+	}
+}
+
 func TestInternalAliasesDoNotShadowColumnNames(t *testing.T) {
 	p := compile(t, `age>1`)
 	query, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.Bind(hff.Path{"age"}, hffsql.Column("__hff_1"))))
@@ -200,6 +233,43 @@ func TestInternalAliasesDoNotShadowColumnNames(t *testing.T) {
 type parityCase struct {
 	source                  string
 	age, name, flag, factor hff.Value
+}
+
+func arithmeticCases() []parityCase {
+	var cases []parityCase
+	for _, tc := range []struct {
+		source string
+		age    int64
+	}{
+		{`age=-9223372036854775808`, math.MinInt64},
+		{`age=9223372036854775807`, math.MaxInt64},
+		{`age-1=null`, math.MinInt64}, {`age+1=null`, math.MaxInt64},
+		{`(-age)=null`, math.MinInt64}, {`age%-1=0`, math.MinInt64},
+		{`age/2=2.5`, 5}, {`age%2=-1`, -5}, {`age%-2=1`, 5},
+		{`age/0=null`, 5}, {`(age/2):type="number"`, 5},
+	} {
+		cases = append(cases, parityCase{tc.source, hff.Int(tc.age), hff.Null(), hff.Null(), hff.Null()})
+	}
+	return cases
+}
+
+func TestArithmeticReferenceExpectations(t *testing.T) {
+	ctx := context.Background()
+	e := sqlEngine(t)
+	for _, tc := range arithmeticCases() {
+		p, err := e.Compile(ctx, tc.source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		filter, err := local.Build(ctx, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		match, err := filter.Match(ctx, hff.Object(map[string]hff.Value{"age": tc.age, "name": tc.name, "flag": tc.flag, "factor": tc.factor}))
+		if err != nil || !match {
+			t.Fatalf("arithmetic contract %s: got %v,%v; want true", tc.source, match, err)
+		}
+	}
 }
 
 func parityCases() []parityCase {
@@ -245,6 +315,16 @@ func parityCases() []parityCase {
 		`flag:and(age:[bool]):type="bool"`, `flag:or(age:[bool]):type="bool"`,
 	}
 	queries = append(queries, "flag"+strings.Repeat(":and(true)", 20))
+	for _, op := range []string{"=", "!=", "<", "<=", ">", ">="} {
+		queries = append(queries, "factor"+op+"1.5", "name"+op+`"Alice"`, "age"+op+"18")
+	}
+	queries = append(queries, `flag=true`, `flag!=false`, `flag=flag`, `flag!=flag`)
+	queries = append(queries,
+		`age+1>age`, `age-1<age`, `age*2=age+age`, `age+1=null`, `age-1=null`,
+		`age*0=0`, `age/2>0.5`, `age/0=null`, `age%0=null`, `age%2=-1`, `age%-1=0`,
+		`age/-1>age`, `(age/1):type="number"`, `age/-9223372036854775808=1.0`,
+		`(age:[int]!+1):exists`, `(age+null):type="null"`,
+	)
 	rows := [][4]hff.Value{
 		{hff.Null(), hff.Null(), hff.Null(), hff.Null()},
 		{hff.Int(18), hff.String("Alice"), hff.Bool(true), hff.Float(1.25)},
@@ -276,6 +356,7 @@ func parityCases() []parityCase {
 			cases = append(cases, parityCase{"age" + op + "factor", row[0], row[1], row[2], row[3]}, parityCase{"factor" + op + "age", row[0], row[1], row[2], row[3]})
 		}
 	}
+	cases = append(cases, arithmeticCases()...)
 	return cases
 }
 

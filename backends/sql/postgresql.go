@@ -345,6 +345,7 @@ func (b *builder) binary(n hff.Node) (expression, error) {
 	op, _ := n.Operator()
 	switch op {
 	case hff.Equal, hff.NotEqual, hff.Less, hff.LessEqual, hff.Greater, hff.GreaterEqual:
+	case hff.Add, hff.Subtract, hff.Multiply, hff.Divide, hff.Remainder:
 	default:
 		return expression{}, b.failure(n, "PostgreSQL does not yet support operator "+string(op))
 	}
@@ -357,6 +358,9 @@ func (b *builder) binary(n hff.Node) (expression, error) {
 	right, err := b.expression(r)
 	if err != nil {
 		return expression{}, err
+	}
+	if op == hff.Add || op == hff.Subtract || op == hff.Multiply || op == hff.Divide || op == hff.Remainder {
+		return b.arithmetic(n, left, right, op)
 	}
 	if left.kind == hff.NullType || right.kind == hff.NullType {
 		return boolean("FALSE"), nil
@@ -377,6 +381,33 @@ func (b *builder) binary(n hff.Node) (expression, error) {
 		operator = "<>"
 	}
 	return boolean(both(both(left.present, right.present), "COALESCE(("+leftCode+" "+operator+" "+rightCode+"), FALSE)")), nil
+}
+
+func (b *builder) arithmetic(n hff.Node, left, right expression, op hff.Operator) (expression, error) {
+	present := both(left.present, "("+left.code+" IS NULL OR "+right.present+")")
+	if left.kind == hff.NullType {
+		return expression{"NULL", left.present, hff.NullType}, nil
+	}
+	if right.kind == hff.NullType {
+		return expression{"NULL", present, hff.NullType}, nil
+	}
+	if left.kind != hff.IntType || right.kind != hff.IntType {
+		return expression{}, b.failure(n, "PostgreSQL floating-point arithmetic requires finite-result and underflow lowering")
+	}
+	l, r := left.code, right.code
+	if op == hff.Divide {
+		// Integer inputs converted to float64 before division have no overflow
+		// or underflow risk. The smallest nonzero quotient is at least 1/2^63.
+		return expression{"(" + l + "::double precision / NULLIF(" + r + "::double precision, 0))", present, hff.FloatType}, nil
+	}
+	if op == hff.Remainder {
+		r = "NULLIF(" + r + "::numeric, 0)"
+	} else {
+		r += "::numeric"
+	}
+	intermediate := b.project("(" + l + "::numeric " + string(op) + " " + r + ")")
+	code := "(CASE WHEN " + intermediate + " BETWEEN '-9223372036854775808'::numeric AND '9223372036854775807'::numeric THEN " + intermediate + "::bigint ELSE NULL END)"
+	return expression{code, present, hff.IntType}, nil
 }
 
 func (b *builder) mixedComparison(left, right expression, op hff.Operator) expression {
