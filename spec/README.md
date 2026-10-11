@@ -53,7 +53,7 @@ These are development references, not dependencies of the HFF language contract.
 The public compiler and a local evaluator for core operators, literals,
 indexing, guards, short-circuit logic, scalar/string methods, list/object
 methods, and collection callbacks are implemented. Base64 conversion methods
-are also available locally. Additional temporal/JSON methods, SQL translation,
+are also available locally. JSON/stringification methods, SQL translation,
 and extension registration are not yet available in the local backend. A backend
 rejects unsupported compiled operations explicitly; compile validity alone does
 not promise support from every backend.

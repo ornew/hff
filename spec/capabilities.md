@@ -169,3 +169,10 @@ support matrix or compatibility profile must state restrictions explicitly.
 These identifiers belong to the advertised compatibility profile; the language
 does not prescribe a particular library version. Services comparing results
 across engines must compare the relevant profiles as well as features.
+
+The local backend obtains named-zone data from an explicit versioned TZif
+profile supplied at Build. It copies and parses the profile once; matching does
+not consult the operating system's zone files or environment. UTC and fixed
+offsets are built in, while unavailable named zones yield null. The filter
+reports the caller-supplied version label, which identifies but does not
+authenticate the data's provenance.

@@ -195,9 +195,10 @@ values and items follow the same ordering as keys.
 | `timestamp:before(timestamp) -> bool` | Earlier-than test |
 | `timestamp:add(duration) -> timestamp` | Time plus duration |
 
-Omitted time zones default to UTC. Timestamps have nanosecond precision and
-format as RFC 3339, omitting trailing fractional zeros. Invalid or unrepresentable
-timestamps yield null. Years range from 0000 through 9999. Month, day-of-month,
+The component methods accept an optional time-zone argument and default to UTC.
+`timestamp:string(tz)` requires an explicit time zone. Timestamps have nanosecond
+precision and format as RFC 3339, omitting trailing fractional zeros. Invalid or
+unrepresentable timestamps yield null. Years range from 0000 through 9999. Month, day-of-month,
 and day-of-year use one-based calendar numbering. Hours range from 0 through 23,
 minutes and seconds from 0 through 59, and the millisecond component from 0
 through 999. Leap seconds are not supported, and input fractional seconds have
@@ -255,3 +256,14 @@ Fixed offsets range through `+23:59` and `-23:59`. Engines identify their time
 zone data versions and explicitly supported Joda-Time aliases. Unknown or
 unavailable names yield null. A backend must document supported zone data and
 reject features whose HFF semantics it cannot preserve.
+
+The local backend accepts named-zone data through `local.TimeZoneProfile`,
+which contains a nonempty version label, a map of zone names to TZif bytes, and
+optional aliases. `local.WithTimeZones` or `local.Config.TimeZones` supplies the
+profile to `local.Build`. Build copies and parses the data into the filter; a
+later Match performs no filesystem or environment lookup. Aliases point
+directly to a zone in the profile or to UTC; alias chains are not accepted. UTC
+and fixed offsets are built in and cannot be overridden by a profile. Invalid
+profiles are configuration errors. `Filter.TimeZoneVersion()` returns the
+profile's version label, or the empty string when only UTC and fixed offsets
+are available.

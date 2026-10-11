@@ -14,6 +14,7 @@ import (
 type Config struct {
 	Limits          hff.Limits
 	UnlimitedLimits bool
+	TimeZones       *TimeZoneProfile
 }
 type Option struct{ apply func(*Config) error }
 
@@ -38,8 +39,9 @@ func configuration(message string) error {
 
 // Filter snapshots its configuration. Each call owns independent evaluation state.
 type Filter struct {
-	program plan.Program
-	config  Config
+	program   plan.Program
+	config    Config
+	timeZones zoneSnapshot
 }
 
 // Build validates local support without evaluating a record.
@@ -72,10 +74,16 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Filter
 		c.Limits = hff.Limits{}
 	}
 	p := plan.Program(program)
+	zones, err := snapshotZones(ctx, c.TimeZones)
+	if err != nil {
+		return nil, err
+	}
+	// Evaluation keeps only privately parsed locations, not caller-owned data.
+	c.TimeZones = nil
 	if err := checkSupported(ctx, p.Root()); err != nil {
 		return nil, err
 	}
-	return &Filter{program: p, config: c}, nil
+	return &Filter{program: p, config: c, timeZones: zones}, nil
 }
 func checkSupported(ctx context.Context, n plan.Node) error {
 	if err := cancelled(ctx); err != nil {
@@ -134,7 +142,7 @@ func (f *Filter) MatchInput(ctx context.Context, input hff.Input) (bool, error) 
 	return f.match(ctx, core.Value(input.Value()))
 }
 func (f *Filter) match(ctx context.Context, record core.Value) (bool, error) {
-	state := evaluation{ctx: ctx, record: record, limits: f.config.Limits}
+	state := evaluation{ctx: ctx, record: record, limits: f.config.Limits, timeZones: f.timeZones}
 	value, err := state.eval(f.program.Root())
 	if err != nil {
 		return false, err

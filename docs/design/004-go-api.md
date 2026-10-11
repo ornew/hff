@@ -17,9 +17,9 @@ The [language specification](../../spec/README.md) defines their semantic contra
 
 The common compiler and local backend's core operators, values, indexing,
 guards, short-circuit behavior, per-match budgets, scalar/string method
-families, list/object methods, and collection callbacks are implemented.
-Additional temporal and JSON methods, extension registration, and SQL
-translation remain separate implementation stages.
+families, list/object methods, collection callbacks, base64 conversions, and
+temporal methods are implemented. JSON/stringification, extension registration,
+and SQL translation remain separate implementation stages.
 
 ## Motivation
 
@@ -147,6 +147,24 @@ A builder validates its backend's support and creates only its own artifact.
 The same program can be built for multiple targets. A local filter is reusable;
 per-record evaluation state is separate from the filter. Backend-specific
 optimizations must preserve the program's validated semantics.
+
+The local backend accepts an optional versioned time-zone profile at Build:
+
+```go
+profile := &local.TimeZoneProfile{
+    Version: "tzdata-2026a",
+    Zones:   map[string][]byte{"America/New_York": newYorkTZif},
+    Aliases: map[string]string{"US/Eastern": "America/New_York"},
+}
+filter, err := local.Build(ctx, program, local.WithTimeZones(profile))
+```
+
+Build copies and parses TZif bytes and aliases into the immutable filter; later
+matching performs no filesystem or environment lookups. Aliases resolve
+directly to a profile zone or UTC, without chains. UTC and fixed offsets are
+built in and cannot be overridden. Invalid profiles are configuration errors.
+`Filter.TimeZoneVersion()` reports the profile version, or an empty string when
+only built-in zones are available.
 
 ```go
 matched, err := filter.Match(ctx, record)
@@ -525,6 +543,6 @@ must accompany implementation rather than be inferred from examples.
 The record specifies behavior and public API direction; acceptance does not
 claim that every package or method family has been implemented. Common
 compilation and the core, scalar/string, list/object, and callback local
-evaluation paths are available. SQL translation, additional temporal/JSON
-method families, and extension implementations remain incomplete. Base64
-conversion methods are available in the local backend.
+evaluation paths, base64 conversions, and temporal methods are available. JSON
+and stringification methods, SQL translation, and extension implementations
+remain incomplete.

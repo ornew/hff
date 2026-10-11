@@ -82,7 +82,7 @@ parser generator, not a requirement to compile grammars at runtime.
 This repository provides immutable values, schemas, capabilities, validated
 input, common query compilation, core local evaluation, scalar/string methods,
 and list/object methods and collection callbacks. Base64 conversion methods are
-also available locally. Additional temporal and JSON methods, extension
+also available locally. Additional JSON/stringification methods, extension
 registration, and SQL translation are not yet available. Start with the
 [Go guides](docs/guides/README.md), including the
 [local evaluation guide](docs/guides/local-evaluation.md),

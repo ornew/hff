@@ -123,7 +123,7 @@ func TestLocalContractsAndConcurrency(t *testing.T) {
 	}
 	_, err = local.Build(ctx, hff.Program{})
 	code(t, err, hff.ConfigurationError)
-	method, err := e.Compile(ctx, `x:duration()`)
+	method, err := e.Compile(ctx, `x:fromjson`)
 	if err != nil {
 		t.Fatal(err)
 	}

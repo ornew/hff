@@ -18,6 +18,8 @@ func supportedMethod(id string) bool {
 		return true
 	case "string.frombase64", "bytes.tobase64":
 		return true
+	case "string.timestamp", "string.duration", "timestamp.year", "timestamp.month", "timestamp.dayofmonth", "timestamp.dayofyear", "timestamp.hours", "timestamp.minutes", "timestamp.seconds", "timestamp.milliseconds", "timestamp.string", "timestamp.after", "timestamp.before", "timestamp.add", "duration.hours", "duration.minutes", "duration.seconds", "duration.milliseconds", "duration.microseconds", "duration.nanoseconds":
+		return true
 	}
 	return false
 }
@@ -137,6 +139,9 @@ func (e *evaluation) call(n plan.Node) (result, error) {
 	}
 	if err := e.scalarCost(id, receiver.value, args); err != nil {
 		return result{}, err
+	}
+	if temporalMethod(id) {
+		return e.temporal(id, receiver.value, args)
 	}
 	value, available := scalarMethod(id, receiver.value, args)
 	if !available {
