@@ -2,6 +2,7 @@
 
 These tutorials build an HFF filter into a small Go service, one step at a
 time. They use Go 1.27.1 and only APIs available in this repository.
+For a quick browser experiment, try the [Playground](../playground.md).
 
 1. [Write your first filter](01-first-filter.md): configure a schema, compile a
    human-authored query, build a local filter, and match records.

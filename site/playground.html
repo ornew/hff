@@ -1,0 +1,12 @@
+{{define "playground"}}
+<section class="playground" aria-label="Filter playground">
+  <div class="playground-toolbar"><label for="playground-example">Example</label><select id="playground-example"><option value="people">People</option><option value="labels">Service labels</option><option value="orders">Order items</option></select><button id="playground-run" type="button">Run filter</button><button id="playground-stop" type="button" disabled>Stop</button></div>
+  <label for="playground-query">Filter query</label><textarea id="playground-query" class="query-editor" rows="3" spellcheck="false"></textarea>
+  <div class="playground-inputs">
+    <div><label for="playground-schema">Schema</label><textarea id="playground-schema" rows="13" spellcheck="false"></textarea></div>
+    <div><label for="playground-record">Record</label><textarea id="playground-record" rows="13" spellcheck="false"></textarea></div>
+  </div>
+  <p id="playground-status" role="status" aria-live="polite">Loading the local WASM engine…</p>
+  <pre id="playground-result" aria-label="Filter result" tabindex="0"></pre>
+</section>
+{{end}}

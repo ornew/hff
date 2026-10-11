@@ -109,6 +109,20 @@ kbd { font: 11px ui-monospace,monospace; border: 1px solid var(--line); padding:
 .sidebar a:hover,.drawer a:hover { color: var(--text); background: var(--soft); }
 .sidebar a[aria-current],.drawer a[aria-current] { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
 .sidebar-note { margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 11px; }
+.playground { margin: 24px 0 40px; }
+@media(min-width:801px) { .doc-shell.playground-shell { grid-template-columns: 225px minmax(0,1fr); }.sidebar-hidden .doc-shell.playground-shell { grid-template-columns: minmax(0,1fr); } }
+.playground label { display: block; font-size: 14px; font-weight: 600; margin: 12px 0 6px; }
+.playground-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+.playground-toolbar label { margin: 0; }
+.playground button,.playground select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; padding: 7px 12px; }
+.playground #playground-run { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+.playground button:disabled { opacity: .5; cursor: default; }
+.playground textarea { width: 100%; resize: vertical; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); font: 14px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace; tab-size: 2; }
+.playground .query-editor { font-size: 16px; }
+.playground-inputs { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 18px; }
+.playground #playground-status { margin: 20px 0 8px; font-weight: 600; }
+.playground #playground-result { white-space: pre-wrap; overflow-wrap: anywhere; min-height: 90px; padding: 14px; background: var(--code); border: 1px solid var(--line); border-radius: 8px; font: 14px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace; }
+@media(max-width:650px) { .playground-inputs { grid-template-columns: minmax(0,1fr); gap: 0; } }
 .toc { border-left: 1px solid var(--line); padding-left: 22px; font-size: 10px; }
 .toc a { display: block; padding: 5px 0; color: var(--muted); text-decoration: none; line-height: 1.5; }
 .toc a:hover { color: var(--accent); }

@@ -1,15 +1,18 @@
 # Private WebAssembly Playground Bridge
 
-`playground/` is a private bridge for the future documentation-site playground,
-not a supported JavaScript SDK. Its Go `main` package uses the same public
-engine, schema, value, capability, and local-filter APIs as native HFF. The
-browser entry point is build-tagged for `js/wasm`; a native entry point reads
-one JSON request from standard input and writes one JSON response to standard
-output for local testing.
+`playground/` is a private bridge for the documentation-site playground, not
+a supported JavaScript SDK. Its Go `main` package uses the same public engine,
+schema, value, capability, and local-filter APIs as native HFF. The browser
+entry point is build-tagged for `js/wasm`; a native entry point reads one JSON
+request from standard input and writes one JSON response to standard output
+for local testing.
 
-The bridge currently evaluates one local match. It does not provide the site
-playground UI, a distributable JavaScript package, SQL translation, or custom
-extension registration.
+The site page provides curated examples and editable query, schema, and record
+JSON. It evaluates one local match in a dedicated worker, keeps the request in
+the browser, and starts a fresh worker after cancellation. The UI uses the
+standard capability set and HFF's default compile and local-match limits. The
+bridge does not provide a distributable JavaScript package, SQL translation,
+or custom extension registration.
 
 ## Request and response
 
@@ -39,8 +42,9 @@ Schema `type` strings use HFF's existing type-guard type-expression grammar;
 they are not Go type names or arbitrary source fragments. Use `type: "struct"`
 with nested `fields` for a struct. The bridge compiles a type descriptor and
 checks that it has the expected syntax-tree shape before using it in a schema.
-The top-level capabilities start with `capabilities.Standard()`; `without`
-only removes IDs from that set and cannot add arbitrary capabilities.
+The bridge starts with `capabilities.Standard()`; the native request's
+`without` field only removes IDs from that set and cannot add arbitrary
+capabilities. The site UI keeps the standard set fixed.
 
 The record decoder consumes JSON tokens directly. It rejects invalid UTF-8,
 invalid Unicode surrogate pairs, duplicate object keys, trailing JSON values,
@@ -78,6 +82,6 @@ Without Node.js the smoke test skips. The repository's generic
 [`js/wasm` package test](checks.md#test-go-packages-on-webassembly) checks
 package compatibility, while this smoke test exercises the bridge itself.
 
-The site does not yet contain a page or worker that invokes this bridge. The
-static-site playground, curated sample schemas and records, browser
-results/errors, and browser/WASM flow remain to be implemented and verified.
+The site worker loads the generated WebAssembly module and passes request JSON
+to the bridge without decoding the record into JavaScript objects. Its
+five-second match timeout stops the worker and produces no partial match.

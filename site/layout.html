@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="{{rel .Current.URL "style.css"}}">
   <script defer src="{{rel .Current.URL "search-index.js"}}"></script>
   <script defer src="{{rel .Current.URL "site.js"}}"></script>
+  {{if .Current.Playground}}<script type="module" src="{{rel .Current.URL "playground/app.js"}}"></script>{{end}}
 </head>
 <body class="{{if .Current.Home}}home-page{{else}}doc-page{{end}}">
   <a class="skip" href="#content">Skip to content</a>
@@ -18,7 +19,8 @@
       <button class="icon-button menu-toggle{{if not .Current.Home}} sidebar-toggle{{end}}" type="button" aria-label="Open navigation" aria-haspopup="dialog" aria-controls="navigation-dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
       <a class="brand" href="{{.Root}}" aria-label="HFF home"><span class="brand-mark" aria-hidden="true">H<span>F</span>F</span></a>
       <nav class="topnav" aria-label="Main">
-        {{range .Sections}}{{$section := .}}{{with index .Pages 0}}<a href="{{rel $.Current.URL .URL}}" {{if $section.Active}}{{if eq .URL $.Current.URL}}aria-current="page"{{else}}aria-current="location"{{end}}{{end}}>{{$section.Name}}</a>{{end}}{{end}}
+        {{range .Sections}}{{if and (ne .Name "Overview") (ne .Name "Design Records") (ne .Name "Development")}}{{$section := .}}{{with index .Pages 0}}<a href="{{rel $.Current.URL .URL}}" {{if $section.Active}}{{if eq .URL $.Current.URL}}aria-current="page"{{else}}aria-current="location"{{end}}{{end}}>{{$section.Name}}</a>{{end}}{{end}}{{end}}
+        {{range .Pages}}{{if .Playground}}<a href="{{rel $.Current.URL .URL}}" {{if $.Current.Playground}}aria-current="page"{{end}}>Playground</a>{{end}}{{end}}
       </nav>
       <div class="topbar-actions">
         <button class="search-trigger" type="button" aria-label="Search documentation" aria-haspopup="dialog" aria-controls="search-dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><span>Search docs</span><kbd>/</kbd></button>
@@ -30,14 +32,14 @@
   {{if .Current.Home}}
   <main id="content" tabindex="-1">{{template "landing" .}}</main>
   {{else}}
-  <div class="doc-shell">
+  <div class="doc-shell{{if .Current.Playground}} playground-shell{{end}}">
     <nav id="documentation-sidebar" class="sidebar" aria-label="Documentation">{{template "doclinks" .}}</nav>
-    <main id="content" tabindex="-1"><article class="prose">{{.Current.Body}}</article>
+    <main id="content" tabindex="-1"><article class="prose">{{.Current.Body}}</article>{{if .Current.Playground}}{{template "playground" .}}{{end}}
       <footer class="doc-footer"><a class="source-link" href="https://github.com/ornew/hff/blob/main/{{.Current.Source}}">View source on GitHub ↗</a>
         <nav class="pager" aria-label="Adjacent pages">{{with .Prev}}<a href="{{rel $.Current.URL .URL}}"><small>Previous</small>{{.Title}}</a>{{end}}{{with .Next}}<a href="{{rel $.Current.URL .URL}}"><small>Next</small>{{.Title}}</a>{{end}}</nav>
       </footer>
     </main>
-    <aside class="toc" aria-label="On this page"><p class="eyebrow">On this page</p>{{range .Current.Headings}}<a href="#{{.ID}}">{{.Title}}</a>{{end}}</aside>
+    {{if not .Current.Playground}}<aside class="toc" aria-label="On this page"><p class="eyebrow">On this page</p>{{range .Current.Headings}}<a href="#{{.ID}}">{{.Title}}</a>{{end}}</aside>{{end}}
   </div>
   {{end}}
   <footer class="site-footer"><a class="footer-brand" href="{{.Root}}">HFF</a><span>Human-Friendly Filter</span><a href="https://github.com/ornew/hff">GitHub ↗</a><a href="{{rel .Current.URL "LICENSE"}}">Apache 2.0</a></footer>
