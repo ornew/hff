@@ -59,12 +59,41 @@ limit. JSON serialization uses an input-depth allowance of 65 so the JSON
 depth limit is the one exercised. These are correctness checks, not latency or
 throughput measurements.
 
+## Measure selected depth-limit workloads
+
+The engine benchmark measures completed work at the default syntax, callback,
+input, and JSON depth ceilings. The callback case raises `MaxSyntaxDepth` to
+512 so it measures `MaxCallbackDepth` independently; under the normal syntax
+default, syntax depth can reject deeply nested callbacks first. The input case
+times `Validate`; the JSON cases use a previously validated `Input` and time
+`MatchInput`.
+
+```sh
+go test -count=5 -benchtime=100ms -run '^$' -bench '^BenchmarkDefaultDepthWorkloads$' -benchmem ./engine
+```
+
+One five-run baseline on Go 1.27.1, Darwin arm64, Apple M3 Max, with a 100 ms
+benchmark time per case produced these medians:
+
+| Case | Median time | Allocated bytes | Allocations |
+|:--|--:|--:|--:|
+| Syntax depth 64 | 13,218 ns/op | 38,252 B/op | 280 allocs/op |
+| Callback depth 64, syntax limit raised to 512 | 394,374 ns/op | 554,002 B/op | 6,542 allocs/op |
+| Input depth 64 | 835 ns/op | 0 B/op | 0 allocs/op |
+| JSON `fromjson` depth 64 | 2,796 ns/op | 3,210 B/op | 128 allocs/op |
+| JSON `tojson` depth 64 | 1,509 ns/op | 440 B/op | 7 allocs/op |
+
+These cases verify completed operations at selected depth ceilings. Exact
+acceptance and rejection immediately around the defaults are checked by
+`TestDefaultDepthBoundaries`; neither benchmark is a latency guarantee or
+evidence that the defaults fit every workload.
+
 ## Remaining evidence gaps
 
-Depth-limit correctness is covered at the defaults, but those boundary tests
-do not measure performance. The evidence does not establish behavior near the
-default `MaxCompileSteps`; existing compile benchmarks cover representative
-query shapes and sizes, not a one-million-step boundary. Runtime abort cases
-also do not measure successful work close to the `MaxSteps` or
-`MaxGeneratedValues` ceilings. Broader service workloads and a reasoned review
-of those limit values remain necessary.
+Boundary correctness and selected depth-64 workload costs are now measured.
+The evidence does not establish behavior near the default `MaxCompileSteps`;
+existing compile benchmarks cover representative query shapes and sizes, not
+a one-million-step boundary. Runtime abort cases also do not measure
+successful work close to the `MaxSteps` or `MaxGeneratedValues` ceilings.
+Broader service workloads and a reasoned review of those limit values remain
+necessary.

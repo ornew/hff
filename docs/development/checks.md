@@ -97,6 +97,15 @@ does not treat operation counts as wall-clock deadlines. See the
 go test -count=5 -benchtime=100ms -run '^$' -bench '^BenchmarkDefaultLimitWorkloads$' -benchmem ./engine
 ```
 
+The depth-limit benchmark measures successful parsing/compilation, input
+validation, and JSON operations at selected default depth ceilings. It raises
+the syntax-depth limit in the callback case to isolate callback depth. Exact
+boundary rejection is covered separately by `TestDefaultDepthBoundaries`.
+
+```sh
+go test -count=5 -benchtime=100ms -run '^$' -bench '^BenchmarkDefaultDepthWorkloads$' -benchmem ./engine
+```
+
 The PostgreSQL structured-build benchmark measures pure translation for
 composite, JSON, and JSONB bindings with scalar, `any()`, and `foldl()` queries.
 It reports Build time and allocations together with generated SQL bytes and
