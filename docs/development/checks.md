@@ -35,9 +35,11 @@ the script replace the default `./...` package pattern; for example:
 sh hack/check-wasm.sh -count=1 ./engine ./backends/local
 ```
 
-This runs Go tests using Node's WebAssembly executor. It verifies package test
-compatibility with `js/wasm`; it does not define a browser-facing Go API,
-distribution contract, browser UI, or playground.
+This runs Go tests using Node's WebAssembly executor and verifies package
+compatibility with `js/wasm`. It does not exercise the private playground
+bridge or establish a distribution contract or browser UI. See the
+[private bridge guide](wasm-bridge.md) for its separate native/WASM parity
+smoke test.
 
 ## Run focused benchmarks
 
