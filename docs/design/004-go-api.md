@@ -530,6 +530,13 @@ Compilation, building, and evaluation accept context cancellation; budgets and
 cancellation state are scoped to each call rather than shared across concurrent
 requests.
 
+Cancellation errors retain both the context status and `context.Cause(ctx)` in
+their unwrap chain. `errors.Is` therefore matches `context.Canceled` or
+`context.DeadlineExceeded`, and also matches a host cause supplied through
+`context.WithCancelCause` or `context.WithDeadlineCause`. The status message
+remains the standard context status. For SQL, this applies to `Build` only;
+database execution is controlled by the context passed to the database API.
+
 ## Alternatives considered
 
 A single Compile that always constructs Match is convenient for local-only use,

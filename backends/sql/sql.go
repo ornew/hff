@@ -9,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/ornew/hff"
+	"github.com/ornew/hff/internal/core"
 )
 
 // Dialect identifies an SQL translation contract. Build requires an explicit dialect.
@@ -209,10 +210,7 @@ func configuration(message string) error {
 }
 
 func checkContext(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
-		return &hff.Error{Code: hff.CancelledError, Message: err.Error(), Cause: err}
-	}
-	return nil
+	return core.CheckContext(ctx)
 }
 
 func pathKey(path []string) string {

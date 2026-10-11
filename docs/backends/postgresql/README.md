@@ -5,6 +5,12 @@ predicate and ordered parameters. It does not open a database connection or
 execute SQL. The service owns the surrounding statement, connection, and
 execution timeout.
 
+The context passed to `Build` cancels SQL translation only. A `CancelledError`
+matches `context.Canceled` or `context.DeadlineExceeded` through `errors.Is`;
+for contexts created with `context.WithCancelCause` or
+`context.WithDeadlineCause`, it also matches the host-supplied cause. Canceling
+database execution requires the context passed to the database API.
+
 ## Build a predicate
 
 This example maps two schema fields to trusted database identifiers:

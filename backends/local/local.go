@@ -121,10 +121,7 @@ func checkSupported(ctx context.Context, n plan.Node, methods map[string]MethodI
 	return nil
 }
 func cancelled(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
-		return &hff.Error{Code: hff.CancelledError, Message: err.Error(), Cause: err}
-	}
-	return nil
+	return core.CheckContext(ctx)
 }
 
 // Match validates the complete record before evaluating the filter.

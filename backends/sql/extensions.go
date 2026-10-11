@@ -241,8 +241,11 @@ func (b *builder) extension(n hff.Node, method hff.Method) (expression, error) {
 		}
 		call.builder = nil
 		call.mu.Unlock()
+		contextErr := checkContext(b.ctx)
 		if err == nil {
-			err = checkContext(b.ctx)
+			err = contextErr
+		} else if contextErr != nil && (errors.Is(err, b.ctx.Err()) || errors.Is(err, context.Cause(b.ctx))) {
+			err = errors.Join(contextErr, err)
 		}
 		if err != nil {
 			return expression{}, b.translationFailure(n, err)

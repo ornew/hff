@@ -153,8 +153,11 @@ func (e *evaluation) extension(n plan.Node, method plan.Method, receiver result)
 	if budgetErr := call.finish(); budgetErr != nil {
 		err = budgetErr
 	}
+	contextErr := cancelled(e.ctx)
 	if err == nil {
-		err = cancelled(e.ctx)
+		err = contextErr
+	} else if contextErr != nil && (errors.Is(err, e.ctx.Err()) || errors.Is(err, context.Cause(e.ctx))) {
+		err = errors.Join(contextErr, err)
 	}
 	if err != nil {
 		return result{}, e.extensionFailure(n, err)

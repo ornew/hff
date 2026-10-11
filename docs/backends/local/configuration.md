@@ -159,7 +159,10 @@ if errors.As(err, &detail) {
 }
 ```
 
-Errors retain context causes for errors.Is(err, context.Canceled) and
-errors.Is(err, context.DeadlineExceeded). Input paths contain literal names;
-list positions appear as decimal indices. Values are not included in diagnostics.
+Cancellation returns a `CancelledError` while preserving both the context
+status and its cause in the error chain. `errors.Is` matches
+`context.Canceled` or `context.DeadlineExceeded`; for contexts created with
+`context.WithCancelCause` or `context.WithDeadlineCause`, it also matches the
+host-supplied cause. Input paths contain literal names; list positions appear
+as decimal indices. Values are not included in diagnostics.
 Completed evaluation results and ordinary null are separate from these errors.

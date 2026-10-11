@@ -54,10 +54,7 @@ func ValidateInput(ctx context.Context, schema Type, value Value, config Validat
 	return Input{value, schema, true}, nil
 }
 func cancelError(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
-		return &Error{Code: CancelledError, Message: err.Error(), Cause: err}
-	}
-	return nil
+	return CheckContext(ctx)
 }
 
 type segment struct {

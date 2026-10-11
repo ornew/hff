@@ -162,7 +162,8 @@ if errors.As(err, &detail) {
     case hff.LimitError:
         // A configured per-match budget was exceeded.
     case hff.CancelledError:
-        // The context was cancelled; errors.Is matches the context cause.
+        // errors.Is matches Canceled/DeadlineExceeded and any host cause
+        // supplied with context.WithCancelCause/WithDeadlineCause.
     }
 }
 ```

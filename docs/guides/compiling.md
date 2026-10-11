@@ -52,7 +52,8 @@ if err != nil {
         case hff.LimitError:
             // Adjust the configured budget or simplify the query.
         case hff.CancelledError:
-            // The context was cancelled; errors.Is also matches its cause.
+            // errors.Is matches Canceled/DeadlineExceeded and any host cause
+            // from context.WithCancelCause/WithDeadlineCause.
         }
         if detail.Span != nil {
             fmt.Printf("query error at %d:%d: %s\n",

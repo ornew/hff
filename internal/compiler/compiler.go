@@ -244,8 +244,8 @@ func (c *compiler) reference(n *syntax.Variable) (plan.Node, error) {
 	return plan.NewNode(plan.Spec{Kind: plan.VariableNode, Type: b.Type(), Span: syntax.ExprSpan(n), Binding: b, Path: []string{name}}), nil
 }
 func (c *compiler) chargeCompile(source any) error {
-	if err := c.ctx.Err(); err != nil {
-		return &core.Error{Code: core.CancelledError, Message: err.Error(), Cause: err}
+	if err := core.CheckContext(c.ctx); err != nil {
+		return err
 	}
 	c.steps++
 	if !c.config.Unlimited && c.config.Limits.MaxCompileSteps > 0 && c.steps > c.config.Limits.MaxCompileSteps {

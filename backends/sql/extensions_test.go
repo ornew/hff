@@ -199,6 +199,42 @@ func TestSQLTranslationContractFailures(t *testing.T) {
 	_, err = hffsql.Build(ctx, p, append(opts, hffsql.WithMethods(hffsql.Implement(ds[0], hffsql.PostgreSQL, fn)))...)
 	requireCode(t, err, hff.CancelledError)
 }
+func TestSQLTranslatorPreservesHostCancellationCause(t *testing.T) {
+	ds := extensionDeclarations(t)
+	p, err := extensionEngine(t, ds).Compile(context.Background(), `name:customprefix("Al")`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, result := range []string{"value", "status", "cause"} {
+		t.Run(result, func(t *testing.T) {
+			cause := errors.New("host stopped SQL translation")
+			ctx, cancel := context.WithCancelCause(context.Background())
+			defer cancel(nil)
+			fn := func(c *hffsql.Call, r hffsql.Expression, a []hffsql.Expression) (hffsql.Expression, error) {
+				value, err := prefixTranslator(c, r, a)
+				if err != nil {
+					return value, err
+				}
+				cancel(cause)
+				switch result {
+				case "status":
+					return hffsql.Expression{}, c.Context().Err()
+				case "cause":
+					return hffsql.Expression{}, context.Cause(c.Context())
+				}
+				return value, nil
+			}
+			query, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL),
+				hffsql.WithBindings(hffsql.Bind(hff.Path{"name"}, hffsql.Column("name"))),
+				hffsql.WithMethods(hffsql.Implement(ds[0], hffsql.PostgreSQL, fn)))
+			requireCode(t, err, hff.CancelledError)
+			if query != nil || !errors.Is(err, context.Canceled) || !errors.Is(err, cause) {
+				t.Fatalf("lost translator cancellation cause or returned a query: %v", err)
+			}
+		})
+	}
+}
+
 func TestSQLTranslatorParametersAndExpressionMetadata(t *testing.T) {
 	ds := extensionDeclarations(t)
 	p, err := extensionEngine(t, ds).Compile(context.Background(), `name:customprefix("Al")`)

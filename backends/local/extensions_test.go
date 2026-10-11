@@ -198,6 +198,36 @@ func TestLocalExtensionBudgetsAndCancellation(t *testing.T) {
 		t.Fatal("cancellation cause lost")
 	}
 }
+func TestLocalExtensionPreservesHostCancellationCause(t *testing.T) {
+	d := extension(t, schema.AnyType, schema.StringType, hff.InvokeNull, 1)
+	p := extensionProgram(t, `x:custom`, d)
+	for _, result := range []string{"value", "status", "cause"} {
+		t.Run(result, func(t *testing.T) {
+			cause := errors.New("host stopped the extension")
+			ctx, cancel := context.WithCancelCause(context.Background())
+			defer cancel(nil)
+			f, err := local.Build(context.Background(), p, local.WithMethods(local.Implement(d, func(c *local.Call, _ hff.Value, _ []hff.Value) (hff.Value, error) {
+				cancel(cause)
+				switch result {
+				case "status":
+					return hff.Value{}, c.Context().Err()
+				case "cause":
+					return hff.Value{}, context.Cause(c.Context())
+				}
+				return hff.String("yes"), nil
+			})))
+			if err != nil {
+				t.Fatal(err)
+			}
+			matched, err := f.Match(ctx, record(hff.Null(), hff.Null()))
+			code(t, err, hff.CancelledError)
+			if matched || !errors.Is(err, context.Canceled) || !errors.Is(err, cause) {
+				t.Fatalf("lost extension cancellation cause or returned a match: %v", err)
+			}
+		})
+	}
+}
+
 func TestLocalExtensionConcurrentCallsAndLifetime(t *testing.T) {
 	d := extension(t, schema.StringType, schema.StringType, hff.PropagateNull, 1)
 	var calls atomic.Int64

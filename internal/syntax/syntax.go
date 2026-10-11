@@ -68,10 +68,7 @@ func ParseQuery(ctx context.Context, source string, config Config) (Expr, error)
 	return tree, nil
 }
 func checkContext(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
-		return &hff.Error{Code: hff.CancelledError, Message: err.Error(), Cause: err}
-	}
-	return nil
+	return core.CheckContext(ctx)
 }
 func sourceError(code hff.ErrorCode, source string, pos int, message string) error {
 	if pos < 0 {
