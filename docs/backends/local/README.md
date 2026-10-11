@@ -55,10 +55,11 @@ fmt.Println(matched) // true
 ```
 
 `Match` validates the supplied value against the program's input schema on each
-call, then evaluates it. `false, nil` means evaluation completed and the record
-did not match. Validation failures, cancellation, and exceeded runtime budgets
-return errors instead of a match result. Ordinary null and internal no-value
-follow the language's boolean-conversion rules.
+call, traversing the whole schema-shaped record even if the query reads only one
+scalar field, then evaluates it. `false, nil` means evaluation completed and
+the record did not match. Validation failures, cancellation, and exceeded
+runtime budgets return errors instead of a match result. Ordinary null and
+internal no-value follow the language's boolean-conversion rules.
 
 ## Reuse validated input
 
@@ -81,7 +82,9 @@ matches the program and skips record validation. The contract compares field
 types, required/optional presence, nullability, numeric subtypes, and missing
 value behavior; it does not require the same schema object or capability set.
 An invalid or incompatible input returns an input error without a completed
-match.
+match. For repeated searches, validate once at ingestion and retain the
+immutable `Input`; this avoids traversing fields that an individual query does
+not read.
 
 ## Configure evaluation limits
 

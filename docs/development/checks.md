@@ -65,6 +65,17 @@ Run this benchmark alone with allocation reporting:
 go test ./backends/local -run '^$' -bench '^BenchmarkCollections$' -benchmem
 ```
 
+The record-matching benchmark compares `Match` with `MatchInput` for scalar,
+service-regex, `any` first/last, and `all` queries over records with one, 100,
+and 1,000 struct items. Compilation, filter construction, and input validation
+are outside the timed loops. `Match` includes per-call validation of the entire
+record; `MatchInput` reuses a previously validated immutable input. The
+benchmark measures local evaluation and allocations, not a universal speedup.
+
+```sh
+go test ./backends/local -run '^$' -bench '^BenchmarkRecordMatching$' -benchmem
+```
+
 The PostgreSQL structured-build benchmark measures pure translation for
 composite, JSON, and JSONB bindings with scalar, `any()`, and `foldl()` queries.
 It reports Build time and allocations together with generated SQL bytes and
