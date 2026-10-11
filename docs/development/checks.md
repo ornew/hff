@@ -144,6 +144,14 @@ partial input is returned and the cancellation cause is preserved.
 go test ./internal/core -run '^$' -fuzz '^FuzzInputUTF8$' -fuzztime=30s -parallel=2
 ```
 
+The map-key ordering target compares HFF's context-aware merge order with Go's
+byte-lexical `sort.Strings` result, including long common prefixes and malformed
+UTF-8 byte sequences.
+
+```sh
+go test ./internal/core -run '^$' -fuzz '^FuzzInputKeyOrder$' -fuzztime=30s -parallel=2
+```
+
 ## Run shared semantic conformance cases
 
 The shared fixture in [`cases.go`](https://github.com/ornew/hff/blob/main/internal/conformance/cases.go)

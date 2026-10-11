@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"sort"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -81,13 +81,77 @@ func appendIndex(path location, index int) location {
 	return append(path, segment{index: index, indexed: true})
 }
 
-func objectKeys(m map[string]Value) []string {
+func objectKeys(ctx context.Context, m map[string]Value) ([]string, error) {
+	if err := cancelError(ctx); err != nil {
+		return nil, err
+	}
 	keys := make([]string, 0, len(m))
 	for key := range m {
+		if err := cancelError(ctx); err != nil {
+			return nil, err
+		}
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
-	return keys
+	if len(keys) < 2 {
+		return keys, nil
+	}
+	scratch := make([]string, len(keys))
+	for width := 1; width < len(keys); {
+		for start := 0; start < len(keys); {
+			mid := start + min(width, len(keys)-start)
+			end := mid + min(width, len(keys)-mid)
+			i, j := start, mid
+			for k := start; k < end; k++ {
+				if err := cancelError(ctx); err != nil {
+					return nil, err
+				}
+				left := j == end
+				if i < mid && j < end {
+					order, err := compareInputKeys(ctx, keys[i], keys[j])
+					if err != nil {
+						return nil, err
+					}
+					left = order <= 0
+				}
+				if left {
+					scratch[k] = keys[i]
+					i++
+				} else {
+					scratch[k] = keys[j]
+					j++
+				}
+			}
+			start = end
+		}
+		keys, scratch = scratch, keys
+		if width >= len(keys)-width {
+			break
+		}
+		width *= 2
+	}
+	return keys, nil
+}
+
+func compareInputKeys(ctx context.Context, a, b string) (int, error) {
+	n := min(len(a), len(b))
+	for offset := 0; offset < n; {
+		if err := cancelError(ctx); err != nil {
+			return 0, err
+		}
+		end := offset + min(4096, n-offset)
+		if order := strings.Compare(a[offset:end], b[offset:end]); order != 0 {
+			return order, nil
+		}
+		offset = end
+	}
+	switch {
+	case len(a) < len(b):
+		return -1, nil
+	case len(a) > len(b):
+		return 1, nil
+	default:
+		return 0, nil
+	}
 }
 func validateValue(ctx context.Context, v Value, path location, depth int, count *int, limits Limits) error {
 	if err := cancelError(ctx); err != nil {
@@ -132,7 +196,11 @@ func validateValue(ctx context.Context, v Value, path location, depth int, count
 			return locationError(LimitError, path, "input value count limit exceeded")
 		}
 		m := v.data.(map[string]Value)
-		for _, key := range objectKeys(m) {
+		keys, err := objectKeys(ctx, m)
+		if err != nil {
+			return err
+		}
+		for _, key := range keys {
 			valid, err := inputUTF8(ctx, key)
 			if err != nil {
 				return err
@@ -218,7 +286,11 @@ func checkValueType(ctx context.Context, v Value, t Type, path location) error {
 		}
 	case MapType:
 		m := v.data.(map[string]Value)
-		for _, key := range objectKeys(m) {
+		keys, err := objectKeys(ctx, m)
+		if err != nil {
+			return err
+		}
+		for _, key := range keys {
 			if err := checkValueType(ctx, m[key], t.Element(), appendPath(path, key)); err != nil {
 				return err
 			}
@@ -239,7 +311,11 @@ func checkValueType(ctx context.Context, v Value, t Type, path location) error {
 				return err
 			}
 		}
-		for _, key := range objectKeys(m) {
+		keys, err := objectKeys(ctx, m)
+		if err != nil {
+			return err
+		}
+		for _, key := range keys {
 			if !known[key] {
 				return inputError(appendPath(path, key), "undeclared struct field; use a map schema for dynamic keys")
 			}

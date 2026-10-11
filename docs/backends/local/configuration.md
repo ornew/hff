@@ -142,7 +142,10 @@ strings and object keys in chunks of at most 4,096 bytes, adjusted to avoid
 splitting a rune, and checks context between chunks. Cancellation during a
 large scan returns a cancellation error with the context status and any
 host-supplied cause preserved; validation never returns a completed partial
-input.
+input. Map keys are still visited in byte-lexical order, matching Go's
+`sort.Strings`; the cancellable ordering checks context while collecting keys,
+merging runs, and comparing long common prefixes. Cancellation returns no
+partially ordered key list.
 
 ## Handle errors
 

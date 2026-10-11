@@ -27,13 +27,18 @@ func TestInputUTF8ChunkBoundaries(t *testing.T) {
 type utf8CancelContext struct {
 	context.Context
 	checks int
+	at     int
 	cancel context.CancelCauseFunc
 	cause  error
 }
 
 func (c *utf8CancelContext) Err() error {
 	c.checks++
-	if c.checks == 4 {
+	at := c.at
+	if at == 0 {
+		at = 4
+	}
+	if c.checks == at {
 		c.cancel(c.cause)
 	}
 	return c.Context.Err()
@@ -69,13 +74,19 @@ func TestValidationCancelsWithinLargeStringsAndKeys(t *testing.T) {
 			base, cancel := context.WithCancelCause(context.Background())
 			defer cancel(nil)
 			cause := errors.New("stop validating host input")
-			ctx := &utf8CancelContext{Context: base, cancel: cancel, cause: cause}
+			at := 4
+			if tc.name == "key" {
+				// Exceed all non-scan context checks for a one-entry map, so
+				// this cancellation requires checks within the key's UTF-8 scan.
+				at = 16
+			}
+			ctx := &utf8CancelContext{Context: base, cancel: cancel, cause: cause, at: at}
 			input, err := ValidateInput(ctx, tc.schema, tc.value, ValidationConfig{})
 			var detail *Error
 			if input.Compatible(tc.schema) || !errors.As(err, &detail) || detail.Code != CancelledError || !errors.Is(err, cause) {
 				t.Fatalf("validation returned a completed input or lost cause: %v", err)
 			}
-			if ctx.checks < 4 || ctx.checks > 5 {
+			if ctx.checks < at || ctx.checks > at+1 {
 				t.Fatalf("validation continued after cancellation: %d checks", ctx.checks)
 			}
 		})
