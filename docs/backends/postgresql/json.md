@@ -78,12 +78,26 @@ and propagates through the ordinary HFF evaluation rules.
 
 For schema-known JSON objects, the backend supports `size()`, `has(key)`,
 `get(key)`, `keys()`, `values()`, and `items()`. Enumeration orders keys with
-PostgreSQL's `C` collation. For schema-known JSON lists, it supports `size()`
-`has(index)`, `any()`, and `all()`. Nested callbacks can capture outer callback
-values and schema fields, with lexical shadowing:
+PostgreSQL's `C` collation. For schema-known JSON lists, it supports `size()`,
+`has(index)`, `contains()`, `unique()`, `any()`, and `all()`. `contains()`
+requires every supplied needle to be present; a null needle is an ordinary
+value, while a null list receiver propagates null. A no-value argument
+propagates even if an earlier needle matched. `unique()` compares each element
+by HFF equality, so repeated stored nulls and repeated nested composite values
+are duplicates. These operations require applicable list/object equality
+capabilities for the types actually compared.
+
+Nested callbacks can capture outer callback values and schema fields, with
+lexical shadowing:
 
 ```hff
 orders:any(order=>order.items:any(item=>item.price>100))
+```
+
+Inside those callbacks, scalar membership is supported as well:
+
+```hff
+profile.roles:any(role=>role:in("admin","editor"))
 ```
 
 The SQL backend preserves the callback result rules: a null list yields null,
@@ -105,16 +119,21 @@ string-keyed maps; a missing field differs from a present field containing
 null. A stored null compares equal to null in the same position. Nested lists
 and schema-known heterogeneous JSON values are compared recursively, including
 known int64 and float64 values without converting int64 through float64.
-Structural comparisons require the matching `comparison:list-equality` or
+Structural comparisons in `=`, `!=`, membership, and `unique()` require the
+matching `comparison:list-equality` or
 `comparison:object-equality` capability (or the combined
 `group:structural-equality`). Explicit null tests do not require either one.
 At the top-level predicate boundary, `=` and `!=` both return false when the
 comparison result is null or no-value, following HFF predicate conversion.
 
-For example, a schema-known list can be compared to a query-side list literal:
+For example, list membership, uniqueness, and a callback using scalar `in()`
+can be combined with structural equality:
 
 ```hff
-profile.roles=["admin","editor"]
+profile.scores=[80,90]
+profile.scores:contains(80,90)
+profile.scores:unique
+profile.scores:any(score=>score:in(80,90))
 ```
 
 The following operations remain unsupported for JSON-backed values and return
@@ -123,7 +142,7 @@ a source-located `hff.BackendError` from `Build`:
 - Dynamic `Any` decoding and unions with multiple non-null families when the
   stored representation cannot determine the HFF type.
 - Transforming callbacks such as `map()`, `flatmap()`, `foldl()`, and `foldr()`;
-  `contains()`, `unique()`, `sort()`, and other collection transformations.
+  `sort()` and other unsupported collection transformations.
 - JSON parsing/serialization methods, conversions to bytes/timestamps/durations,
   and operations requiring a runtime type not fixed by the schema.
 
@@ -157,7 +176,7 @@ the service remains responsible for database timeouts and cancellation.
 ## Verification
 
 The repository's tagged integration suite compares JSON and JSONB bindings
-against local evaluation on PostgreSQL 18.6. The verified matrix covers 2,120
+against local evaluation on PostgreSQL 18.6. The verified matrix covers 2,640
 JSON/JSONB query-record pairs for scalar and nested access, null and missing-key
 cases, list indexing, object/list inspection and equality, callbacks, type
 guards, and type/truthiness predicates.

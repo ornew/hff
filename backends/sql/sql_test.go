@@ -209,7 +209,7 @@ func TestDeferredSQLTypesAndMethodsRejectAtBuild(t *testing.T) {
 	for _, source := range []string{
 		`name:matches("A")`, `name!~"A"`, `name:number>0`, `name:bool`, `name:fromjson`,
 		`name:frombase64`, `name:timestamp`, `name:duration`, `name:tojson`, `name:tostring`,
-		`name:in("A")`, `age:round=1`, `age:floor=1`, `factor:ceil=1`,
+		`age:round=1`, `age:floor=1`, `factor:ceil=1`,
 	} {
 		_, err := hffsql.Build(ctx, compile(t, source), hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
 		detail := requireCode(t, err, hff.BackendError)
@@ -275,6 +275,8 @@ func TestArithmeticReferenceExpectations(t *testing.T) {
 func parityCases() []parityCase {
 	var cases []parityCase
 	queries := []string{
+		`name:in("Alice","A",null)`, `age:in(18,9007199254740992.0,null)`, `flag:in(true,false)`,
+		`name:in("Alice",age)`, `age:in(18,factor!)`, `name:in(null,name!)`,
 		``, `age`, `name`, `flag`, `factor`,
 		`age>=18 name:contains("A") | flag`,
 		`age=null`, `age!=null`, `age=null | flag`,

@@ -75,6 +75,10 @@ implicit AND, explicit null comparisons, numeric unary negation, postfix guards
 at scalar leaves, scalar type guards, `exists()`, and `type()` are supported.
 String methods currently supported are `len()`, `contains()`, `startswith()`,
 `endswith()`, and `concat()`; boolean `not()`, `and()`, and `or()` are supported.
+The generic scalar `in()` method is supported for membership among its
+arguments. For JSON-backed lists, the backend also supports `contains()`,
+`unique()`, `any()`, and `all()`; callbacks may use scalar `in()`. See the
+[JSON guide](json.md) for equality capabilities and collection semantics.
 
 Integer arithmetic supports `+`, `-`, `*`, `%`, and integer/integer `/`:
 
@@ -112,11 +116,12 @@ from `Build`. For scalar bindings, the current subset rejects regex, collection
 operations, `Any` and non-null mixed unions, JSON and temporal conversions,
 float/float and mixed int/float arithmetic, and guarded access through nullable
 parents. JSON bindings support the schema-known access and inspection described
-in the [JSON guide](json.md); dynamic `Any`, mixed non-null unions, callbacks,
-and representations whose runtime HFF type cannot be recovered remain
-unsupported there. JSON list/object structural equality is available for
-schema-known values when its capability is enabled; transforming callbacks,
-collection transformations, and JSON conversions remain unsupported.
+in the [JSON guide](json.md); dynamic `Any`, mixed non-null unions, transforming
+callbacks, and representations whose runtime HFF type cannot be recovered
+remain unsupported there. JSON list/object structural equality, list
+`contains()` and `unique()`, and `any()`/`all()` are available for schema-known
+values when their required capabilities are enabled; transforming callbacks,
+`sort()`, and JSON conversions remain unsupported.
 Unsupported operations do not fall back to local evaluation.
 PostgreSQL is the only currently supported SQL dialect.
 

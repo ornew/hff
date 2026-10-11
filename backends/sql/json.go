@@ -167,6 +167,8 @@ func (b *builder) jsonCall(n hff.Node, name string, values []expression, format 
 	r := values[0]
 	present := ordinaryPresence(values)
 	switch name {
+	case "contains", "unique":
+		return b.jsonMembership(n, name, values, format)
 	case "exists":
 		return boolean(both(r.present, "("+r.code+" IS NOT NULL)")), nil
 	case "type":

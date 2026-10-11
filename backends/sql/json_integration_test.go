@@ -42,6 +42,12 @@ func TestPostgreSQLJSONParity(t *testing.T) {
 		rows = append(rows, row{[]hff.Value{obj(map[string]hff.Value{"name": hff.String("Alice"), "age": hff.Int(n), "father": obj(map[string]hff.Value{"name": hff.String("Bob")})}), hff.List(hff.Int(n)), obj(map[string]hff.Value{}), hff.List(hff.Float(math.SmallestNonzeroFloat64), hff.Float(math.MaxFloat64))}, []string{`{"name":"Alice","age":` + strconv.FormatInt(n, 10) + `,"father":{"name":"Bob"}}`, `[` + strconv.FormatInt(n, 10) + `]`, `{}`, `[5e-324,1.7976931348623157e308]`}, false})
 	}
 	for i := range rows {
+		if i == 4 {
+			rows[i].values[1] = hff.List(hff.Null(), hff.Null(), hff.Int(10), hff.Int(10))
+			rows[i].documents[1] = `[null,null,10,10]`
+			rows[i].values[3] = hff.List(hff.Float(1), hff.Float(1))
+			rows[i].documents[3] = `[1.0,1.0]`
+		}
 		value := hff.List(hff.List(hff.Int(10), hff.Int(20)), hff.List(), hff.Null(), hff.List(hff.Null()))
 		document := `[[10,20],[],null,[null]]`
 		if i < 2 {
@@ -50,6 +56,9 @@ func TestPostgreSQLJSONParity(t *testing.T) {
 		} else if i == 3 {
 			value = hff.List()
 			document = "[]"
+		} else if i == 4 {
+			value = hff.List(hff.List(hff.Int(10)), hff.List(hff.Int(10)), hff.Null(), hff.Null())
+			document = `[[10],[10],null,null]`
 		}
 		rows[i].values = append(rows[i].values, value)
 		rows[i].documents = append(rows[i].documents, document)
@@ -58,6 +67,9 @@ func TestPostgreSQLJSONParity(t *testing.T) {
 		if i < 2 {
 			people = hff.Null()
 			peopleJSON = "null"
+		} else if i == 4 {
+			people = hff.List(rows[i].values[0], rows[i].values[0], hff.Null())
+			peopleJSON = "[" + rows[i].documents[0] + "," + rows[i].documents[0] + ",null]"
 		}
 		rows[i].values = append(rows[i].values, people)
 		rows[i].documents = append(rows[i].documents, peopleJSON)

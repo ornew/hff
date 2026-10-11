@@ -486,7 +486,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		return b.jsonPredicate(n, name)
 	}
 	switch name {
-	case "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items":
+	case "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique":
 	default:
 		return expression{}, b.failure(n, "PostgreSQL does not yet support method "+name)
 	}
@@ -500,6 +500,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		values[i] = value
 	}
 	receiver := values[0]
+	if name == "in" {
+		return b.jsonIn(n, values)
+	}
 	if format, structured := b.jsonValues[receiver.code]; structured {
 		return b.jsonCall(n, name, values, format)
 	}

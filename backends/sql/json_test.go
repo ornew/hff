@@ -39,6 +39,14 @@ func jsonBindings(format hffsql.JSONFormat) []hffsql.Binding {
 
 func jsonQueries() []string {
 	return []string{
+		`scores:contains(10,20,null)`, `scores:contains(null)`, `scores:contains(9007199254740992.0)`, `scores:contains(9007199254740993)`,
+		`scores:contains(9223372036854775808.0)`, `scores:contains(-9223372036854775808.0)`, `scores:contains("10")`,
+		`scores:contains(null,profile!.age)`, `!scores:contains(null,profile!.age)`, `scores:unique`, `groups:unique`, `people:unique`,
+		`groups:contains([10,20],null,[])`, `people:contains({"name":"Alice","age":18})`,
+		`labels:items:contains(["team",null])`, `labels:items:unique`, `labels:keys:unique`,
+		`profile.age:in(18,9007199254740992.0,null)`, `profile.name:in("Alice",null)`, `profile.name:in("Alice",profile!.father!.name)`,
+		`profile.age:in(null,profile!.name!)`, `factors:unique`, `labels:values:unique`,
+		`profile:in({"name":"Alice","age":18},null)`, `scores:in([], [10,20,null], null)`, `scores:in(scores)`,
 		`scores=[10,20,null]`, `scores!=[10,20,null]`, `scores=[20,10,null]`, `scores=[10,20]`, `scores=[]`, `scores=[null]`,
 		`scores=[10.0,20.0,null]`, `scores=[9007199254740992.0]`, `scores=["10",20,null]`, `scores=scores`, `scores!=scores`,
 		`scores=[9007199254740993]`, `scores=[9223372036854775808.0]`, `scores=[-9223372036854775808.0]`, `scores!=[9007199254740992.0]`,
@@ -115,7 +123,7 @@ func TestJSONBindingRejectsConflictingPhysicalMappings(t *testing.T) {
 
 func TestJSONUnsupportedSemanticsAreExplicitBuildErrors(t *testing.T) {
 	ctx := context.Background()
-	for _, source := range []string{`labels:tojson="{}"`, `scores:unique`, `scores:sort[0]=10`, `scores:contains(10)`, `scores=[10,20.0]`} {
+	for _, source := range []string{`labels:tojson="{}"`, `scores:sort[0]=10`, `scores=[10,20.0]`} {
 		p, err := jsonEngine(t).Compile(ctx, source)
 		if err != nil {
 			t.Fatal(source, err)
@@ -137,7 +145,7 @@ func TestJSONUnsupportedSemanticsAreExplicitBuildErrors(t *testing.T) {
 
 func TestJSONCallbacksConcurrentBuildsPreserveScopes(t *testing.T) {
 	ctx := context.Background()
-	p, err := jsonEngine(t).Compile(ctx, `people:any(x=>scores:any(y=>y<x.age) x.name="Alice") groups:all(xs=>xs:all(x=>x!=null))`)
+	p, err := jsonEngine(t).Compile(ctx, `people:any(x=>scores:any(y=>y<x.age) x.name="Alice" scores:contains(x.age,null)) groups:all(xs=>xs:all(x=>x!=null) xs:unique)`)
 	if err != nil {
 		t.Fatal(err)
 	}
