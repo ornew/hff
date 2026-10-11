@@ -23,9 +23,10 @@ func Column(parts ...string) ColumnRef { return ColumnRef{append([]string(nil), 
 
 // Binding maps a literal schema path to a database column.
 type Binding struct {
-	path   hff.Path
-	column ColumnRef
-	format JSONFormat
+	path      hff.Path
+	column    ColumnRef
+	format    JSONFormat
+	composite bool
 }
 
 func Bind(path hff.Path, column ColumnRef) Binding {
@@ -113,7 +114,7 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 	if err != nil {
 		return nil, err
 	}
-	b := builder{methods: methods, ctx: ctx, program: program, bindings: make(map[string]string), reserved: make(map[string]bool), jsonBindings: make(map[string]JSONFormat), jsonValues: make(map[string]JSONFormat)}
+	b := builder{methods: methods, ctx: ctx, program: program, bindings: make(map[string]string), reserved: make(map[string]bool), jsonBindings: make(map[string]JSONFormat), jsonValues: make(map[string]JSONFormat), compositeBindings: make(map[string]bool)}
 	if err := b.checkMethods(program.Root()); err != nil {
 		return nil, err
 	}
@@ -136,7 +137,22 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 		if err != nil {
 			return nil, err
 		}
-		if binding.format != "" {
+		if binding.composite {
+			kind, ok := jsonKind(typ)
+			if !ok || kind != hff.StructType {
+				return nil, configuration("composite binding requires an unambiguous struct schema")
+			}
+			if previous, exists := columnFormats[column]; exists && previous != "composite" {
+				return nil, configuration("SQL column has conflicting physical formats")
+			}
+			columnFormats[column] = "composite"
+			if previous, exists := columnJSONTypes[column]; exists && previous != typ.Key() {
+				return nil, configuration("composite column has conflicting schema types")
+			}
+			columnJSONTypes[column] = typ.Key()
+			b.compositeBindings[key] = true
+			b.jsonBindings[key] = JSON
+		} else if binding.format != "" {
 			if binding.format != JSON && binding.format != JSONB {
 				return nil, configuration("invalid JSON binding format")
 			}
@@ -165,7 +181,7 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 		}
 	}
 	for _, parent := range config.Bindings {
-		if parent.format == "" {
+		if parent.format == "" && !parent.composite {
 			continue
 		}
 		for _, child := range config.Bindings {
@@ -173,7 +189,7 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 				continue
 			}
 			if pathKey(child.path[:len(parent.path)]) == pathKey(parent.path) {
-				return nil, configuration("JSON binding overlaps a descendant binding")
+				return nil, configuration("structured binding overlaps a descendant binding")
 			}
 		}
 	}

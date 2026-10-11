@@ -65,6 +65,9 @@ In addition to scalar columns, the backend supports an initial schema-typed
 JSON/JSONB profile. See [PostgreSQL JSON and JSONB bindings](json.md) for its
 binding API, supported field and collection access, storage requirements, and
 current rejection boundary.
+Struct values can also be bound to native PostgreSQL composite columns with
+`BindComposite`; see [composite bindings](composites.md) for attribute presence,
+null handling, and the supported nested and array profile.
 
 The initial builder supports nullable scalar columns whose HFF type is one of
 null, boolean, int64, finite float64, or string. Required struct parents may be

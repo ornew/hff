@@ -11,17 +11,18 @@ import (
 )
 
 type builder struct {
-	ctx          context.Context
-	program      hff.Program
-	bindings     map[string]string
-	args         []any
-	steps        []string
-	reserved     map[string]bool
-	alias        int
-	methods      map[string]MethodImplementation
-	jsonBindings map[string]JSONFormat
-	jsonValues   map[string]JSONFormat
-	parameters   map[hff.BindingID]jsonParameter
+	ctx               context.Context
+	program           hff.Program
+	bindings          map[string]string
+	args              []any
+	steps             []string
+	reserved          map[string]bool
+	alias             int
+	methods           map[string]MethodImplementation
+	compositeBindings map[string]bool
+	jsonBindings      map[string]JSONFormat
+	jsonValues        map[string]JSONFormat
+	parameters        map[hff.BindingID]jsonParameter
 }
 
 // present tracks HFF's internal no-value separately from SQL NULL.

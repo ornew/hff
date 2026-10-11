@@ -211,7 +211,7 @@ func build(repo, out string) (int, error) {
 		"docs/guides/README.md", "docs/guides/getting-started.md", "docs/guides/compiling.md", "docs/guides/schemas-and-values.md", "docs/guides/scalar-methods.md", "docs/guides/collections.md", "docs/guides/callbacks.md", "docs/guides/json.md", "docs/guides/temporal.md",
 		"docs/cookbook/README.md",
 		"docs/reference/README.md", "docs/reference/methods.md", "docs/reference/go-api.md", "docs/reference/program-ir.md",
-		"docs/backends/README.md", "docs/backends/local/README.md", "docs/backends/local/configuration.md", "docs/backends/local/extensions.md", "docs/backends/postgresql/README.md",
+		"docs/backends/README.md", "docs/backends/local/README.md", "docs/backends/local/configuration.md", "docs/backends/local/extensions.md", "docs/backends/postgresql/README.md", "docs/backends/postgresql/json.md", "docs/backends/postgresql/composites.md",
 		"docs/design/README.md",
 		"docs/development/README.md", "docs/development/parser.md", "docs/development/parsing.md", "docs/development/site.md",
 	}

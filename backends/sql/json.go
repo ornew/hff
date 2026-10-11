@@ -91,7 +91,15 @@ func (b *builder) hasJSONAncestor(n hff.Node) bool {
 func (b *builder) jsonPath(n hff.Node) (expression, bool, error) {
 	if path, ok := n.Path(); ok {
 		if format, yes := b.jsonBindings[pathKey(path)]; yes {
-			v, err := b.jsonDecode(n, b.bindings[pathKey(path)], format, n.Type(), "TRUE")
+			code := b.bindings[pathKey(path)]
+			if b.compositeBindings[pathKey(path)] {
+				converted, err := b.compositeJSON(n, code, n.Type())
+				if err != nil {
+					return expression{}, true, err
+				}
+				code = converted
+			}
+			v, err := b.jsonDecode(n, code, format, n.Type(), "TRUE")
 			return v, true, err
 		}
 	}

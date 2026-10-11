@@ -118,6 +118,13 @@ See the [PostgreSQL JSON binding guide](../backends/postgresql/json.md) for the
 supported schema profile, collection access and equality behavior, and storage
 requirements.
 
+For a native PostgreSQL composite column, bind an unambiguous struct schema
+with `hffsql.BindComposite(path, column)`. Composite attribute names must match
+the schema field names; attributes are always present, so a null attribute is
+an explicit null rather than an absent optional field. See the
+[composite binding guide](../backends/postgresql/composites.md) for the current
+physical type profile and its limits.
+
 ## Related lookup pages
 
 - [Built-in method signatures](methods.md)
