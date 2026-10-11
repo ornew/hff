@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -211,5 +212,36 @@ func TestGroupedNavigationAndRemovedPages(t *testing.T) {
 	}
 	if !strings.Contains(read(t, out, "docs/design/001-test.html"), "<details class=\"nav-section\" open>") {
 		t.Fatal("active design-record group is collapsed")
+	}
+}
+
+func TestNavigationPutsSectionIntroductionsFirst(t *testing.T) {
+	current := &page{Source: "docs/tutorials/01-first-filter.md", URL: "docs/tutorials/01-first-filter.html"}
+	pages := []*page{
+		current,
+		{Source: "docs/tutorials/README.md", URL: "docs/tutorials/index.html"},
+		{Source: "README.md", URL: "index.html"},
+		{Source: "spec/syntax.md", URL: "spec/syntax.html"},
+		{Source: "spec/README.md", URL: "spec/index.html"},
+		{Source: "docs/design/001-record.md", URL: "docs/design/001-record.html"},
+		{Source: "docs/design/README.md", URL: "docs/design/index.html"},
+	}
+	sections := navigation(pages, current)
+	for _, name := range []string{"Tutorials", "Language", "Design Records"} {
+		var found *navSection
+		for i := range sections {
+			if sections[i].Name == name {
+				found = &sections[i]
+				break
+			}
+		}
+		if found == nil || len(found.Pages) == 0 || path.Base(found.Pages[0].Source) != "README.md" {
+			t.Errorf("%s introduction is not first: %#v", name, found)
+		}
+	}
+	for _, section := range sections {
+		if section.Name == "Tutorials" && !section.Active {
+			t.Fatal("current tutorials section is not active")
+		}
 	}
 }

@@ -18,9 +18,7 @@
       <button class="icon-button menu-toggle" type="button" aria-label="Open navigation" aria-haspopup="dialog" aria-controls="navigation-dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
       <a class="brand" href="{{.Root}}" aria-label="HFF home"><span class="brand-mark" aria-hidden="true">H<span>F</span>F</span></a>
       <nav class="topnav" aria-label="Main">
-        <a href="{{.Root}}" {{if .Current.Home}}aria-current="page"{{end}}>Overview</a>
-        <a href="{{rel .Current.URL "spec/index.html"}}">Specification</a>
-        <a href="{{rel .Current.URL "spec/methods.html"}}">Methods</a>
+        {{range .Sections}}{{$section := .}}{{with index .Pages 0}}<a href="{{rel $.Current.URL .URL}}" {{if $section.Active}}{{if eq .URL $.Current.URL}}aria-current="page"{{else}}aria-current="location"{{end}}{{end}}>{{$section.Name}}</a>{{end}}{{end}}
       </nav>
       <div class="topbar-actions">
         <button class="search-trigger" type="button" aria-label="Search documentation" aria-haspopup="dialog" aria-controls="search-dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><span>Search docs</span><kbd>/</kbd></button>

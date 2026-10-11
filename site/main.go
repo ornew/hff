@@ -69,6 +69,11 @@ func navigation(pages []*page, current *page) []navSection {
 			sections[i].Active = true
 		}
 	}
+	for i := range sections {
+		sort.SliceStable(sections[i].Pages, func(a, b int) bool {
+			return path.Base(sections[i].Pages[a].Source) == "README.md" && path.Base(sections[i].Pages[b].Source) != "README.md"
+		})
+	}
 	var result []navSection
 	for _, section := range sections {
 		if len(section.Pages) > 0 {
