@@ -1,0 +1,75 @@
+package sql_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/ornew/hff"
+	hffsql "github.com/ornew/hff/backends/sql"
+	"github.com/ornew/hff/engine"
+	"github.com/ornew/hff/internal/conformance"
+)
+
+// Enumerating rejections keeps backend limitations visible without accepting
+// new or regressed cases merely because Build returned an error.
+func TestSharedConformanceJSONBuildContracts(t *testing.T) {
+	supported := map[string]bool{}
+	for _, name := range []string{"empty_filter", "and_before_or", "grouped_or", "implicit_truthiness", "fractional_integer_division", "overflow_is_null", "unicode_code_points", "invalid_host_input_is_rejected"} {
+		supported[name] = true
+	}
+	rejected := map[string]bool{}
+	for _, name := range []string{
+		"json_preserves_float", "json_duplicate_keys_fail", "json_null_is_observable", "json_guard_stays_absent",
+		"not_encloses_comparison", "null_inequality_is_false", "explicit_null_test", "two_null_values_are_not_equal", "not_of_null_comparison",
+		"type_guard_failure_is_not_null", "exists_observes_failed_type_guard", "guard_failure_is_not_null", "not_inverts_failed_guard",
+		"exists_observes_falsy_values", "explicit_type_guard", "exact_mixed_number_comparison", "negative_index", "contains_requires_all_arguments",
+		"structural_equality_ignores_key_order", "unique_is_a_predicate", "any_and_all_empty_lists", "callback_predicate_guard",
+		"nested_callback_captures", "fold_argument_order", "regex_partial_match", "invalid_regex_does_not_match_negation",
+		"null_type_is_observable", "strict_base64", "duration_compound_fraction", "timestamp_utc_components", "epoch_is_truthy",
+		"zero_duration_is_falsy", "type_guard_limits_method_permissions",
+	} {
+		rejected[name] = true
+	}
+	var bindings []hffsql.Binding
+	for _, name := range []string{"age", "name", "flag", "x", "y", "items", "labels"} {
+		bindings = append(bindings, hffsql.BindJSON(hff.Path{name}, hffsql.Column("records", name), hffsql.JSON))
+	}
+	for _, tc := range conformance.Cases() {
+		t.Run(tc.Name, func(t *testing.T) {
+			e, err := engine.New(engine.WithSchema(tc.Schema), engine.WithCapabilities(tc.Capabilities))
+			if err != nil {
+				t.Fatal(err)
+			}
+			p, err := e.Compile(context.Background(), tc.Source)
+			if tc.CompileError != "" {
+				var detail *hff.Error
+				if !errors.As(err, &detail) || detail.Code != tc.CompileError {
+					t.Fatalf("compile error=%v, want %s", err, tc.CompileError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			q, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings...))
+			if supported[tc.Name] {
+				delete(supported, tc.Name)
+				if err != nil || q.Where() == "" {
+					t.Fatalf("supported case failed: %v", err)
+				}
+			} else if rejected[tc.Name] {
+				delete(rejected, tc.Name)
+				var detail *hff.Error
+				if !errors.As(err, &detail) || detail.Code != hff.BackendError {
+					t.Fatalf("expected explicit backend rejection, got %v", err)
+				}
+			} else {
+				t.Fatal("new shared case needs explicit SQL coverage or rejection classification")
+			}
+		})
+	}
+	if len(supported) > 0 || len(rejected) > 0 {
+		t.Fatalf("classified shared cases disappeared: supported=%v rejected=%v", supported, rejected)
+	}
+}

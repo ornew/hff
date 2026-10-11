@@ -196,12 +196,16 @@ go test ./internal/syntax -run '^$' -fuzz '^FuzzParseQuery$' -fuzztime=30s -para
 go test ./engine -run '^$' -fuzz '^FuzzCompile$' -fuzztime=30s -parallel=2
 ```
 
-The shared fixture covers the parser/compiler/local contract. PostgreSQL has a
-partial adapter for seven scalar cases (14 query/record pairs): it compares
-fixture expectations, local matches, and PostgreSQL results. Two shared regex
-cases assert a typed unsupported-backend error. Other SQL parity, extension
-evaluators, and a comprehensive runtime budget matrix remain outside shared
-fixture coverage.
+The shared fixture covers the parser/compiler/local contract. SQL tests classify
+every shared case by its expected compile outcome and PostgreSQL Build support;
+adding an unclassified case fails the tests. Execution parity currently covers
+seven supported cases across 14 query/record pairs in each of the native,
+JSON, and JSONB binding forms (42 comparisons total), checking fixture
+expectations against both local matches and PostgreSQL results. The two shared
+regex cases produce typed unsupported-backend errors for all three forms. The
+remaining classifications do not claim PostgreSQL execution parity, and broader
+SQL semantics, extension evaluators, and a comprehensive runtime budget matrix
+remain open.
 
 Run the SQL adapter against PostgreSQL:
 

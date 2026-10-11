@@ -41,66 +41,84 @@ func TestPostgreSQLSharedScalarConformance(t *testing.T) {
 		match bool
 	}
 	var expected []expectation
-	for _, tc := range conformance.Cases() {
-		if !supported[tc.Name] {
-			continue
-		}
-		delete(supported, tc.Name)
-		e, err := engine.New(engine.WithSchema(tc.Schema), engine.WithCapabilities(tc.Capabilities))
-		if err != nil {
-			t.Fatal(err)
-		}
-		p, err := e.Compile(ctx, tc.Source)
-		if err != nil {
-			t.Fatal(tc.Name, err)
-		}
-		q, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(
-			hffsql.Bind(hff.Path{"age"}, hffsql.Column("records", "age")),
-			hffsql.Bind(hff.Path{"name"}, hffsql.Column("records", "name")),
-			hffsql.Bind(hff.Path{"flag"}, hffsql.Column("records", "flag")),
-		))
-		if tc.Name == "regex_partial_match" || tc.Name == "invalid_regex_does_not_match_negation" {
-			var detail *hff.Error
-			if !errors.As(err, &detail) || detail.Code != hff.BackendError {
-				t.Fatalf("%s: expected unsupported regex, got %v", tc.Name, err)
+	seen := map[string]bool{}
+	for _, storage := range []string{"native", "json", "jsonb"} {
+		for _, tc := range conformance.Cases() {
+			if !supported[tc.Name] {
+				continue
 			}
-			continue
-		}
-		if err != nil {
-			t.Fatal(tc.Name, err)
-		}
-		filter, err := local.Build(ctx, p)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, row := range tc.Records {
-			match, err := filter.Match(ctx, row.Value)
-			if err != nil || match != row.Match {
-				t.Fatalf("%s/%s local=(%v,%v), want %v", tc.Name, row.Name, match, err, row.Match)
+			seen[tc.Name] = true
+			e, err := engine.New(engine.WithSchema(tc.Schema), engine.WithCapabilities(tc.Capabilities))
+			if err != nil {
+				t.Fatal(err)
 			}
-			name := fmt.Sprintf("shared_%d", len(expected))
-			expected = append(expected, expectation{tc.Name + "/" + row.Name, row.Match})
-			var types, literals []string
-			for _, arg := range q.Args() {
-				typ, literal := sqlFixtureParameter(t, arg)
-				types = append(types, typ)
-				literals = append(literals, literal)
+			p, err := e.Compile(ctx, tc.Source)
+			if err != nil {
+				t.Fatal(tc.Name, err)
 			}
-			parameters, execution := "", ""
-			if len(types) > 0 {
-				parameters = "(" + strings.Join(types, ",") + ")"
-				execution = "(" + strings.Join(literals, ",") + ")"
+			var bindings []hffsql.Binding
+			for _, field := range []string{"age", "name", "flag"} {
+				column := hffsql.Column("records", field)
+				binding := hffsql.Bind(hff.Path{field}, column)
+				if storage != "native" {
+					format := hffsql.JSON
+					if storage == "jsonb" {
+						format = hffsql.JSONB
+					}
+					binding = hffsql.BindJSON(hff.Path{field}, column, format)
+				}
+				bindings = append(bindings, binding)
 			}
-			var values []string
-			for i, field := range []string{"age", "name", "flag"} {
-				v, _ := row.Value.Lookup(field)
-				values = append(values, sqlFixtureValue(t, v, []string{"bigint", "text", "boolean"}[i]))
+			q, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings...))
+			if tc.Name == "regex_partial_match" || tc.Name == "invalid_regex_does_not_match_negation" {
+				var detail *hff.Error
+				if !errors.As(err, &detail) || detail.Code != hff.BackendError {
+					t.Fatalf("%s: expected unsupported regex, got %v", tc.Name, err)
+				}
+				continue
 			}
-			fmt.Fprintf(&script, "PREPARE %s%s AS SELECT %s FROM (VALUES (%s)) AS records(age,name,flag); EXECUTE %s%s; DEALLOCATE %s;\n", name, parameters, q.Where(), strings.Join(values, ","), name, execution, name)
+			if err != nil {
+				t.Fatal(tc.Name, err)
+			}
+			filter, err := local.Build(ctx, p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, row := range tc.Records {
+				match, err := filter.Match(ctx, row.Value)
+				if err != nil || match != row.Match {
+					t.Fatalf("%s/%s local=(%v,%v), want %v", tc.Name, row.Name, match, err, row.Match)
+				}
+				name := fmt.Sprintf("shared_%d", len(expected))
+				expected = append(expected, expectation{storage + "/" + tc.Name + "/" + row.Name, row.Match})
+				var types, literals []string
+				for _, arg := range q.Args() {
+					typ, literal := sqlFixtureParameter(t, arg)
+					types = append(types, typ)
+					literals = append(literals, literal)
+				}
+				parameters, execution := "", ""
+				if len(types) > 0 {
+					parameters = "(" + strings.Join(types, ",") + ")"
+					execution = "(" + strings.Join(literals, ",") + ")"
+				}
+				var values []string
+				for i, field := range []string{"age", "name", "flag"} {
+					v, _ := row.Value.Lookup(field)
+					literal := sqlFixtureValue(t, v, []string{"bigint", "text", "boolean"}[i])
+					if storage != "native" {
+						literal = "to_json(" + literal + ")::" + storage
+					}
+					values = append(values, literal)
+				}
+				fmt.Fprintf(&script, "PREPARE %s%s AS SELECT %s FROM (VALUES (%s)) AS records(age,name,flag); EXECUTE %s%s; DEALLOCATE %s;\n", name, parameters, q.Where(), strings.Join(values, ","), name, execution, name)
+			}
 		}
 	}
-	if len(supported) > 0 {
-		t.Fatalf("shared cases disappeared: %v", supported)
+	for name := range supported {
+		if !seen[name] {
+			t.Fatalf("shared case disappeared: %s", name)
+		}
 	}
 	command := exec.CommandContext(ctx, "docker", "exec", "-i", container, "psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-U", "postgres")
 	command.Stdin = strings.NewReader(script.String())
