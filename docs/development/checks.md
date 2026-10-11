@@ -78,3 +78,18 @@ go test -race ./internal/syntax ./engine ./backends/local -run '^TestShared'
 The fixture covers the current parser/compiler/local contract. SQL parity,
 JSON conversion methods, extension evaluators, and a comprehensive runtime
 budget matrix remain outside its coverage.
+
+## Test PostgreSQL integration
+
+The SQL backend's tagged integration test uses a running PostgreSQL container
+through `docker exec` and `psql`. It compares supported SQL predicate results
+with local evaluation for the same compiled inputs. Provide a container name or
+ID explicitly; the test fails if it is absent rather than silently skipping:
+
+```sh
+HFF_POSTGRES_CONTAINER=<container-name-or-id> go test -tags=integration ./backends/sql
+```
+
+The ordinary SQL tests need no database. The integration suite currently covers
+the implemented PostgreSQL scalar subset; unsupported operations are checked as
+Build errors in package tests.

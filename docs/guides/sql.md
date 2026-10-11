@@ -1,0 +1,130 @@
+# PostgreSQL Predicate Building
+
+The SQL backend turns a compiled HFF program into a reusable PostgreSQL
+predicate and ordered parameters. It does not open a database connection or
+execute SQL. The service owns the surrounding statement, connection, and
+execution timeout.
+
+## Build a predicate
+
+This example maps two schema fields to trusted database identifiers:
+
+```go
+e, err := engine.New(
+    engine.WithSchema(schema.Struct(
+        schema.Nullable(schema.String("name")),
+        schema.Nullable(schema.Int("age")),
+    )),
+    engine.WithCapabilities(capabilities.Standard()),
+)
+if err != nil {
+    return err
+}
+
+program, err := e.Compile(ctx, `age>=18 name:contains("api")`)
+if err != nil {
+    return err
+}
+
+query, err := hffsql.Build(ctx, program,
+    hffsql.WithDialect(hffsql.PostgreSQL),
+    hffsql.WithBindings(
+        hffsql.Bind(hff.Path{"name"}, hffsql.Column("records", "name")),
+        hffsql.Bind(hff.Path{"age"}, hffsql.Column("records", "age")),
+    ),
+)
+if err != nil {
+    return err
+}
+
+rows, err := db.QueryContext(ctx,
+    `SELECT records.id FROM records WHERE `+query.Where(), query.Args()...)
+```
+
+`Path` and `Column` take identifier components, not SQL fragments. A schema
+field literally named `service.name` is bound with `hff.Path{"service.name"}`;
+nested fields use multiple path components. Each column component is quoted
+separately. Every referenced field must have a binding. A path can pass through
+required struct fields, but not through an optional or nullable parent because
+a flattened column cannot preserve the parent's missing/null state.
+
+You can also pass `hffsql.WithConfig(&hffsql.Config{Dialect: hffsql.PostgreSQL,
+Bindings: bindings})`; functional options apply from left to right, so a later
+dialect or binding option replaces the earlier value for that setting.
+
+The backend emits typed parameters for HFF literals and SQL `NULL` for literal
+null. `Where()` returns the predicate fragment; `Args()` returns a fresh slice
+in placeholder order. The `Query` owns its data and can be reused concurrently.
+The predicate text is an implementation artifact, not a stable formatting
+contract. Compose it into a statement owned by the service and pass the
+parameters to the database API; do not interpolate query values into SQL text.
+
+## Supported PostgreSQL subset
+
+The initial builder supports nullable scalar columns whose HFF type is one of
+null, boolean, int64, finite float64, or string. Required struct parents may be
+traversed to a scalar leaf. Comparisons require homogeneous scalar types; string
+ordering uses PostgreSQL's `C` collation. Boolean literals and operators,
+implicit AND, explicit null comparisons, numeric unary negation, postfix guards
+at scalar leaves, scalar type guards, `exists()`, and `type()` are supported.
+String methods currently supported are `len()`, `contains()`, `startswith()`,
+`endswith()`, and `concat()`; boolean `not()`, `and()`, and `or()` are supported.
+
+Mapped database columns must use schema-compatible PostgreSQL types: `bigint`,
+`double precision`, `boolean`, or `text`. Float values must be finite. Text must
+be valid UTF-8 without NUL. Identifier components must contain 1–63 UTF-8 bytes
+and no NUL; PostgreSQL identifiers that would be truncated are rejected.
+
+An unsupported operation or type returns a source-located `hff.BackendError`
+from `Build`. The current subset rejects arithmetic, mixed numeric comparisons,
+regex, collection operations, `Any` and non-null mixed unions, JSON and temporal
+conversions, and guarded access through nullable parents. It does not fall back
+to local evaluation. PostgreSQL is the only currently supported SQL dialect.
+
+The builder uses relational subqueries for chained operations to keep generated
+SQL growth linear. This may make the predicate shape more involved; callers
+should treat it as opaque and rely on the bound parameters, not its exact text.
+
+## Execution and limits
+
+`Build` is a pure translation step. The SQL backend does not enforce local
+`MaxSteps` or `MaxGeneratedValues` during database execution, and SQL evaluation
+does not promise HFF's local short-circuit work order. Do not treat local runtime
+budgets as SQL execution guarantees. The service controls database cancellation
+and timeouts through its own database API and context. The current SQL
+`Config` contains only a dialect and bindings; the Build options do not express
+a SQL runtime-budget requirement. Program-local runtime limits are not SQL
+requests and are not copied into the predicate. If a service needs a database
+execution guarantee, it must enforce it through its database integration. A
+future API must reject an explicit constraint request that the selected backend
+cannot enforce rather than silently ignore it.
+
+## Run the example
+
+The example only builds a predicate; it does not connect to PostgreSQL:
+
+```sh
+go run ./examples/sql-predicate
+```
+
+Expected output:
+
+```text
+Predicate built: true
+Parameter count: 2
+```
+
+## Test against PostgreSQL
+
+The tagged integration tests execute scalar parity cases against a running
+PostgreSQL container using `docker exec` and `psql`. Set
+`HFF_POSTGRES_CONTAINER` to the name or ID of a running container with the
+standard `postgres` user and `psql` installed, then run:
+
+```sh
+HFF_POSTGRES_CONTAINER=<container-name-or-id> go test -tags=integration ./backends/sql
+```
+
+Without the environment variable, the integration test fails instead of
+silently skipping the database check. The ordinary SQL package tests remain
+database-independent.

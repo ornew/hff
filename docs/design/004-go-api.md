@@ -18,8 +18,9 @@ The [language specification](../../spec/README.md) defines their semantic contra
 The common compiler and local backend's core operators, values, indexing,
 guards, short-circuit behavior, per-match budgets, scalar/string method
 families, list/object methods, collection callbacks, base64 conversions, and
-temporal methods are implemented. JSON/stringification, extension registration,
-and SQL translation remain separate implementation stages.
+temporal methods are implemented. The SQL package builds parameterized
+PostgreSQL predicates for a scalar subset. JSON/stringification, broader SQL
+semantics, and extension registration remain in progress.
 
 ## Motivation
 
@@ -440,6 +441,11 @@ resource accounting. An artifact does not claim local-runtime cancellation or
 step-budget guarantees for database execution; the service controls execution
 through its own context and database API.
 
+The current SQL `Config` and Build options do not express SQL runtime-budget
+requirements. Program-local runtime limits are not inherited as SQL execution
+guarantees. A future API that accepts an explicit execution constraint must
+reject requests that the selected backend cannot enforce.
+
 ### Schema and value construction
 
 Named field helpers include String(name), Int(name), and List(name, elementType).
@@ -543,6 +549,7 @@ must accompany implementation rather than be inferred from examples.
 The record specifies behavior and public API direction; acceptance does not
 claim that every package or method family has been implemented. Common
 compilation and the core, scalar/string, list/object, and callback local
-evaluation paths, base64 conversions, and temporal methods are available. JSON
-and stringification methods, SQL translation, and extension implementations
-remain incomplete.
+evaluation paths, base64 conversions, and temporal methods are available. A
+PostgreSQL scalar predicate subset is implemented; broader SQL operation and
+dialect support remain incomplete. JSON and stringification methods and
+extension implementations also remain incomplete.
