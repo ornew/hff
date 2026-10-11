@@ -157,18 +157,17 @@ dialog::backdrop { background: #0009; backdrop-filter: blur(3px); }
 @media(prefers-reduced-motion:reduce) { html { scroll-behavior: auto; } }
 
 .nav-section { margin: 0 0 24px; }
-.nav-section h2,.nav-section summary { margin: 0 0 8px; padding: 0 10px; font-size: 12px; font-weight: 650; color: var(--text); }
-.nav-section summary { cursor: pointer; display: flex; align-items: center; gap: 12px; list-style: none; line-height: 1.5; padding: 7px 10px; margin: 2px 0; border-radius: 6px; font-size: inherit; font-weight: inherit; color: var(--muted); }
-.nav-section>summary { margin: 0 0 8px; padding: 0 10px; font-size: 12px; font-weight: 650; color: var(--text); }
+.nav-section>h2,.nav-section>summary { margin: 0 0 8px; padding: 0 10px; font-size: 12px; font-weight: 650; line-height: 21px; color: var(--text); }
+.nav-section summary { cursor: pointer; display: flex; align-items: center; gap: 12px; list-style: none; }
 .nav-section summary::-webkit-details-marker { display: none; }
 .nav-section summary::marker { content: ""; }
 .nav-section summary::after { content: ""; width: 5px; height: 5px; margin-left: auto; margin-right: 2px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg); flex: 0 0 auto; }
 .nav-section[open]>summary::after,.nav-section details[open]>summary::after { transform: rotate(45deg); }
-.nav-section summary:hover { color: var(--text); background: var(--soft); }
+.nav-subsection summary:hover { color: var(--text); background: var(--soft); }
 .nav-section summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
 .nav-subsection { margin: 0; }
 details.nav-section>a,.nav-subsection>a { padding-left: 24px; }
-.nav-subsection summary { margin: 2px 0; padding: 7px 10px; color: var(--muted); font-size: inherit; font-weight: inherit; }
+.nav-subsection summary { margin: 2px 0; padding: 7px 10px; border-radius: 6px; line-height: 1.5; color: var(--muted); font-size: inherit; font-weight: inherit; }
 
 .drawer .nav-section { margin-bottom: 24px; }
 
