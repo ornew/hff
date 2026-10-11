@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/ornew/hff"
+	"github.com/ornew/hff/internal/conformance"
 )
 
 func TestGrammarConformance(t *testing.T) {
@@ -146,6 +147,9 @@ func TestLimitsAndLocations(t *testing.T) {
 }
 
 func FuzzParseQuery(f *testing.F) {
+	for _, tc := range conformance.Cases() {
+		f.Add(tc.Source)
+	}
 	for _, s := range []string{`age>10 name`, `items:any(x=>x!)`, `x:[map[list[string|null]]]`, `"\ud800"`, strings.Repeat("(", 65), "\xff"} {
 		f.Add(s)
 	}

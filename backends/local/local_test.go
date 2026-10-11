@@ -244,7 +244,15 @@ func FuzzLocalMatch(f *testing.F) {
 	} {
 		f.Add(seed.source, seed.selector, []byte(seed.data))
 	}
+	for _, source := range []string{`x`, `x:type`, `x:exists`, `x=y`, `x:has(y)`, `x:get(y)`, `x[y]`} {
+		for selector := int64(0); selector < 16; selector++ {
+			f.Add(source, selector, []byte("lookup-key"))
+		}
+	}
 	f.Fuzz(func(t *testing.T, source string, number int64, data []byte) {
+		if len(data) > 4096 {
+			t.Skip("bounded host data")
+		}
 		check := func(err error) bool {
 			if err == nil {
 				return false
@@ -264,7 +272,7 @@ func FuzzLocalMatch(f *testing.F) {
 			return
 		}
 		var x hff.Value
-		switch uint64(number) % 4 {
+		switch uint64(number) % 9 {
 		case 0:
 			x = hff.Int(number)
 		case 1:
@@ -272,9 +280,23 @@ func FuzzLocalMatch(f *testing.F) {
 		case 2:
 			x = hff.List(hff.Int(number), hff.Null(), hff.String(string(data)))
 		case 3:
-			x = hff.Object(map[string]hff.Value{"value": hff.Bytes(data)})
+			x = hff.Object(map[string]hff.Value{"value": hff.Bytes(data), string(data): hff.String(string(data))})
+		case 4:
+			x = hff.Bool(number != 0)
+		case 5:
+			x = hff.Float(float64(number))
+		case 6:
+			x = hff.Bytes(data)
+		case 7:
+			x = hff.Duration(time.Duration(number))
+		case 8:
+			x = hff.Timestamp(time.Unix(number, number%1_000_000_000))
 		}
-		dataRecord := record(x, hff.Float(float64(number)))
+		y := hff.Float(float64(number))
+		if uint64(number)%2 == 1 {
+			y = hff.String(string(data))
+		}
+		dataRecord := record(x, y)
 		matched, matchErr := filter.Match(context.Background(), dataRecord)
 		check(matchErr)
 		input, validationErr := e.Validate(context.Background(), dataRecord)

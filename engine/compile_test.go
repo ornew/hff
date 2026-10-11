@@ -6,6 +6,7 @@ import (
 	"github.com/ornew/hff"
 	"github.com/ornew/hff/capabilities"
 	"github.com/ornew/hff/engine"
+	"github.com/ornew/hff/internal/conformance"
 	"github.com/ornew/hff/schema"
 	"sync"
 	"testing"
@@ -194,7 +195,11 @@ func TestCompileNumericAndNullPlans(t *testing.T) {
 	}
 }
 func FuzzCompile(f *testing.F) {
-	e, err := engine.New(engine.WithSchema(compilerSchema()), engine.WithCapabilities(capabilities.Standard()), engine.WithLimits(hff.Limits{MaxQueryBytes: 4096, MaxSyntaxDepth: 32}))
+	cases := conformance.Cases()
+	for _, tc := range cases {
+		f.Add(tc.Source)
+	}
+	e, err := engine.New(engine.WithSchema(cases[0].Schema), engine.WithCapabilities(capabilities.Standard()), engine.WithLimits(hff.Limits{MaxQueryBytes: 4096, MaxSyntaxDepth: 32}))
 	if err != nil {
 		f.Fatal(err)
 	}

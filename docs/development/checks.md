@@ -136,7 +136,9 @@ The local matcher fuzz target compiles a query, builds a filter, and generates
 records. It compares `Match` with `Validate` followed by `MatchInput`: completed
 results must agree, and when either path aborts, both paths must return an HFF
 error with the same error code. The retained seeds include base64 and temporal
-methods, Unicode regular expressions, and nested callbacks.
+methods, Unicode regular expressions, and nested callbacks. Generated host
+values are bounded to 4 KiB and include additional boolean, floating-point,
+byte, duration, timestamp, and string-key lookup cases.
 
 Run the target for 30 seconds with two workers:
 
@@ -177,6 +179,21 @@ Run all three suites with the race detector:
 
 ```sh
 go test -race ./internal/syntax ./engine ./backends/local -run '^TestShared'
+```
+
+The parser and compiler fuzz targets also seed from every shared conformance
+source. Adding a case to the fixture therefore adds it to both fuzz corpora.
+Fuzzing checks parser/compiler robustness, typed diagnostics, source-bounded
+spans, and valid compiled programs; it does not decide each case's expected
+semantics. The shared conformance tests above remain the source of truth for
+those expected outcomes. The compiler target uses the fixture's schema,
+including `Any`, union, and collection fields.
+
+Run either target for 30 seconds with two workers:
+
+```sh
+go test ./internal/syntax -run '^$' -fuzz '^FuzzParseQuery$' -fuzztime=30s -parallel=2
+go test ./engine -run '^$' -fuzz '^FuzzCompile$' -fuzztime=30s -parallel=2
 ```
 
 The shared fixture covers the parser/compiler/local contract. PostgreSQL has a
