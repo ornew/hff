@@ -61,6 +61,11 @@ parameters to the database API; do not interpolate query values into SQL text.
 
 ## Supported PostgreSQL subset
 
+In addition to scalar columns, the backend supports an initial schema-typed
+JSON/JSONB profile. See [PostgreSQL JSON and JSONB bindings](json.md) for its
+binding API, supported field and collection access, storage requirements, and
+current rejection boundary.
+
 The initial builder supports nullable scalar columns whose HFF type is one of
 null, boolean, int64, finite float64, or string. Required struct parents may be
 traversed to a scalar leaf. Comparisons support homogeneous scalar types and
@@ -103,11 +108,14 @@ declared HFF types and nullability, and that stored values meet these encoding
 and finiteness constraints.
 
 An unsupported operation or type returns a source-located `hff.BackendError`
-from `Build`. The current subset rejects regex, collection operations, `Any` and
-non-null mixed unions, JSON and temporal conversions, float/float and mixed
-int/float arithmetic, and guarded access through nullable parents. It does not
-fall back to local evaluation. PostgreSQL is the only currently supported SQL
-dialect.
+from `Build`. For scalar bindings, the current subset rejects regex, collection
+operations, `Any` and non-null mixed unions, JSON and temporal conversions,
+float/float and mixed int/float arithmetic, and guarded access through nullable
+parents. JSON bindings support the schema-known access and inspection described
+in the [JSON guide](json.md); dynamic `Any`, mixed non-null unions, callbacks,
+structural equality, transformations, and JSON conversions remain unsupported
+there. Unsupported operations do not fall back to local evaluation.
+PostgreSQL is the only currently supported SQL dialect.
 
 The builder uses relational subqueries for chained operations to keep generated
 SQL growth linear. This may make the predicate shape more involved; callers

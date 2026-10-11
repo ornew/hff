@@ -11,14 +11,16 @@ import (
 )
 
 type builder struct {
-	ctx      context.Context
-	program  hff.Program
-	bindings map[string]string
-	args     []any
-	steps    []string
-	reserved map[string]bool
-	alias    int
-	methods  map[string]MethodImplementation
+	ctx          context.Context
+	program      hff.Program
+	bindings     map[string]string
+	args         []any
+	steps        []string
+	reserved     map[string]bool
+	alias        int
+	methods      map[string]MethodImplementation
+	jsonBindings map[string]JSONFormat
+	jsonValues   map[string]JSONFormat
 }
 
 // present tracks HFF's internal no-value separately from SQL NULL.
@@ -87,6 +89,7 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 	if value.kind == hff.NullType && value.present == "TRUE" {
 		return value, nil
 	}
+	format, isJSON := b.jsonValues[value.code]
 	alias := b.nextAlias()
 	if value.kind == hff.NullType {
 		b.steps = append(b.steps, "(SELECT "+value.present+" AS p OFFSET 0) AS "+alias)
@@ -98,6 +101,9 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 	// planning. Each step still returns exactly one row.
 	b.steps = append(b.steps, "(SELECT "+value.code+" AS v, "+value.present+" AS p OFFSET 0) AS "+alias)
 	value.code = alias + ".v"
+	if isJSON {
+		b.jsonValues[value.code] = format
+	}
 	value.present = alias + ".p"
 	return value, nil
 }
@@ -109,6 +115,9 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 	case hff.LiteralNode:
 		return b.literal(n)
 	case hff.VariableNode, hff.FieldNode:
+		if value, handled, err := b.jsonPath(n); handled {
+			return value, err
+		}
 		path, ok := n.Path()
 		if !ok {
 			return expression{}, b.failure(n, "SQL requires a statically bound schema path")
@@ -166,6 +175,8 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		}
 		value.present = both(value.present, "("+value.code+" IS NOT NULL)")
 		return value, nil
+	case hff.IndexNode:
+		return b.jsonIndex(n)
 	case hff.TypeGuardNode:
 		child, _ := n.Child(0)
 		value, err := b.expression(child)
@@ -173,6 +184,9 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 			return expression{}, err
 		}
 		constraint, _ := n.Constraint()
+		if format, structured := b.jsonValues[value.code]; structured {
+			return b.jsonTypeGuard(n, value, format, child.Type(), constraint)
+		}
 		acceptNull := acceptsKind(constraint, hff.NullType)
 		acceptValue := acceptsKind(constraint, value.kind)
 		test := "FALSE"
@@ -297,6 +311,10 @@ func truth(value expression) string {
 		test = value.code
 	case hff.IntType, hff.FloatType:
 		test = "(" + value.code + " <> 0)"
+	case hff.ListType:
+		test = "(" + value.code + "::jsonb <> '[]'::jsonb)"
+	case hff.StructType, hff.MapType:
+		test = "(" + value.code + "::jsonb <> '{}'::jsonb)"
 	case hff.StringType:
 		test = "(" + value.code + " COLLATE \"C\" <> '' COLLATE \"C\")"
 	}
@@ -376,6 +394,9 @@ func (b *builder) binary(n hff.Node) (expression, error) {
 		}
 		return expression{}, b.failure(n, "mixed SQL scalar comparisons require exact numeric lowering")
 	}
+	if left.kind == hff.ListType || left.kind == hff.StructType || left.kind == hff.MapType {
+		return expression{}, b.failure(n, "JSON structural comparison requires schema-aware recursive equality")
+	}
 	leftCode, rightCode := left.code, right.code
 	if left.kind == hff.StringType {
 		leftCode += " COLLATE \"C\""
@@ -449,7 +470,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		}
 	}
 	switch name {
-	case "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or":
+	case "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items":
 	default:
 		return expression{}, b.failure(n, "PostgreSQL does not yet support method "+name)
 	}
@@ -463,6 +484,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		values[i] = value
 	}
 	receiver := values[0]
+	if format, structured := b.jsonValues[receiver.code]; structured {
+		return b.jsonCall(n, name, values, format)
+	}
 	if name == "exists" {
 		return boolean(both(receiver.present, "("+receiver.code+" IS NOT NULL)")), nil
 	}

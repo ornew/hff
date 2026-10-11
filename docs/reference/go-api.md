@@ -103,6 +103,20 @@ return copies. The caller owns database connections, execution, transactions,
 and timeouts. Consult the [PostgreSQL backend reference](../backends/postgresql/README.md)
 for supported operations and constraints.
 
+To bind a schema-known value stored in a native JSON or JSONB column, use
+`hffsql.BindJSON` with an explicit format:
+
+```go
+hffsql.BindJSON(
+    hff.Path{"profile"},
+    hffsql.Column("records", "profile"),
+    hffsql.JSONB,
+)
+```
+
+See the [PostgreSQL JSON binding guide](../backends/postgresql/json.md) for the
+supported schema profile and storage requirements.
+
 ## Related lookup pages
 
 - [Built-in method signatures](methods.md)

@@ -25,10 +25,11 @@ func Column(parts ...string) ColumnRef { return ColumnRef{append([]string(nil), 
 type Binding struct {
 	path   hff.Path
 	column ColumnRef
+	format JSONFormat
 }
 
 func Bind(path hff.Path, column ColumnRef) Binding {
-	return Binding{append(hff.Path(nil), path...), Column(column.parts...)}
+	return Binding{path: append(hff.Path(nil), path...), column: Column(column.parts...)}
 }
 
 type Config struct {
@@ -112,11 +113,13 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 	if err != nil {
 		return nil, err
 	}
-	b := builder{methods: methods, ctx: ctx, program: program, bindings: make(map[string]string), reserved: make(map[string]bool)}
+	b := builder{methods: methods, ctx: ctx, program: program, bindings: make(map[string]string), reserved: make(map[string]bool), jsonBindings: make(map[string]JSONFormat), jsonValues: make(map[string]JSONFormat)}
 	if err := b.checkMethods(program.Root()); err != nil {
 		return nil, err
 	}
 	columnKinds := make(map[string]hff.TypeKind)
+	columnFormats := make(map[string]JSONFormat)
+	columnJSONTypes := make(map[string]string)
 	for _, binding := range config.Bindings {
 		if len(binding.path) == 0 {
 			return nil, configuration("empty schema binding path")
@@ -133,7 +136,24 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 		if err != nil {
 			return nil, err
 		}
-		if kind, ok := scalarKind(typ); ok {
+		if binding.format != "" {
+			if binding.format != JSON && binding.format != JSONB {
+				return nil, configuration("invalid JSON binding format")
+			}
+			if previous, exists := columnFormats[column]; exists && previous != binding.format {
+				return nil, configuration("SQL column has conflicting physical formats")
+			}
+			columnFormats[column] = binding.format
+			if previous, exists := columnJSONTypes[column]; exists && previous != typ.Key() {
+				return nil, configuration("JSON column has conflicting schema types")
+			}
+			columnJSONTypes[column] = typ.Key()
+			b.jsonBindings[key] = binding.format
+		} else if kind, ok := scalarKind(typ); ok {
+			if previous, exists := columnFormats[column]; exists && previous != "" {
+				return nil, configuration("SQL column has conflicting physical formats")
+			}
+			columnFormats[column] = ""
 			if previous, exists := columnKinds[column]; exists && previous != kind {
 				return nil, configuration("SQL column has conflicting schema types")
 			}
@@ -142,6 +162,19 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 		b.bindings[key] = column
 		for _, component := range binding.column.parts {
 			b.reserved[component] = true
+		}
+	}
+	for _, parent := range config.Bindings {
+		if parent.format == "" {
+			continue
+		}
+		for _, child := range config.Bindings {
+			if len(child.path) <= len(parent.path) {
+				continue
+			}
+			if pathKey(child.path[:len(parent.path)]) == pathKey(parent.path) {
+				return nil, configuration("JSON binding overlaps a descendant binding")
+			}
 		}
 	}
 	root, err := b.expression(program.Root())
