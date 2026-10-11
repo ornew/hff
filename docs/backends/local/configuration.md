@@ -182,6 +182,13 @@ length or quote its output, it checks context at approximately 4 KiB intervals
 and again before returning the encoded value. Cancellation returns no partial
 output. These checkpoints do not change input or output byte-budget accounting.
 
+Regex evaluation checks context immediately after `regexp.Compile`, before it
+turns an invalid pattern into ordinary null or starts matching, and again after
+`MatchString` before applying negation or returning a result. Cancellation at
+these boundaries returns `CancelledError` with the context status and cause;
+step charges are unchanged. The standard-library compile and match calls
+themselves cannot be interrupted, so a long call is not promptly preempted.
+
 ## Handle errors
 
 ```go

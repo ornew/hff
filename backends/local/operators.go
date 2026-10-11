@@ -307,10 +307,16 @@ func (e *evaluation) regex(text, pattern string, invert bool) (result, error) {
 		return result{}, err
 	}
 	re, err := regexp.Compile(pattern)
+	if contextErr := cancelled(e.ctx); contextErr != nil {
+		return result{}, contextErr
+	}
 	if err != nil {
 		return null(), nil
 	}
 	yes := re.MatchString(text)
+	if err := cancelled(e.ctx); err != nil {
+		return result{}, err
+	}
 	if invert {
 		yes = !yes
 	}

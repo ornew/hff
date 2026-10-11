@@ -217,6 +217,17 @@ Run the target for 30 seconds with two workers:
 go test ./backends/local -run '^$' -fuzz '^FuzzLocalMatch$' -fuzztime=30s -parallel=2
 ```
 
+The local regex cancellation regression checks context after the standard
+regular-expression compiler returns, before invalid-pattern null propagation
+or matching, and after matching before inversion/result handling. It verifies
+typed cancellation and cause preservation for valid and invalid patterns,
+including `!~`; the standard-library calls themselves remain non-preemptible.
+Step accounting is unchanged.
+
+```sh
+go test -race ./backends/local -run '^TestRegexCancellationAtLibraryBoundaries$'
+```
+
 ## Fuzz input UTF-8 validation
 
 This target compares HFF's chunked UTF-8 validation with Go's standard UTF-8
