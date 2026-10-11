@@ -3,6 +3,7 @@
   --bg: #fafbfa; --surface: #ffffff; --soft: #f0f3f1;
   --text: #202923; --muted: #647169; --line: #dfe5e0;
   --accent: #20734c; --accent-soft: #e5f2e9; --code: #f2f5f2;
+  --syntax-number: #885018; --syntax-keyword: #7840a0; --syntax-op: #526b79; --syntax-type: #206789;
   --shadow: 0 22px 70px #17281c0d;
 }
 :root[data-theme=dark] {
@@ -10,6 +11,7 @@
   --bg: #0e1011; --surface: #141718; --soft: #1b1f20;
   --text: #e7ebe8; --muted: #969e9a; --line: #2a3030;
   --accent: #76d49b; --accent-soft: #183025; --code: #171b1c;
+  --syntax-number: #e2ac72; --syntax-keyword: #c6a0e1; --syntax-op: #a2b9c5; --syntax-type: #85bfdb;
   --shadow: 0 22px 70px #00000035;
 }
 @media(prefers-color-scheme:dark) {
@@ -18,7 +20,8 @@
     --bg: #0e1011; --surface: #141718; --soft: #1b1f20;
     --text: #e7ebe8; --muted: #969e9a; --line: #2a3030;
     --accent: #76d49b; --accent-soft: #183025; --code: #171b1c;
-    --shadow: 0 22px 70px #00000035;
+    --syntax-number: #e2ac72; --syntax-keyword: #c6a0e1; --syntax-op: #a2b9c5; --syntax-type: #85bfdb;
+  --shadow: 0 22px 70px #00000035;
   }
 }
 * { box-sizing: border-box; }
@@ -81,7 +84,7 @@ kbd { font: 11px ui-monospace,monospace; border: 1px solid var(--line); padding:
 .query-legend { display: flex; gap: 26px; border-top: 1px solid var(--line); margin: 0 22px; padding: 18px 0; font-size: 10px; color: var(--muted); }
 .query-legend b { margin-right: 7px; font: 12px ui-monospace,monospace; }
 .query-caption { display: flex; align-items: center; gap: 9px; padding: 13px 22px; background: var(--soft); border-radius: 0 0 12px 12px; color: var(--muted); font-size: 10px; }
-.token-name { color: var(--text); }.token-string { color: var(--accent); }.token-number { color: #d0914b; }.token-op { color: #849dac; }.token-keyword { color: #b08fcc; }
+.token-name { color: var(--text); }.token-string { color: var(--accent); }.token-number { color: var(--syntax-number); }.token-op { color: var(--syntax-op); }.token-keyword { color: var(--syntax-keyword); }.token-type { color: var(--syntax-type); }.token-function { color: var(--accent); }.token-comment { color: var(--muted); font-style: italic; }
 .principles { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); max-width: 1280px; padding: 70px 48px; margin: auto; }
 .section-intro h2,.reading-path h2 { font-size: clamp(27px,3vw,36px); line-height: 1.2; letter-spacing: -.045em; font-weight: 650; margin: 12px 0 16px; }
 .section-intro>p:last-child { color: var(--muted); font-size: 13px; }

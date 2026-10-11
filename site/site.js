@@ -110,18 +110,77 @@
     }
   });
 
-  // A small lexical highlighter, not a parser or an evaluator.
-  document.querySelectorAll('code.language-hff').forEach(function (code) {
-    var source = code.textContent;
-    var tokens = /("(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`|\b(?:true|false|null)\b|\b\d+(?:\.\d+)?\b|(?:!~|!=|>=|<=|=>|[=~>|:+*!%-]))/g;
-    var fragment = document.createDocumentFragment(), previous = 0, match;
-    while ((match = tokens.exec(source))) {
-      fragment.append(document.createTextNode(source.slice(previous, match.index)));
-      var span = document.createElement('span'), token = match[0];
-      span.className = token[0] === '`' ? 'token-name' : token[0] === '"' ? 'token-string' : /^\d/.test(token) ? 'token-number' : /^(true|false|null)$/.test(token) ? 'token-keyword' : 'token-op';
-      span.textContent = token; fragment.append(span); previous = tokens.lastIndex;
+  // Lexical highlighting only; source is always inserted as text, never HTML.
+  var goKeywords = new Set(('break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var nil true false iota').split(' '));
+  var goTypes = new Set(('any bool byte comparable complex64 complex128 error float32 float64 int int8 int16 int32 int64 rune string uint uint8 uint16 uint32 uint64 uintptr').split(' '));
+  var rules = {
+    hff: [
+      ['string', /"(?:\\.|[^"\\])*"/y],
+      ['name', /`(?:\\.|[^`\\])*`/y],
+      ['keyword', /\b(?:true|false|null)\b/y],
+      ['number', /\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/y],
+      ['op', /!~|!=|>=|<=|=>|[=~<>|:+*!%\/-]/y]
+    ],
+    go: [
+      ['comment', /\/\/[^\n]*|\/\*[\s\S]*?(?:\*\/|$)/y],
+      ['string', /"(?:\\.|[^"\\\n])*"|`[^`]*`|'(?:\\.|[^'\\\n])*'/y],
+      ['number', /\b\d[\w.]*(?:[eEpP][+-]?\d+)?/y],
+      ['ident', /[\p{L}_][\p{L}\p{N}_]*/uy]
+    ],
+    json: [
+      ['string', /"(?:\\.|[^"\\])*"/y],
+      ['number', /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y],
+      ['keyword', /\b(?:true|false|null)\b/y]
+    ],
+    sh: [
+      ['comment', /(?:^|(?<=\s))#[^\n]*/y],
+      ['string', /"(?:\\.|[^"\\])*"|'[^']*'/y],
+      ['type', /\$\{[^}]*\}|\$[A-Za-z_][A-Za-z_0-9]*/y]
+    ],
+    sql: [
+      ['comment', /--[^\n]*|\/\*[\s\S]*?(?:\*\/|$)/y],
+      ['string', /'(?:''|[^'])*'/y],
+      ['name', /"(?:""|[^"])*"/y],
+      ['keyword', /\b(?:SELECT|FROM|WHERE|AND|OR|NOT|NULL|TRUE|FALSE|AS|IN|IS|LIKE|JOIN|ON|ORDER|BY|LIMIT|OFFSET|ASC|DESC)\b/iy],
+      ['number', /\b\d+(?:\.\d+)?\b/y]
+    ],
+    toml: [
+      ['comment', /#[^\n]*/y],
+      ['string', /"(?:\\.|[^"\\])*"|'[^']*'/y],
+      ['keyword', /\b(?:true|false)\b/y],
+      ['number', /[+-]?\b\d+(?:\.\d+)?\b/y]
+    ]
+  };
+  rules.golang = rules.go;
+  rules.bash = rules.shell = rules.console = rules.sh;
+  document.querySelectorAll('pre code[class*="language-"]').forEach(function (code) {
+    var language = Array.from(code.classList).find(function (name) { return name.startsWith('language-'); });
+    var languageRules = rules[language.slice(9).toLowerCase()];
+    if (!languageRules) return;
+    var source = code.textContent, fragment = document.createDocumentFragment();
+    var offset = 0, plainStart = 0;
+    while (offset < source.length) {
+      var token = null, kind;
+      for (var rule of languageRules) {
+        rule[1].lastIndex = offset;
+        token = rule[1].exec(source);
+        if (token) { kind = rule[0]; break; }
+      }
+      if (!token) { offset++; continue; }
+      if (kind === 'ident') {
+        kind = goKeywords.has(token[0]) ? 'keyword' : goTypes.has(token[0]) ? 'type' : /^\s*\(/.test(source.slice(offset + token[0].length)) ? 'function' : null;
+      }
+      if (kind) {
+        fragment.append(document.createTextNode(source.slice(plainStart, offset)));
+        var span = document.createElement('span');
+        span.className = 'token-' + kind;
+        span.textContent = token[0];
+        fragment.append(span);
+        plainStart = offset + token[0].length;
+      }
+      offset += token[0].length;
     }
-    fragment.append(document.createTextNode(source.slice(previous)));
+    fragment.append(document.createTextNode(source.slice(plainStart)));
     code.replaceChildren(fragment);
   });
 })();
