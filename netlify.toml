@@ -1,0 +1,16 @@
+# Build the landing page and documentation from repository Markdown.
+# See docs/site.md for local preview and deployment configuration.
+[build]
+  command = "sh site/build.sh"
+  publish = "site/dist"
+
+[build.environment]
+  # Compatible with the Go directive in site/go.mod.
+  GO_VERSION = "1.24.2"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

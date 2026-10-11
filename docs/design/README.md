@@ -1,0 +1,15 @@
+# Design Records
+
+These documents explain the rationale, contracts, and tradeoffs behind HFF's
+language design. The [language specification](../../spec/README.md) defines the
+query language; records provide context for individual design choices.
+
+| Record | Subject |
+|:--|:--|
+| [001: Compact predicates](001-compact-predicates.md) | Whitespace as a visual and logical boundary |
+| [002: Guards and presence](002-guards-and-presence.md) | Value-preserving guards and explicit existence tests |
+| [003: Collection predicates](003-collection-predicates.md) | Short-circuiting any/all for common search intent |
+
+Use [000: Design Record Template](000-template.md) for a new `NNN-topic.md`
+record. Proposed, Accepted, and Implemented distinguish a proposal, an approved
+design, and delivered behavior.

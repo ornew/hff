@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en" data-root="{{rel .Current.URL "index.html"}}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="HFF is a human-friendly, type-safe filter language with one syntax across processing systems.">
+  <title>{{if .Current.Home}}HFF — Human-Friendly Filter{{else}}{{.Current.Title}} · HFF{{end}}</title>
+  <script src="{{rel .Current.URL "theme.js"}}"></script>
+  <link rel="stylesheet" href="{{rel .Current.URL "style.css"}}">
+  <script defer src="{{rel .Current.URL "search-index.js"}}"></script>
+  <script defer src="{{rel .Current.URL "site.js"}}"></script>
+</head>
+<body class="{{if .Current.Home}}home-page{{else}}doc-page{{end}}">
+  <a class="skip" href="#content">Skip to content</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <button class="icon-button menu-toggle" type="button" aria-label="Open navigation" aria-haspopup="dialog" aria-controls="navigation-dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <a class="brand" href="{{.Root}}" aria-label="HFF home"><span class="brand-mark" aria-hidden="true">H<span>F</span>F</span></a>
+      <nav class="topnav" aria-label="Main">
+        <a href="{{.Root}}" {{if .Current.Home}}aria-current="page"{{end}}>Overview</a>
+        <a href="{{rel .Current.URL "spec/index.html"}}">Specification</a>
+        <a href="{{rel .Current.URL "spec/methods.html"}}">Methods</a>
+      </nav>
+      <div class="topbar-actions">
+        <button class="search-trigger" type="button" aria-label="Search documentation" aria-haspopup="dialog" aria-controls="search-dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><span>Search docs</span><kbd>/</kbd></button>
+        <button class="icon-button theme-toggle" type="button" aria-label="Color mode: system" title="Color mode: system"><svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><path d="M12 1.5v2.5M12 20v2.5M1.5 12H4M20 12h2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/></svg><svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"/></svg></button>
+        <a class="icon-button github-link" href="https://github.com/ornew/hff" aria-label="HFF on GitHub" title="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4 1-4-2-6-2m12 5v-4c0-1-.1-1.5-.6-2 3-.4 6-1.5 6-6 0-1.3-.4-2.5-1.3-3.4.2-.8.2-2-.4-3.1 0 0-1-.3-3.4 1.3a12 12 0 0 0-6.6 0C6.3 3.2 5.3 3.5 5.3 3.5c-.6 1.1-.6 2.3-.4 3.1A5 5 0 0 0 3.6 10c0 4.5 3 5.6 6 6-.5.5-.6 1.2-.6 2v4"/></svg></a>
+      </div>
+    </div>
+  </header>
+  {{if .Current.Home}}
+  <main id="content" tabindex="-1">{{template "landing" .}}</main>
+  {{else}}
+  <div class="doc-shell">
+    <nav class="sidebar" aria-label="Documentation">{{template "doclinks" .}}</nav>
+    <main id="content" tabindex="-1"><article class="prose">{{.Current.Body}}</article>
+      <footer class="doc-footer"><a class="source-link" href="https://github.com/ornew/hff/blob/main/{{.Current.Source}}">View source on GitHub ↗</a>
+        <nav class="pager" aria-label="Adjacent pages">{{with .Prev}}<a href="{{rel $.Current.URL .URL}}"><small>Previous</small>{{.Title}}</a>{{end}}{{with .Next}}<a href="{{rel $.Current.URL .URL}}"><small>Next</small>{{.Title}}</a>{{end}}</nav>
+      </footer>
+    </main>
+    <aside class="toc" aria-label="On this page"><p class="eyebrow">On this page</p>{{range .Current.Headings}}<a href="#{{.ID}}">{{.Title}}</a>{{end}}</aside>
+  </div>
+  {{end}}
+  <footer class="site-footer"><a class="footer-brand" href="{{.Root}}">HFF</a><span>Human-Friendly Filter</span><a href="https://github.com/ornew/hff">GitHub ↗</a><a href="{{rel .Current.URL "LICENSE"}}">Apache 2.0</a></footer>
+
+  <dialog id="navigation-dialog" class="drawer" aria-labelledby="navigation-title">
+    <div class="dialog-heading"><span id="navigation-title">Explore HFF</span><button class="icon-button" type="button" data-close="navigation-dialog" aria-label="Close navigation">✕</button></div>
+    <nav aria-label="Mobile documentation">{{template "doclinks" .}}<a href="https://github.com/ornew/hff">GitHub ↗</a></nav>
+  </dialog>
+  <dialog id="search-dialog" class="search-dialog" aria-labelledby="search-title">
+    <div class="dialog-heading"><span id="search-title">Search documentation</span><button class="icon-button" type="button" data-close="search-dialog" aria-label="Close search">✕</button></div>
+    <label class="sr-only" for="search-input">Search documentation</label>
+    <input id="search-input" type="search" placeholder="Operators, null safety, methods…" autocomplete="off" spellcheck="false" aria-describedby="search-status">
+    <p id="search-status" class="search-status" role="status">Search the language specification and guides.</p>
+    <div id="search-results" class="search-results"></div>
+    <div class="search-footer"><span>↑ ↓ to move · Enter to open</span><span>Esc to close</span></div>
+  </dialog>
+</body>
+</html>
+{{define "doclinks"}}{{range .Sections}}
+{{if .Collapsible}}<details class="nav-section" {{if .Active}}open{{end}}><summary>{{.Name}}</summary>{{else}}<section class="nav-section"><h2>{{.Name}}</h2>{{end}}
+{{range .Pages}}<a href="{{rel $.Current.URL .URL}}" {{if eq .URL $.Current.URL}}aria-current="page"{{end}}>{{if eq .Source "README.md"}}Home{{else if eq .Source "spec/README.md"}}Introduction{{else if eq .Source "docs/design/README.md"}}Introduction{{else}}{{.Title}}{{end}}</a>{{end}}
+{{if .Collapsible}}</details>{{else}}</section>{{end}}
+{{end}}{{end}}

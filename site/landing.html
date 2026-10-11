@@ -1,0 +1,26 @@
+{{define "landing"}}
+<section class="hero">
+  <div class="hero-copy">
+    <h1 class="hero-identity" id="{{.Current.HomeAnchor}}"><span class="hero-logo">H<span>F</span>F</span><span class="hero-fullname">Human-Friendly Filter</span></h1>
+    <p class="hero-tagline">Write <em>intuitively.</em><br>Read <em>clearly.</em></p>
+    <p class="hero-description">{{.Current.Intro}}</p>
+    <div class="hero-actions"><a class="button primary" href="{{rel .Current.URL "spec/syntax.html"}}">Explore the syntax <span>→</span></a><a class="button secondary" href="{{rel .Current.URL "spec/index.html"}}">Read the specification</a></div>
+  </div>
+  <div class="query-window">
+    <div class="query-titlebar"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>filter.hff</span></div>
+    <div class="query-code"><pre><code class="language-hff">{{.Current.Example}}</code></pre></div>
+  </div>
+</section>
+<section class="principles" id="why-hff">
+  <div class="section-intro"><h2>Why HFF</h2></div>
+  <div class="feature-grid">{{range $i, $feature := .Current.Features}}<div class="feature-card">{{template "feature-icon" $i}}<h3>{{$feature.ID}}</h3><p>{{$feature.Title}}</p></div>{{end}}</div>
+</section>
+<section class="reading-path"><div><h2>Documentation</h2></div><div class="doc-cards">
+  <a href="{{rel .Current.URL "spec/syntax.html"}}"><h3>Syntax <span>↗</span></h3><p>Names, operators, methods, and a space for AND.</p></a>
+  <a href="{{rel .Current.URL "spec/evaluation.html"}}"><h3>Evaluation <span>↗</span></h3><p>Null-safe access, boolean conversion, and guarded values.</p></a>
+  <a href="{{rel .Current.URL "spec/capabilities.html"}}"><h3>Capabilities <span>↗</span></h3><p>A fixed grammar with configurable features and backend support.</p></a>
+</div></section>
+<section class="readme-section"><div class="prose">{{.Current.Body}}</div></section>
+{{end}}
+
+{{define "feature-icon"}}<svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true">{{if eq . 0}}<path d="m15 5 4 4M4 20l4-1 12-12a2.8 2.8 0 0 0-4-4L4 15v5z"/>{{else if eq . 1}}<path d="M4 7h15m-4-4 4 4-4 4M20 17H5m4-4-4 4 4 4"/>{{else if eq . 2}}<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c5 5 5 13 0 18-5-5-5-13 0-18"/>{{else if eq . 3}}<path d="m12 3 8 3v6c0 5-8 9-8 9s-8-4-8-9V6l8-3zM8 12l3 3 5-6"/>{{else if eq . 4}}<path d="M4 6h6m4 0h6M4 12h10m4 0h2M4 18h2m4 0h10"/><circle cx="12" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="18" r="2"/>{{else}}<rect x="4" y="6" width="16" height="12" rx="2"/><path d="m8 10 2 2-2 2m5 0h3"/>{{end}}</svg>{{end}}
