@@ -37,6 +37,28 @@ func TestQueryUTF8AdmissionCancellation(t *testing.T) {
 	}
 }
 
+func TestPreflightCancellationAcrossEscapes(t *testing.T) {
+	for _, tc := range []struct{ name, source string }{
+		{"string", `x="` + strings.Repeat(`\\`, 2045) + `"`},
+		{"quoted name", "`" + strings.Repeat(`\\`, 2047) + "`"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tree, err := ParseQuery(context.Background(), tc.source, Config{}); err != nil || tree == nil {
+				t.Fatalf("escape fixture must remain a valid query: %v", err)
+			}
+			ctx, cancel := context.WithCancelCause(context.Background())
+			cause := errors.New("stop escaped query preflight")
+			probe := &admissionContext{Context: ctx, cancel: cancel, cause: cause}
+			err := preflight(probe, tc.source, 64)
+			cancel(nil)
+			var detail *hff.Error
+			if !errors.As(err, &detail) || detail.Code != hff.CancelledError || !errors.Is(err, context.Canceled) || !errors.Is(err, cause) {
+				t.Fatalf("escaped bytes skipped cancellation checks: %v", err)
+			}
+		})
+	}
+}
+
 func TestGrammarConformance(t *testing.T) {
 	valid := []string{
 		``, " \t\r\n", `foo.age>10 foo.father.name~"^A"`,

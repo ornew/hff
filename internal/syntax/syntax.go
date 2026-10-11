@@ -102,13 +102,14 @@ func sourceError(code hff.ErrorCode, source string, pos int, message string) err
 // preflight bounds recursive delimiters and consecutive guards/unary operators
 // before entering the generated parser. The typed-tree check enforces full depth.
 func preflight(ctx context.Context, source string, limit int) error {
-	depth, run := 0, 0
+	depth, run, nextCheck := 0, 0, 0
 	var quote byte
 	for i := 0; i < len(source); i++ {
-		if i%1024 == 0 {
+		if i >= nextCheck {
 			if err := checkContext(ctx); err != nil {
 				return err
 			}
+			nextCheck = i + 1024
 		}
 		c := source[i]
 		if quote != 0 {

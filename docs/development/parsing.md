@@ -85,6 +85,12 @@ resulting typed tree afterward; a preflight scan bounds delimiter, guard, and
 unary-operator runs before entering the generated parser. The generated parser
 also retains an internal rule-call safety limit.
 
+The preflight scanner checks cancellation at byte-position checkpoints roughly
+every 1 KiB. Escaped characters inside quoted strings can advance past a
+checkpoint, so the scanner tracks the next checkpoint instead of relying on
+an exact modulo boundary. This keeps long escaped strings and quoted names
+cancellable without modifying generated parser code.
+
 Query UTF-8 admission uses the shared chunked validator, checking context
 between chunks of at most 4,096 bytes before parsing. If the source is invalid,
 the diagnostic-location rescan checks context at approximately 1 KiB intervals

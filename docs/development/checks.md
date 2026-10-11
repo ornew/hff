@@ -256,6 +256,15 @@ the generated `ParseAST` call is still an uninterruptible boundary.
 go test -race ./internal/syntax -run '^TestQueryUTF8AdmissionCancellation$'
 ```
 
+The preflight cancellation regression uses long escaped quoted strings and
+quoted names to ensure skipped escape bytes cannot skip a cancellation
+checkpoint. This covers HFF's preflight loop only; it does not make generated
+`ParseAST` interruptible.
+
+```sh
+go test -race ./internal/syntax -run '^TestPreflightCancellationAcrossEscapes$'
+```
+
 The map-key ordering target compares HFF's context-aware merge order with Go's
 byte-lexical `sort.Strings` result, including long common prefixes and malformed
 UTF-8 byte sequences.
