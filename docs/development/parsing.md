@@ -87,9 +87,11 @@ also retains an internal rule-call safety limit.
 
 Cancellation is checked before parsing, periodically during the preflight scan,
 after generated parsing, and while validating the resulting tree. The generated
-`ParseAST` call has no cooperative context hook, so cancellation that occurs
-during that call is reported after parsing returns rather than interrupting it
-immediately.
+`ParseAST` call has no cooperative context hook. HFF detects cancellation that
+occurs during that call only after parsing returns; it cannot preempt the
+generated parser mid-call. The byte and depth limits bound input size and
+nesting, but do not promise an immediate cancellation response within
+`ParseAST`.
 
 Syntax diagnostics report a UTF-8 byte span and a one-based line and Unicode
 code-point column. Invalid UTF-8, malformed strings (including unpaired

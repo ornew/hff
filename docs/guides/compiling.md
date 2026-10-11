@@ -32,6 +32,14 @@ extension declarations. Local implementations are registered when building a
 filter; see the [local extension guide](../backends/local/extensions.md). See [the program guide](../reference/program-ir.md)
 for the immutable IR and its source spans.
 
+Compilation honors context cancellation during preflight checks, generated
+tree validation, and semantic analysis. The generated parser's `ParseAST` call
+has no context hook, so cancellation that arrives inside that call is detected
+after parsing returns; cancellation is not immediately preemptive during that
+phase. `MaxQueryBytes` and `MaxSyntaxDepth` bound the source and nesting before
+the call. See the [parser maintenance notes](../development/parsing.md) for the
+phase-by-phase checks.
+
 ## Handle diagnostics
 
 Compilation failures are returned as `*hff.Error`. Use `errors.As` to inspect
