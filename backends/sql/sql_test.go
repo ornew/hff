@@ -140,7 +140,7 @@ func TestIdentifiersAndLiteralPaths(t *testing.T) {
 }
 
 func TestUnsupportedSQLHasSourceLocation(t *testing.T) {
-	for _, source := range []string{`age+1>2`, `age>factor`, `name~"a"`, `name:lower="a"`, `name:upper="A"`, `name="\u0000"`} {
+	for _, source := range []string{`age+1>2`, `age/2>factor`, `name~"a"`, `name:lower="a"`, `name:upper="A"`, `name="\u0000"`} {
 		p := compile(t, source)
 		_, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
 		detail := requireCode(t, err, hff.BackendError)
@@ -213,6 +213,7 @@ func parityCases() []parityCase {
 		`age!=-1`, `-age>1`, `factor>-0.0`,
 		`age=-9223372036854775808`, `age=9223372036854775807`, `age>9223372036854775806`,
 		`factor=1.7976931348623157e308`, `factor=5e-324`, `factor=-0.0`,
+		`age>10.5`, `age=9007199254740992.0`, `age!=9223372036854775808.0`, `factor<9007199254740993`,
 		`age!=null age>1`, `age!=null | !flag`,
 		`age!`, `age!:exists`, `age!=null age!:exists`,
 		`(age!)=null`, `!(age!)=null`, `(age!)!=null`,
@@ -255,6 +256,24 @@ func parityCases() []parityCase {
 	for _, source := range queries {
 		for _, row := range rows {
 			cases = append(cases, parityCase{source, row[0], row[1], row[2], row[3]})
+		}
+	}
+	integers := []int64{math.MinInt64, math.MinInt64 + 1, -9007199254740993, -9007199254740992, -2, -1, 0, 1, 2, 9007199254740992, 9007199254740993, math.MaxInt64 - 1, math.MaxInt64}
+	floats := []float64{
+		-math.MaxFloat64, math.Nextafter(float64(math.MinInt64), math.Inf(-1)), float64(math.MinInt64), math.Nextafter(float64(math.MinInt64), 0),
+		-9007199254740992, -2, -1.5, -1, -math.SmallestNonzeroFloat64, math.Copysign(0, -1), 0, math.SmallestNonzeroFloat64, 0.5, 1, 1.5, 2,
+		9007199254740992, math.Nextafter(float64(math.MaxInt64), 0), float64(math.MaxInt64), math.Nextafter(float64(math.MaxInt64), math.Inf(1)), math.MaxFloat64,
+	}
+	for _, op := range []string{"=", "!=", "<", "<=", ">", ">="} {
+		for _, integer := range integers {
+			for _, floating := range floats {
+				for _, source := range []string{"age" + op + "factor", "factor" + op + "age"} {
+					cases = append(cases, parityCase{source, hff.Int(integer), hff.Null(), hff.Null(), hff.Float(floating)})
+				}
+			}
+		}
+		for _, row := range rows {
+			cases = append(cases, parityCase{"age" + op + "factor", row[0], row[1], row[2], row[3]}, parityCase{"factor" + op + "age", row[0], row[1], row[2], row[3]})
 		}
 	}
 	return cases

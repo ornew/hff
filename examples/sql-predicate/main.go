@@ -26,7 +26,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	program, err := e.Compile(ctx, `age>=18 name:contains("api")`)
+	program, err := e.Compile(ctx, `age>=18.5 name:contains("api")`)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -86,15 +86,7 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 	if value.kind == hff.NullType && value.present == "TRUE" {
 		return value, nil
 	}
-	var alias string
-	for {
-		b.alias++
-		alias = fmt.Sprintf("__hff_%d", b.alias)
-		if !b.reserved[alias] {
-			break
-		}
-	}
-	alias = `"` + alias + `"`
+	alias := b.nextAlias()
 	if value.kind == hff.NullType {
 		b.steps = append(b.steps, "(SELECT "+value.present+" AS p OFFSET 0) AS "+alias)
 		value.present = alias + ".p"
@@ -252,6 +244,24 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 
 func boolean(code string) expression { return expression{code, "TRUE", hff.BoolType} }
 
+// project names an internal SQL-only intermediate using the same projection
+// barrier as typed plan nodes. It does not introduce an HFF value or parameter.
+func (b *builder) project(code string) string {
+	name := b.nextAlias()
+	b.steps = append(b.steps, "(SELECT "+code+" AS v OFFSET 0) AS "+name)
+	return name + ".v"
+}
+
+func (b *builder) nextAlias() string {
+	for {
+		b.alias++
+		name := fmt.Sprintf("__hff_%d", b.alias)
+		if !b.reserved[name] {
+			return `"` + name + `"`
+		}
+	}
+}
+
 func acceptsKind(typ hff.Type, kind hff.TypeKind) bool {
 	if typ.Kind() == hff.AnyType {
 		return true
@@ -352,6 +362,9 @@ func (b *builder) binary(n hff.Node) (expression, error) {
 		return boolean("FALSE"), nil
 	}
 	if left.kind != right.kind {
+		if (left.kind == hff.IntType && right.kind == hff.FloatType) || (left.kind == hff.FloatType && right.kind == hff.IntType) {
+			return b.mixedComparison(left, right, op), nil
+		}
 		return expression{}, b.failure(n, "mixed SQL scalar comparisons require exact numeric lowering")
 	}
 	leftCode, rightCode := left.code, right.code
@@ -364,6 +377,31 @@ func (b *builder) binary(n hff.Node) (expression, error) {
 		operator = "<>"
 	}
 	return boolean(both(both(left.present, right.present), "COALESCE(("+leftCode+" "+operator+" "+rightCode+"), FALSE)")), nil
+}
+
+func (b *builder) mixedComparison(left, right expression, op hff.Operator) expression {
+	integer, floating := left, right
+	reversed := left.kind == hff.FloatType
+	if reversed {
+		integer, floating = right, left
+	}
+	i, f := integer.code, floating.code
+	// The positive bound is 2^63, not float64(MaxInt64), which rounds up to
+	// this bound. Inside [−2^63,2^63), floor(f) is an exactly representable
+	// integer and the bigint cast is safe and exact. No int64 is rounded to
+	// float64, and no float64 is rounded through PostgreSQL numeric.
+	const low = "'-9223372036854775808'::double precision"
+	const high = "'9223372036854775808'::double precision"
+	floor := b.project("(CASE WHEN " + f + " >= " + low + " AND " + f + " < " + high + " THEN floor(" + f + ")::bigint ELSE NULL END)")
+	comparison := b.project("(CASE WHEN " + i + " IS NULL OR " + f + " IS NULL THEN NULL WHEN " + f + " >= " + high + " THEN -1 WHEN " + f + " < " + low + " THEN 1 WHEN " + i + " < " + floor + " THEN -1 WHEN " + i + " > " + floor + " THEN 1 WHEN " + f + " > floor(" + f + ") THEN -1 ELSE 0 END)")
+	if reversed {
+		comparison = "(-(" + comparison + "))"
+	}
+	operator := string(op)
+	if op == hff.NotEqual {
+		operator = "<>"
+	}
+	return boolean(both(both(left.present, right.present), "COALESCE(("+comparison+" "+operator+" 0), FALSE)"))
 }
 
 func (b *builder) call(n hff.Node) (expression, error) {

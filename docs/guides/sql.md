@@ -21,7 +21,7 @@ if err != nil {
     return err
 }
 
-program, err := e.Compile(ctx, `age>=18 name:contains("api")`)
+program, err := e.Compile(ctx, `age>=18.5 name:contains("api")`)
 if err != nil {
     return err
 }
@@ -63,12 +63,18 @@ parameters to the database API; do not interpolate query values into SQL text.
 
 The initial builder supports nullable scalar columns whose HFF type is one of
 null, boolean, int64, finite float64, or string. Required struct parents may be
-traversed to a scalar leaf. Comparisons require homogeneous scalar types; string
-ordering uses PostgreSQL's `C` collation. Boolean literals and operators,
+traversed to a scalar leaf. Comparisons support homogeneous scalar types and
+mixed int64/float64 ordering without rounding the integer through float64;
+string ordering uses PostgreSQL's `C` collation. Boolean literals and operators,
 implicit AND, explicit null comparisons, numeric unary negation, postfix guards
 at scalar leaves, scalar type guards, `exists()`, and `type()` are supported.
 String methods currently supported are `len()`, `contains()`, `startswith()`,
 `endswith()`, and `concat()`; boolean `not()`, `and()`, and `or()` are supported.
+
+For mixed numeric ordering, the builder partitions float values around the
+int64 range, floors only in the safely castable range, and compares the integer
+with that bigint value before considering the fractional part. It never converts
+the int64 operand to float64, which would lose precision near 2^53 and above.
 
 Mapped database columns must use schema-compatible PostgreSQL types: `bigint`,
 `double precision`, `boolean`, or `text`. Float values must be finite. Text must
@@ -76,10 +82,10 @@ be valid UTF-8 without NUL. Identifier components must contain 1–63 UTF-8 byte
 and no NUL; PostgreSQL identifiers that would be truncated are rejected.
 
 An unsupported operation or type returns a source-located `hff.BackendError`
-from `Build`. The current subset rejects arithmetic, mixed numeric comparisons,
-regex, collection operations, `Any` and non-null mixed unions, JSON and temporal
-conversions, and guarded access through nullable parents. It does not fall back
-to local evaluation. PostgreSQL is the only currently supported SQL dialect.
+from `Build`. The current subset rejects arithmetic, regex, collection
+operations, `Any` and non-null mixed unions, JSON and temporal conversions, and
+guarded access through nullable parents. It does not fall back to local
+evaluation. PostgreSQL is the only currently supported SQL dialect.
 
 The builder uses relational subqueries for chained operations to keep generated
 SQL growth linear. This may make the predicate shape more involved; callers
