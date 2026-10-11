@@ -169,6 +169,17 @@ deadlines. See the
 go test -count=5 -benchtime=100ms -run '^$' -bench '^BenchmarkDefaultLimitWorkloads$' -benchmem ./engine
 ```
 
+To compare padded and dense sources at the query-byte ceiling, run:
+
+```sh
+go test -benchtime=100ms -count=3 -run '^$' -bench '^BenchmarkDefaultQueryByteCeiling$' -benchmem ./engine
+```
+
+The finite-limit review describes the 65,536-byte padded and dense queries,
+the one-byte-over rejection, and why generated-parser allocation samples vary
+between runs. This measures one schema and query pair, not a general query
+memory budget.
+
 The depth-limit benchmark measures successful parsing/compilation, input
 validation, and JSON operations at selected default depth ceilings. It raises
 the syntax-depth limit in the callback case to isolate callback depth. Exact

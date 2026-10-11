@@ -222,7 +222,7 @@ not generally acceptable service latency or a reason to change a default.
 
 | Limit | Counting unit | Boundary evidence | Measured cost and remaining coverage |
 |:--|:--|:--|:--|
-| `MaxQueryBytes` (65,536) | UTF-8 source bytes | Exact byte boundary accepted and the next byte rejected. | Padded bare-predicate scan/reject is measured above. Dense conjunction parsing and compilation have separate size benchmarks; no representative query corpus. |
+| `MaxQueryBytes` (65,536) | UTF-8 source bytes | Exact byte boundary accepted and the next byte rejected. | Padded and dense 65,536-byte queries plus a 65,537-byte rejection are measured below. This is one schema/query pair, not a representative query corpus. |
 | `MaxSyntaxDepth` (64) | Nested syntax constructs | Exact 64/65 accept/reject. | One depth-64 parse/compile shape measured; no broad grammar or large-query combination matrix. |
 | `MaxCallbackDepth` (64) | Lexically nested callbacks; root callback is depth 1 | Exact 64/65 tested with syntax depth raised to isolate this limit; normal syntax depth can reject first. | One depth-64 nested callback workload measured with syntax limit raised; no broad callback-body/schema workload. |
 | `MaxCompileSteps` (1,000,000) | Semantic compiler visits, including repeated inference and checking work | Repeated structural checks: 400 fields complete, 600 reject, and raising only this limit to 2,000,000 completes. Calibrated case: 998,002 steps complete; 1,000,002 reject. | One deliberately repeated structural-check workload has before/after timing and allocation measurements. Other compiler benchmarks cover common query shapes, not diverse service schemas near the ceiling. |
@@ -237,6 +237,36 @@ that defaults are safe for every service, constrain SQL execution, or predict
 database planning, transport, peak memory, or caller-specific latency. SQL
 backends reject explicit execution-budget requirements they cannot enforce;
 local runtime limits do not become database limits.
+
+## Compare padded and dense queries at the byte ceiling
+
+Run the compilation benchmark with Go 1.27.1 and allocation reporting:
+
+```sh
+go test -benchtime=100ms -count=3 -run '^$' -bench '^BenchmarkDefaultQueryByteCeiling$' -benchmem ./engine
+```
+
+The benchmark compiles against `{x: bool}`. It compares a 65,536-byte source
+containing one predicate padded with spaces with a same-size dense source of
+32,768 whitespace-conjoined `x` predicates. Both compile under the defaults; a
+65,537-byte source is rejected by byte admission before parsing. Engine and
+source setup are outside the timed loop.
+
+One Go 1.27.1, Darwin arm64, Apple M3 Max baseline with a 100 ms benchmark time
+and three runs produced these medians:
+
+| Case | Median time | Allocated bytes | Allocations |
+|:--|--:|--:|--:|
+| Padded, 65,536 bytes | 509 µs/op | 4,946–8,245 B/op across runs | 19 allocs/op |
+| Dense, 65,536 bytes | 17.412 ms/op | 38,450,489 B/op | 99,342 allocs/op |
+| 65,537-byte rejection | 98 ns/op | 120 B/op | 3 allocs/op |
+
+Generated-parser scratch uses `sync.Pool`, so repeated-run allocation figures
+vary with retained scratch and garbage collection. `B/op` is cumulative
+allocation, not a fixed per-query memory budget or peak/retained memory. The
+rejection result measures this admission path, not general scanning
+throughput. This comparison isolates source density at one byte length; it
+does not establish a safe maximum query size for other schemas or services.
 
 ## Remaining evidence gaps
 
