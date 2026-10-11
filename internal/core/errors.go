@@ -10,6 +10,7 @@ const (
 	SyntaxError        ErrorCode = "syntax"
 	TypeError          ErrorCode = "type"
 	CapabilityError    ErrorCode = "capability"
+	BackendError       ErrorCode = "backend"
 	InputError         ErrorCode = "input"
 	LimitError         ErrorCode = "limit"
 	CancelledError     ErrorCode = "cancelled"

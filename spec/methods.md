@@ -88,8 +88,11 @@ Unicode simple mappings, without multi-code-point expansions;
 strings are not implicitly normalized. `contains()` requires at least one
 argument and tests every supplied substring. `matches()` uses RE2 substring
 matching; anchors select full-string matching. Invalid patterns and invalid
-conversions yield null. Base64 uses the standard alphabet and required padding;
-URL-safe and unpadded alternatives are not accepted.
+conversions yield null. HFF's regex reference syntax follows RE2 except the
+byte escape `\C`, which is excluded and therefore invalid. A backend may
+support a smaller regex subset only when its support matrix or compatibility
+profile documents the restriction. Base64 uses the standard alphabet and
+required padding; URL-safe and unpadded alternatives are not accepted.
 
 `bool()` accepts exactly `true` or `false`. `number()` accepts JSON numeric
 spelling and follows literal subtype selection. Neither trims surrounding

@@ -15,6 +15,11 @@ This record defines the API contract. Availability is documented separately as
 the packages are implemented.
 The [language specification](../../spec/README.md) defines their semantic contract.
 
+The common compiler and local backend's core operators, values, indexing,
+guards, short-circuit behavior, and per-match budgets are implemented. The
+built-in method and callback families, extension registration, and SQL
+translation remain separate implementation stages.
+
 ## Motivation
 
 A service chooses a schema and supported features, then accepts many queries.
@@ -407,7 +412,10 @@ traversal order, and placeholders match Args positions.
 Build verifies support for each requested operation and resolved type. Supporting
 an SQL operator's spelling is insufficient: null comparisons, guards, numeric
 boundaries, regex semantics, and collection behavior must all be preserved.
-Unsupported operations produce source-located Build errors. Dialects document
+Unsupported operations produce source-located Build errors. A backend may
+provide a documented regex subset below HFF's RE2 reference (which excludes the
+byte escape `\C`); its support matrix and compatibility profile must state
+those restrictions, and unsupported patterns must be rejected. Dialects document
 execution constraints they cannot enforce, including short-circuit order and
 resource accounting. An artifact does not claim local-runtime cancellation or
 step-budget guarantees for database execution; the service controls execution
@@ -514,5 +522,6 @@ and the PostgreSQL support matrix and driver encodings. These detailed contracts
 must accompany implementation rather than be inferred from examples.
 
 The record specifies behavior and public API direction; acceptance does not
-claim that every package has been implemented. No parser, evaluator, or SQL
-translator implementation is delivered by the record itself.
+claim that every package or method family has been implemented. Common
+compilation and core local evaluation are available. SQL translation and the
+complete method, callback, and extension surfaces remain incomplete.

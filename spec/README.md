@@ -47,3 +47,12 @@ The document structure and parser-generation approach are informed by the local
 PEGO [specification](https://github.com/ornew/pego/blob/main/spec/README.md) and
 [code generation guide](https://github.com/ornew/pego/blob/main/docs/guide/code-generation.md).
 These are development references, not dependencies of the HFF language contract.
+
+## Implementation status
+
+The public compiler and a local evaluator for core operators, literals,
+indexing, guards, and short-circuit logic are implemented. The complete built-in
+method and callback catalog described by this specification is not yet
+available in the local backend. SQL translation and extension registration are
+also not yet available. A backend rejects unsupported compiled operations
+explicitly; compile validity alone does not promise support from every backend.

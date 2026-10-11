@@ -9,10 +9,12 @@ compilation and backend lifecycle.
 - [Inspect the compiled program](program-ir.md)
 - [Configure an engine and validate records](getting-started.md)
 - [Compile a query](compiling.md)
+- [Build and run a local filter](local-evaluation.md)
 - [Schemas and immutable values](schemas-and-values.md)
 - [Capabilities and resource limits](configuration.md)
 
 The current implementation provides values, schemas, feature selection, engine
-configuration, validated input, an internal syntax-only parser, and public
-common query compilation. Local matching, SQL translation, and extension
-implementation registration are subsequent stages.
+configuration, validated input, an internal syntax-only parser, public common
+query compilation, and local matching for core operations. Full built-in method
+and callback coverage, SQL translation, and extension implementation
+registration remain unavailable.

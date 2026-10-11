@@ -155,7 +155,7 @@ func (t Type) Key() string {
 		return fmt.Sprintf("%d", t.Kind())
 	}
 }
-func (t Type) Equal(other Type) bool { return t.Key() == other.Key() }
+func (t Type) Equal(other Type) bool { return t.node == other.node || t.Key() == other.Key() }
 
 // Check rejects invalid descriptors and duplicate fields before engine construction.
 func (t Type) Check() error { return t.check(0) }

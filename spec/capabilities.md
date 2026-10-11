@@ -130,7 +130,10 @@ backend checks. They MUST NOT replace a built-in method name. Adding an extensio
 does not introduce tokens, operators, statements, or a service-specific grammar.
 An extension requiring unavailable processing-system behavior is rejected.
 
-Engines identify their Unicode case-data, RE2 compatibility, and time zone data
-versions. These identifiers belong to the advertised compatibility profile;
-the language does not prescribe a particular library version. Services comparing
-results across engines must compare the relevant profiles as well as features.
+Engines identify their Unicode case-data, regex compatibility, and time zone
+data versions. HFF's regex reference follows RE2 except for the excluded `\C`
+byte escape. A backend may advertise a smaller supported regex subset; its
+support matrix or compatibility profile must state restrictions explicitly.
+These identifiers belong to the advertised compatibility profile; the language
+does not prescribe a particular library version. Services comparing results
+across engines must compare the relevant profiles as well as features.

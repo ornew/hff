@@ -94,9 +94,10 @@ query execution. Cancellation is checked during compilation. Each operation
 uses the engine's configured finite limits unless unlimited mode was explicitly
 selected.
 
-Compilation produces a typed plan only. Local `Build`/`Match`, SQL dialects,
-bindings, and custom extension implementations are separate backend work and
-are not described as available APIs here.
+Compilation produces a typed plan only. The local backend supports core
+operators and collections; see the [local evaluation guide](local-evaluation.md)
+for its supported operations and limits. Full built-in method/callback families,
+SQL dialects, and custom extension implementations remain separate work.
 
 Run the complete example from the repository root:
 

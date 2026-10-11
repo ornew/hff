@@ -11,6 +11,7 @@ const (
 	SyntaxError        = core.SyntaxError
 	TypeError          = core.TypeError
 	CapabilityError    = core.CapabilityError
+	BackendError       = core.BackendError
 	InputError         = core.InputError
 	LimitError         = core.LimitError
 	CancelledError     = core.CancelledError

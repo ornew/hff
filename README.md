@@ -80,10 +80,10 @@ parser generator, not a requirement to compile grammars at runtime.
 ## Specification
 
 This repository provides immutable values, schemas, capabilities, validated
-input, and public query compilation to an immutable typed program. Local
-evaluation and backend translators are not yet available.
-Start with the [Go guides](docs/guides/README.md) and
-[engine configuration tutorial](docs/guides/getting-started.md).
+input, common query compilation, and local evaluation for core operators and
+collections. Full built-in method and callback families and SQL translation are
+not yet available. Start with the [Go guides](docs/guides/README.md), including
+the [local evaluation guide](docs/guides/local-evaluation.md).
 
 Read the [language specification](spec/README.md), beginning with
 [syntax](spec/syntax.md), [types and schemas](spec/types.md), and

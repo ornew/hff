@@ -103,7 +103,11 @@ still an explicit null test. An expression that merely computes null is not.
 RE2 matching uses `~` and `!~`, with the pattern on the right. These operators
 and `matches()` search for a matching substring. Use anchors such as `^` and `$`
 to require a full-string match. Invalid patterns yield null, including under
-`!~`; non-match is not a way to turn an invalid pattern into true.
+`!~`; non-match is not a way to turn an invalid pattern into true. HFF's
+reference regular-expression syntax follows RE2 except that the byte escape
+`\C` is excluded and is an invalid pattern, so it yields null. Backends may
+support a smaller regex subset; they must publish those restrictions and reject
+unsupported patterns rather than claim full HFF regex support.
 Numeric subtypes compare by numeric value. Otherwise, equality compares values
 of the same type. Lists and objects compare recursively by contents; stored null
 members compare equal to stored null members. This structural rule does not

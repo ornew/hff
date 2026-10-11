@@ -52,6 +52,10 @@ func OwnedObject(v map[string]Value) Value { return Value{ObjectKind, v} }
 
 // ListView and ObjectView are read-only internal views. They must not escape
 // through a public API or be mutated by a compiler/backend implementation.
+func (v Value) BytesView() ([]byte, bool) {
+	x, ok := v.data.([]byte)
+	return x, ok && v.kind == BytesKind
+}
 func (v Value) ListView() ([]Value, bool) {
 	x, ok := v.data.([]Value)
 	return x, ok && v.kind == ListKind
