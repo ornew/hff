@@ -291,6 +291,22 @@ HFF_POSTGRES_CONTAINER=<container-name-or-id> \
 go test -tags=integration ./backends/sql -run '^TestPostgreSQLSharedScalarConformance$'
 ```
 
+The shared fixture also exercises three typed-composite cases across native,
+JSON, and JSONB storage: a null composite versus a present row with null
+attributes, guarded access to a null child and an empty name, and negative
+array indexing when the PostgreSQL array has a nondefault lower bound. The
+integration test compares 12 records across the three storage forms (36
+PostgreSQL comparisons) against the shared expectations and local evaluation.
+This covers existing supported mappings; it does not imply support for `Any`
+or ambiguous numeric unions in structured SQL bindings.
+
+Run this focused PostgreSQL test with:
+
+```sh
+HFF_POSTGRES_CONTAINER=<container-name-or-id> \
+go test -race -tags=integration ./backends/sql -run '^TestPostgreSQLSharedCompositeConformance$' -v
+```
+
 JSON parsing and serialization have focused package tests and a round-trip
 fuzz target.
 

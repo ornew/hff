@@ -15,7 +15,7 @@ import (
 // new or regressed cases merely because Build returned an error.
 func TestSharedConformanceJSONBuildContracts(t *testing.T) {
 	supported := map[string]bool{}
-	for _, name := range []string{"empty_filter", "and_before_or", "grouped_or", "implicit_truthiness", "fractional_integer_division", "overflow_is_null", "unicode_code_points", "invalid_host_input_is_rejected"} {
+	for _, name := range []string{"empty_filter", "and_before_or", "grouped_or", "implicit_truthiness", "fractional_integer_division", "overflow_is_null", "unicode_code_points", "invalid_host_input_is_rejected", "typed_composite_null_identity", "typed_composite_parent_guard", "typed_array_negative_index"} {
 		supported[name] = true
 	}
 	rejected := map[string]bool{}
@@ -31,12 +31,12 @@ func TestSharedConformanceJSONBuildContracts(t *testing.T) {
 	} {
 		rejected[name] = true
 	}
-	var bindings []hffsql.Binding
-	for _, name := range []string{"age", "name", "flag", "x", "y", "items", "labels"} {
-		bindings = append(bindings, hffsql.BindJSON(hff.Path{name}, hffsql.Column("records", name), hffsql.JSON))
-	}
 	for _, tc := range conformance.Cases() {
 		t.Run(tc.Name, func(t *testing.T) {
+			var bindings []hffsql.Binding
+			for _, field := range tc.Schema.Fields() {
+				bindings = append(bindings, hffsql.BindJSON(hff.Path{field.Name}, hffsql.Column("records", field.Name), hffsql.JSON))
+			}
 			e, err := engine.New(engine.WithSchema(tc.Schema), engine.WithCapabilities(tc.Capabilities))
 			if err != nil {
 				t.Fatal(err)

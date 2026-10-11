@@ -200,5 +200,5 @@ func Cases() []Case {
 			cases[i].Capabilities = capabilities.Standard()
 		}
 	}
-	return cases
+	return append(cases, CompositeCases()...)
 }
