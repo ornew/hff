@@ -77,13 +77,24 @@ go test ./backends/local -run '^$' -bench '^BenchmarkCollections$' -benchmem
 
 The record-matching benchmark compares `Match` with `MatchInput` for scalar,
 service-regex, `any` first/last, and `all` queries over records with one, 100,
-and 1,000 struct items. Compilation, filter construction, and input validation
+ and 1,000 struct items. Compilation, filter construction, and input validation
 are outside the timed loops. `Match` includes per-call validation of the entire
 record; `MatchInput` reuses a previously validated immutable input. The
 benchmark measures local evaluation and allocations, not a universal speedup.
 
 ```sh
 go test ./backends/local -run '^$' -bench '^BenchmarkRecordMatching$' -benchmem
+```
+
+The finite-limit benchmark measures successful and rejected query-byte and
+input-value boundaries, plus local step-budget and generated-value aborts.
+Compilation, record construction, filter building, and input validation for the
+runtime cases are outside the measured loops. It checks typed limit errors and
+does not treat operation counts as wall-clock deadlines. See the
+[finite-limit review](finite-limits.md) for its measured scope and remaining gaps.
+
+```sh
+go test -count=5 -benchtime=100ms -run '^$' -bench '^BenchmarkDefaultLimitWorkloads$' -benchmem ./engine
 ```
 
 The PostgreSQL structured-build benchmark measures pure translation for

@@ -234,6 +234,7 @@ func TestNavigationPutsSectionIntroductionsFirst(t *testing.T) {
 		{Source: "docs/backends/local/README.md", URL: "docs/backends/local/index.html"},
 		{Source: "docs/backends/README.md", URL: "docs/backends/index.html"},
 		{Source: "docs/development/checks.md", URL: "docs/development/checks.html"},
+		{Source: "docs/development/finite-limits.md", URL: "docs/development/finite-limits.html"},
 		{Source: "docs/development/README.md", URL: "docs/development/index.html"},
 	}
 	sections := navigation(pages, current)
@@ -247,6 +248,20 @@ func TestNavigationPutsSectionIntroductionsFirst(t *testing.T) {
 		}
 		if found == nil || len(found.Pages) == 0 || path.Base(found.Pages[0].Source) != "README.md" {
 			t.Errorf("%s introduction is not first: %#v", name, found)
+		}
+	}
+	for i := range sections {
+		if sections[i].Name != "Development" {
+			continue
+		}
+		want := []string{"docs/development/README.md", "docs/development/checks.md", "docs/development/finite-limits.md"}
+		if len(sections[i].Pages) < len(want) {
+			t.Fatalf("Development section has too few pages: %#v", sections[i].Pages)
+		}
+		for j, source := range want {
+			if sections[i].Pages[j].Source != source {
+				t.Errorf("Development page %d = %q, want %q", j, sections[i].Pages[j].Source, source)
+			}
 		}
 	}
 	for _, section := range sections {
