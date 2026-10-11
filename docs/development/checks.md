@@ -207,6 +207,14 @@ Check cancellation during JSON input UTF-8 admission with:
 go test -race ./backends/local -run '^TestJSONCancellationBeforeLateInvalidUTF8$'
 ```
 
+Query UTF-8 admission uses the same chunked validator. Its invalid-input
+location rescan remains cancellation-aware and preserves source byte spans;
+the generated `ParseAST` call is still an uninterruptible boundary.
+
+```sh
+go test -race ./internal/syntax -run '^TestQueryUTF8AdmissionCancellation$'
+```
+
 The map-key ordering target compares HFF's context-aware merge order with Go's
 byte-lexical `sort.Strings` result, including long common prefixes and malformed
 UTF-8 byte sequences.

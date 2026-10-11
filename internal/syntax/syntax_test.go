@@ -10,6 +10,33 @@ import (
 	"github.com/ornew/hff/internal/conformance"
 )
 
+type admissionContext struct {
+	context.Context
+	checks int
+	cancel context.CancelCauseFunc
+	cause  error
+}
+
+func (c *admissionContext) Err() error {
+	c.checks++
+	if c.checks == 4 {
+		c.cancel(c.cause)
+	}
+	return c.Context.Err()
+}
+
+func TestQueryUTF8AdmissionCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	cause := errors.New("stop query admission")
+	probe := &admissionContext{Context: ctx, cancel: cancel, cause: cause}
+	tree, err := ParseQuery(probe, `name="`+strings.Repeat("東京😀", 4096)+"\xff\"", Config{})
+	var detail *hff.Error
+	if tree != nil || !errors.As(err, &detail) || detail.Code != hff.CancelledError || !errors.Is(err, context.Canceled) || !errors.Is(err, cause) {
+		t.Fatalf("query admission did not preserve cancellation: %v", err)
+	}
+}
+
 func TestGrammarConformance(t *testing.T) {
 	valid := []string{
 		``, " \t\r\n", `foo.age>10 foo.father.name~"^A"`,

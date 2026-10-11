@@ -36,8 +36,19 @@ func ParseQuery(ctx context.Context, source string, config Config) (Expr, error)
 	if limits.MaxQueryBytes > 0 && len(source) > limits.MaxQueryBytes {
 		return nil, sourceError(hff.LimitError, source, 0, "query byte limit exceeded")
 	}
-	if !utf8.ValidString(source) {
+	validUTF8, err := core.ValidUTF8(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	if !validUTF8 {
+		nextCheck := 0
 		for i := 0; i < len(source); {
+			if i >= nextCheck {
+				if err := checkContext(ctx); err != nil {
+					return nil, err
+				}
+				nextCheck = i + 1024
+			}
 			_, width := utf8.DecodeRuneInString(source[i:])
 			if width == 1 && source[i] >= 0x80 {
 				return nil, sourceError(hff.SyntaxError, source, i, "query is not valid UTF-8")
