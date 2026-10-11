@@ -8,6 +8,18 @@
   # Compatible with the Go directive in site/go.mod.
   GO_VERSION = "1.24.2"
 
+[[redirects]]
+  from = "https://hff-go.netlify.app/*"
+  to = "https://hff.ornew.net/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "http://hff-go.netlify.app/*"
+  to = "https://hff.ornew.net/:splat"
+  status = 301
+  force = true
+
 [[headers]]
   for = "/*"
   [headers.values]
