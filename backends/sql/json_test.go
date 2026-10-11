@@ -39,6 +39,14 @@ func jsonBindings(format hffsql.JSONFormat) []hffsql.Binding {
 
 func jsonQueries() []string {
 	return []string{
+		`scores:sort=[]`, `scores:sort=null`, `scores:sort=scores`, `scores:sort=[2,2,10,20]`, `scores:sort:has(-1)`,
+		`factors:sort=[1.0,1.0]`, `factors:sort=factors`, `labels:keys:sort=labels:keys`, `labels:values:sort=null`,
+		`scores:concat([30,null])[-1]=null`, `scores:concat([])=scores`, `scores:concat(scores):size=scores:size*2`,
+		`scores:concat([profile!.age])=null`, `!scores:concat([profile!.age])=null`, `scores:concat(null)=null`,
+		`scores:concat(null)[0]=null`, `scores:concat(null):size=null`, `scores:concat(null):sort=null`,
+		`scores:concat(["z","a"]):sort=["a","z"]`, `scores:concat(["z","a"]):sort=null`, `scores:concat([true]):sort=null`,
+		`groups:concat([[],null]):size=groups:size+2`, `groups:concat([])=groups`,
+		`people:concat([profile])[-1]=profile`, `people:any(x=>scores:concat([x.age]):sort=null)`,
 		`scores:contains(10,20,null)`, `scores:contains(null)`, `scores:contains(9007199254740992.0)`, `scores:contains(9007199254740993)`,
 		`scores:contains(9223372036854775808.0)`, `scores:contains(-9223372036854775808.0)`, `scores:contains("10")`,
 		`scores:contains(null,profile!.age)`, `!scores:contains(null,profile!.age)`, `scores:unique`, `groups:unique`, `people:unique`,
@@ -123,7 +131,7 @@ func TestJSONBindingRejectsConflictingPhysicalMappings(t *testing.T) {
 
 func TestJSONUnsupportedSemanticsAreExplicitBuildErrors(t *testing.T) {
 	ctx := context.Background()
-	for _, source := range []string{`labels:tojson="{}"`, `scores:sort[0]=10`, `scores=[10,20.0]`} {
+	for _, source := range []string{`labels:tojson="{}"`, `scores=[10,20.0]`} {
 		p, err := jsonEngine(t).Compile(ctx, source)
 		if err != nil {
 			t.Fatal(source, err)

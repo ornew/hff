@@ -1,0 +1,81 @@
+package sql
+
+import (
+	"strings"
+
+	"github.com/ornew/hff"
+)
+
+func (b *builder) jsonSequence(n hff.Node, name string, values []expression, format JSONFormat) (expression, error) {
+	r := values[0]
+	if r.kind != hff.ListType {
+		return expression{}, b.failure(n, "sort and list concat require a list receiver")
+	}
+	if name == "concat" {
+		return b.jsonConcat(n, values, format)
+	}
+	child, _ := n.Child(0)
+	lists, err := b.jsonEqualityMembers(n, child.Type())
+	if err != nil || len(lists) != 1 {
+		if err == nil {
+			err = b.failure(n, "sort requires an unambiguous list schema")
+		}
+		return expression{}, err
+	}
+	members, err := b.jsonEqualityMembers(n, lists[0].Element())
+	if err != nil {
+		return expression{}, err
+	}
+	alias := b.nextAlias()
+	raw := alias + ".value"
+	category := string(format) + "_typeof(" + raw + ")"
+	var valid, order []string
+	for _, t := range members {
+		switch t.Kind() {
+		case hff.IntType, hff.FloatType, hff.StringType:
+			condition := category + "='" + jsonCategory(t.Kind()) + "'"
+			valid = append(valid, condition)
+			key := "(CASE WHEN " + condition + " THEN (" + raw + " #>> '{}'::text[])::" + sqlType(t.Kind()) + " END)"
+			if t.Kind() == hff.StringType {
+				key += " COLLATE \"C\""
+			}
+			order = append(order, key)
+		}
+	}
+	allowed := "FALSE"
+	if len(valid) > 0 {
+		allowed = "(" + strings.Join(valid, " OR ") + ")"
+	}
+	from := string(format) + "_array_elements(" + r.code + ") WITH ORDINALITY AS " + alias + "(value,ord)"
+	// Null elements and incompatible domains are data failures. Empty arrays
+	// remain valid even when their schema has no orderable element member.
+	invalid := "EXISTS(SELECT 1 FROM " + from + " WHERE NOT COALESCE(" + allowed + ",FALSE))"
+	mixed := "(SELECT count(DISTINCT " + category + ")>1 FROM " + from + ")"
+	// Ordinality is the final key, preserving the original order of equal
+	// elements independently of the database's aggregate/sort implementation.
+	order = append(order, alias+".ord")
+	aggregate := "(SELECT COALESCE(" + string(format) + "_agg(" + raw + " ORDER BY " + strings.Join(order, ",") + "),'[]'::" + string(format) + ") FROM " + from + ")"
+	code := "(CASE WHEN " + r.code + " IS NULL OR " + invalid + " OR " + mixed + " THEN NULL ELSE " + aggregate + " END)"
+	b.jsonValues[code] = format
+	return expression{code, r.present, hff.ListType}, nil
+}
+
+func (b *builder) jsonConcat(n hff.Node, values []expression, format JSONFormat) (expression, error) {
+	r, arg := values[0], values[1]
+	if arg.kind == hff.NullType {
+		code := "NULL::json"
+		b.jsonValues[code] = JSON
+		return expression{code, ordinaryPresence(values), hff.ListType}, nil
+	}
+	rf, ok := b.jsonValues[arg.code]
+	if arg.kind != hff.ListType || !ok {
+		return expression{}, b.failure(n, "list concat requires a JSON list argument")
+	}
+	left, right, result := b.nextAlias(), b.nextAlias(), b.nextAlias()
+	// Converting a jsonb element to json changes its physical format only;
+	// its HFF scalar subtype remains determined by the list's schema.
+	rows := "SELECT 0 AS segment," + left + ".ord," + left + ".value::json AS value FROM " + string(format) + "_array_elements(" + r.code + ") WITH ORDINALITY AS " + left + "(value,ord) UNION ALL SELECT 1," + right + ".ord," + right + ".value::json FROM " + string(rf) + "_array_elements(" + arg.code + ") WITH ORDINALITY AS " + right + "(value,ord)"
+	code := "(CASE WHEN " + r.code + " IS NULL OR " + arg.code + " IS NULL THEN NULL ELSE (SELECT COALESCE(json_agg(" + result + ".value ORDER BY " + result + ".segment," + result + ".ord),'[]'::json) FROM (" + rows + ") AS " + result + ") END)"
+	b.jsonValues[code] = JSON
+	return expression{code, ordinaryPresence(values), hff.ListType}, nil
+}

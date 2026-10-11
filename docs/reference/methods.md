@@ -84,10 +84,11 @@ See [list rules](../../spec/methods.md#lists) and the
 [callback guide](../guides/callbacks.md).
 
 The PostgreSQL backend currently supports schema-known JSON/JSONB list
-`contains()`, `unique()`, `any()`, and `all()`, plus scalar `in()` inside those
-callbacks. Structural comparisons require the corresponding equality
-capability. See the [PostgreSQL JSON support matrix](../backends/postgresql/json.md)
-for the exact supported profile and restrictions.
+`contains()`, `unique()`, `sort()`, `concat(list)`, `any()`, and `all()`, plus
+scalar `in()` inside those callbacks. Structural comparisons require the
+corresponding equality capability. See the
+[PostgreSQL JSON support matrix](../backends/postgresql/json.md) for the exact
+supported profile and restrictions.
 
 ## Object
 

@@ -169,6 +169,8 @@ func (b *builder) jsonCall(n hff.Node, name string, values []expression, format 
 	switch name {
 	case "contains", "unique":
 		return b.jsonMembership(n, name, values, format)
+	case "sort", "concat":
+		return b.jsonSequence(n, name, values, format)
 	case "exists":
 		return boolean(both(r.present, "("+r.code+" IS NOT NULL)")), nil
 	case "type":

@@ -79,13 +79,29 @@ and propagates through the ordinary HFF evaluation rules.
 For schema-known JSON objects, the backend supports `size()`, `has(key)`,
 `get(key)`, `keys()`, `values()`, and `items()`. Enumeration orders keys with
 PostgreSQL's `C` collation. For schema-known JSON lists, it supports `size()`,
-`has(index)`, `contains()`, `unique()`, `any()`, and `all()`. `contains()`
-requires every supplied needle to be present; a null needle is an ordinary
-value, while a null list receiver propagates null. A no-value argument
-propagates even if an earlier needle matched. `unique()` compares each element
+`has(index)`, `contains()`, `unique()`, `sort()`, `concat(list)`, `any()`, and
+`all()`. `contains()` requires every supplied needle to be present; a null
+needle is an ordinary value, while a null list receiver propagates null. A
+no-value argument propagates even if an earlier needle matched. `unique()`
+compares each element
 by HFF equality, so repeated stored nulls and repeated nested composite values
 are duplicates. These operations require applicable list/object equality
 capabilities for the types actually compared.
+
+`sort()` returns a stable ascending copy. Schema-known integer and float lists
+sort numerically; strings sort by Unicode code point using PostgreSQL's `C`
+collation. Equal values retain their input order. A runtime list containing
+null or incompatible/non-orderable values produces null. A statically known
+type with no orderable member is rejected during compilation. A
+JSON-distinguishable union can be sorted when all runtime elements share one
+orderable family; an ambiguous int/float union remains unsupported without
+type metadata.
+
+`concat(list)` preserves left-to-right order, duplicates, and null elements.
+JSON- or JSONB-backed lists can be concatenated with schema-compatible list
+values, including a list from the other physical format, or query-side list
+literals. A null argument produces a typed JSON null, so subsequent indexing or
+list methods propagate null; no-value propagates by the ordinary HFF rules.
 
 Nested callbacks can capture outer callback values and schema fields, with
 lexical shadowing:
@@ -97,7 +113,7 @@ orders:any(order=>order.items:any(item=>item.price>100))
 Inside those callbacks, scalar membership is supported as well:
 
 ```hff
-profile.roles:any(role=>role:in("admin","editor"))
+profile.scores:any(score=>score:in(80,90))
 ```
 
 The SQL backend preserves the callback result rules: a null list yields null,
@@ -133,6 +149,8 @@ can be combined with structural equality:
 profile.scores=[80,90]
 profile.scores:contains(80,90)
 profile.scores:unique
+profile.scores:sort=[80,90]
+profile.scores:concat([100])=[80,90,100]
 profile.scores:any(score=>score:in(80,90))
 ```
 
@@ -142,7 +160,7 @@ a source-located `hff.BackendError` from `Build`:
 - Dynamic `Any` decoding and unions with multiple non-null families when the
   stored representation cannot determine the HFF type.
 - Transforming callbacks such as `map()`, `flatmap()`, `foldl()`, and `foldr()`;
-  `sort()` and other unsupported collection transformations.
+  other unsupported collection transformations.
 - JSON parsing/serialization methods, conversions to bytes/timestamps/durations,
   and operations requiring a runtime type not fixed by the schema.
 
@@ -176,7 +194,7 @@ the service remains responsible for database timeouts and cancellation.
 ## Verification
 
 The repository's tagged integration suite compares JSON and JSONB bindings
-against local evaluation on PostgreSQL 18.6. The verified matrix covers 2,640
+against local evaluation on PostgreSQL 18.6. The verified matrix covers 3,454
 JSON/JSONB query-record pairs for scalar and nested access, null and missing-key
 cases, list indexing, object/list inspection and equality, callbacks, type
 guards, and type/truthiness predicates.
