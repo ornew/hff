@@ -186,6 +186,34 @@ construction, retained input memory, database or transport cost, or every
 service workload. It is evidence for this boundary only, not a universal
 budget-safety or latency claim.
 
+## Measure a generated-value workload at the default ceiling
+
+Run the local matcher benchmark with Go 1.27.1 and allocation reporting:
+
+```sh
+go test -benchtime=100ms -count=3 -run '^$' -bench '^BenchmarkDefaultGeneratedValueCeiling$' -benchmem ./backends/local
+```
+
+The query `items:flatmap(x=>[x,x]):size=2*n` creates an intermediate
+three-value list for each input item, then a flattened two-entry result and its
+outer list. The benchmark compares 19,999 items (99,996 generated values,
+completed) with 20,000 items (100,001 values, rejected). Validation,
+compilation, and Build happen outside the timed loop; each iteration calls
+`MatchInput` on the previously validated input.
+
+One baseline on Go 1.27.1, Darwin arm64, Apple M3 Max, with a 100 ms benchmark
+time and three runs produced these medians:
+
+| Case | Median time | Allocated bytes | Allocations |
+|:--|--:|--:|--:|
+| 19,999 items, completed | 2.827 ms/op | 6,374,118 B/op | 40,026 allocs/op |
+| 20,000 items, limit error | 2.763 ms/op | 6,374,243 B/op | 40,028 allocs/op |
+
+This is one flatmap workload. Allocation volume is cumulative `B/op`, not peak
+or resident memory. `MaxGeneratedValues` counts logical HFF values, not bytes
+or peak memory. This timing and allocation sample does not describe other
+queries or establish a universal limit-safety or latency guarantee.
+
 ## Remaining evidence gaps
 
 Boundary correctness and selected depth-64 workload costs are now measured.
@@ -195,6 +223,7 @@ representative query shapes and sizes, not a broad range of schemas and
 service workloads near that ceiling.
 Runtime benchmarks include one successful
 nested-search shape and one near-limit generated collection, plus explicit
-abort cases; input-admission timing covers one flat list shape. These do not
-cover a broader set of query shapes or service workloads. A reasoned review of
-the default values remains necessary.
+abort cases; input-admission timing covers one flat list shape, and generated
+value timing covers one flatmap shape. These do not cover a broader set of
+query shapes or service workloads. A reasoned review of the default values
+remains necessary.

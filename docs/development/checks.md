@@ -113,6 +113,15 @@ go test -benchtime=100ms -count=3 -run '^$' -bench '^BenchmarkDefaultInputValueC
 The [finite-limit review](finite-limits.md) records the input shape, exact
 value counts, measured sample, and scope limits.
 
+Measure successful and rejected local `MaxGeneratedValues` work with:
+
+```sh
+go test -benchtime=100ms -count=3 -run '^$' -bench '^BenchmarkDefaultGeneratedValueCeiling$' -benchmem ./backends/local
+```
+
+The [finite-limit review](finite-limits.md) describes the flatmap workload and
+its logical-value accounting. `B/op` is cumulative allocation, not peak memory.
+
 To measure a deliberately repeated structural-check workload close to the
 default compile-work ceiling, run:
 
