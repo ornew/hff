@@ -62,6 +62,15 @@ construction.
 go test ./internal/syntax -run '^$' -bench '^BenchmarkParseQuery$' -benchmem
 ```
 
+The compile-step boundary test separately checks that a shallow query over a
+large schema completes or returns a span-bearing limit error according to
+`MaxCompileSteps`, with no partial program. It is a correctness check rather
+than a benchmark; see the [finite-limit review](finite-limits.md#verify-the-compilation-work-boundary).
+
+```sh
+go test -race ./engine -run '^TestDefaultCompileBudgetForRepeatedStructuralChecks$'
+```
+
 The collection benchmark in [`collections_bench_test.go`](https://github.com/ornew/hff/blob/main/backends/local/collections_bench_test.go)
 measures `MatchInput` on one-, 100-, and 1,000-element inputs for `any` first,
 last, and miss cases, `all`, `map`, `fold`, `sort`, and nested search. Input

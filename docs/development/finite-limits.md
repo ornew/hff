@@ -95,12 +95,32 @@ acceptance and rejection immediately around the defaults are checked by
 `TestDefaultDepthBoundaries`; neither benchmark is a latency guarantee or
 evidence that the defaults fit every workload.
 
+## Verify the compilation-work boundary
+
+Run the compile-step boundary test with the race detector:
+
+```sh
+go test -race ./engine -run '^TestDefaultCompileBudgetForRepeatedStructuralChecks$'
+```
+
+The test compiles the same shallow, 3,999-byte query containing 1,000 repeated
+`x=y` predicates against schemas whose `x` and `y` values each contain a
+struct. With 400 integer fields in each operand, compilation completes within
+the default `MaxCompileSteps`. With 600 fields, it returns a span-bearing
+`LimitError` and no partial program. Raising only `MaxCompileSteps` to
+2,000,000 lets that same query and schema compile. The query remains below the
+byte ceiling and the syntax is shallow, so this isolates semantic compile
+work from query-byte and syntax-depth limits. It is a correctness boundary
+check, not a timing measurement or evidence for tuning the default.
+
 ## Remaining evidence gaps
 
 Boundary correctness and selected depth-64 workload costs are now measured.
-The evidence does not establish behavior near the default `MaxCompileSteps`;
-existing compile benchmarks cover representative query shapes and sizes, not
-a one-million-step boundary. Runtime benchmarks include one successful
+The compile-step test establishes completion/rejection behavior for the
+selected repeated structural-check workload, not the cost or behavior of
+every query near the default `MaxCompileSteps`; existing compile benchmarks
+cover representative query shapes and sizes, not a one-million-step boundary.
+Runtime benchmarks include one successful
 nested-search shape and one near-limit generated collection, plus explicit
 abort cases; they do not cover a broader set of query shapes or service
 workloads. A reasoned review of the default values remains necessary.
