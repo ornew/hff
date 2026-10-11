@@ -179,10 +179,22 @@ Run all three suites with the race detector:
 go test -race ./internal/syntax ./engine ./backends/local -run '^TestShared'
 ```
 
-The fixture covers the current parser/compiler/local contract. SQL parity,
-extension evaluators, and a comprehensive runtime budget matrix remain outside
-its coverage. JSON parsing and serialization have focused package tests and a
-round-trip fuzz target.
+The shared fixture covers the parser/compiler/local contract. PostgreSQL has a
+partial adapter for seven scalar cases (14 query/record pairs): it compares
+fixture expectations, local matches, and PostgreSQL results. Two shared regex
+cases assert a typed unsupported-backend error. Other SQL parity, extension
+evaluators, and a comprehensive runtime budget matrix remain outside shared
+fixture coverage.
+
+Run the SQL adapter against PostgreSQL:
+
+```sh
+HFF_POSTGRES_CONTAINER=<container-name-or-id> \
+go test -tags=integration ./backends/sql -run '^TestPostgreSQLSharedScalarConformance$'
+```
+
+JSON parsing and serialization have focused package tests and a round-trip
+fuzz target.
 
 ## Fuzz and benchmark JSON conversion
 
