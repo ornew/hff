@@ -87,10 +87,11 @@ go test ./backends/local -run '^$' -bench '^BenchmarkRecordMatching$' -benchmem
 ```
 
 The finite-limit benchmark measures successful and rejected query-byte and
-input-value boundaries, plus local step-budget and generated-value aborts.
-Compilation, record construction, filter building, and input validation for the
-runtime cases are outside the measured loops. It checks typed limit errors and
-does not treat operation counts as wall-clock deadlines. See the
+input-value boundaries, plus completed and aborted local step-budget and
+generated-value workloads. Compilation, record construction, filter building,
+and input validation for the runtime cases are outside the measured loops. It
+checks typed limit errors and does not treat operation counts as wall-clock
+deadlines. See the
 [finite-limit review](finite-limits.md) for its measured scope and remaining gaps.
 
 ```sh

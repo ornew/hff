@@ -19,11 +19,14 @@ the configured byte boundary, then adds one byte to verify rejection. It
 measures byte scanning rather than a dense syntax tree; the parser and compiler
 benchmarks separately cover conjunctions up to 1,000 terms. The input case
 validates a root object and list with exactly `MaxInputValues` counted values,
-then adds one value to verify rejection. The runtime cases abort local
-evaluations with `MaxSteps` and `MaxGeneratedValues` errors. They check the
+then adds one value to verify rejection. Runtime cases include successful and
+aborted evaluations: a nested search over 600 items completes, identity-map
+creates 99,999 generated values within the 100,000-value limit, and separate
+cases verify `MaxSteps` and `MaxGeneratedValues` aborts. They check the
 expected result or typed limit failure. Query construction, record
-construction, and runtime setup are outside the timed loops. These cases test
-selected boundaries and abort paths, not every limit or application workload.
+construction, filter building, and input validation are outside the runtime
+timed loops. These cases test selected boundaries and abort paths, not every
+limit or application workload.
 
 One five-run baseline on Go 1.27.1, Darwin arm64, Apple M3 Max, with a 100 ms
 benchmark time per case produced these medians:
@@ -34,13 +37,17 @@ benchmark time per case produced these medians:
 | Query-byte rejection | 174 ns/op | 120 B/op | 3 allocs/op |
 | Input-value boundary | 1,115,028 ns/op | 0 B/op | 1 alloc/op |
 | Input-value rejection | 559,828 ns/op | 142 B/op | 4 allocs/op |
+| Nested search, 600 items | 10,196,788 ns/op | 539 B/op | 4 allocs/op |
 | Step-budget abort | 11,131,892 ns/op | 643 B/op | 6 allocs/op |
+| Identity map, 99,999 generated values | 4,968,475 ns/op | 12,970,514 B/op | 33 allocs/op |
 | Generated-value abort | 2,362,478 ns/op | 4,768,139 B/op | 50,027 allocs/op |
 
 These measurements describe only the benchmark's records and queries. Compare
 them with representative service workloads on the target Go version and
 hardware before using them to justify a default. A benchmark result is not a
-wall-clock deadline or a performance promise.
+wall-clock deadline or a performance promise. `B/op` reports cumulative
+allocation during a benchmark iteration, not peak or resident memory; the
+identity-map case's roughly 13 MB reflects that allocation churn.
 
 ## Verify default depth boundaries
 
@@ -93,7 +100,7 @@ evidence that the defaults fit every workload.
 Boundary correctness and selected depth-64 workload costs are now measured.
 The evidence does not establish behavior near the default `MaxCompileSteps`;
 existing compile benchmarks cover representative query shapes and sizes, not
-a one-million-step boundary. Runtime abort cases also do not measure
-successful work close to the `MaxSteps` or `MaxGeneratedValues` ceilings.
-Broader service workloads and a reasoned review of those limit values remain
-necessary.
+a one-million-step boundary. Runtime benchmarks include one successful
+nested-search shape and one near-limit generated collection, plus explicit
+abort cases; they do not cover a broader set of query shapes or service
+workloads. A reasoned review of the default values remains necessary.

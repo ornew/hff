@@ -3,6 +3,7 @@ package engine_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -76,9 +77,12 @@ func BenchmarkDefaultLimitWorkloads(b *testing.B) {
 	for _, tc := range []struct {
 		name, source, failure string
 		count                 int
+		abort                 bool
 	}{
-		{"steps_abort", `items:all(x=>items:any(y=>y=x))`, "evaluation step limit exceeded", 1000},
-		{"generated_values_abort", `items:map(x=>[x,x]):size>0`, "generated value limit exceeded", limits.MaxGeneratedValues / 2},
+		{"steps_complete", `items:all(x=>items:any(y=>y=x))`, "", 600, false},
+		{"steps_abort", `items:all(x=>items:any(y=>y=x))`, "evaluation step limit exceeded", 1000, true},
+		{"generated_values_complete", fmt.Sprintf(`items:map(x=>x):size=%d`, limits.MaxInputValues-2), "", limits.MaxInputValues - 2, false},
+		{"generated_values_abort", `items:map(x=>[x,x]):size>0`, "generated value limit exceeded", limits.MaxGeneratedValues / 2, true},
 	} {
 		program, err := e.Compile(ctx, tc.source)
 		if err != nil {
@@ -96,12 +100,12 @@ func BenchmarkDefaultLimitWorkloads(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
 				matched, err := filter.MatchInput(ctx, input)
-				check(b, err, true)
-				if matched {
-					b.Fatal("aborted evaluation returned a match")
+				check(b, err, tc.abort)
+				if matched == tc.abort {
+					b.Fatalf("expected completed match=%v, got %v", !tc.abort, matched)
 				}
 				var detail *hff.Error
-				if !errors.As(err, &detail) || detail.Message != tc.failure {
+				if tc.abort && (!errors.As(err, &detail) || detail.Message != tc.failure) {
 					b.Fatalf("unexpected budget was exhausted: %v", err)
 				}
 			}
