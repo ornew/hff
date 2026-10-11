@@ -19,6 +19,36 @@ read access to repository contents. A successful local run does not establish
 that the remote workflow has completed; check the workflow result for the
 commit under review.
 
+## Run the complete CI check scripts
+
+The main job runs three scripts with Go 1.27.1 and Node.js 24.19.0:
+
+```sh
+sh hack/check.sh
+sh hack/check-wasm.sh
+sh hack/check-fuzz.sh
+```
+
+`check.sh` runs native race tests and vet, verifies generated parser freshness,
+runs all examples, checks and builds the site, and checks the diff. The
+WebAssembly script runs package tests through Node's `js/wasm` executor. The
+fuzz script runs all eight bounded parser, compiler, runtime, SQL Build, and
+playground bridge fuzz targets for 15 seconds each with two workers by default.
+Set `HFF_FUZZ_TIME` or `HFF_FUZZ_PARALLEL` to adjust that run locally.
+
+A separate PostgreSQL job uses the pinned PostgreSQL 18.6 image initialized
+with UTF-8 encoding and `C` locale. It runs race-enabled tagged SQL integration
+tests and tagged vet:
+
+```sh
+go test -race -tags=integration ./backends/sql
+go vet -tags=integration ./backends/sql
+```
+
+The workflow file documents the jobs; it does not prove a hosted run succeeded.
+Check GitHub Actions for the commit under review, and distinguish local checks
+from remote results.
+
 ## Test Go packages on WebAssembly
 
 Run the existing Go package tests for `js/wasm` through Node.js with:
