@@ -114,9 +114,11 @@ during evaluation. These budgets apply to each match call independently.
 The local evaluator supports core boolean and arithmetic operators, equality
 and ordering, regex operators, truthiness, null and no-value propagation,
 postfix guards and explicit type guards, indexing, collection literals, and
-logical short-circuiting. A program containing a method or callback that the
-current local backend does not support fails during `Build` with
-`hff.BackendError`. Build never silently drops an operation. Use the
+logical short-circuiting. It also supports the scalar and string methods listed
+in the [scalar/string guide](scalar-methods.md). A program containing a list or
+object method, callback, or other method not supported by the local backend
+fails during `Build` with `hff.BackendError`. Build never silently drops an
+operation. Use the
 [method catalog](../../spec/methods.md) and language specification for query
 semantics; backend support is reported separately from compile validity.
 

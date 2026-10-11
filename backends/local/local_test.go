@@ -123,7 +123,7 @@ func TestLocalContractsAndConcurrency(t *testing.T) {
 	}
 	_, err = local.Build(ctx, hff.Program{})
 	code(t, err, hff.ConfigurationError)
-	method, err := e.Compile(ctx, `x:len()`)
+	method, err := e.Compile(ctx, `x:duration()`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func FuzzLocalMatch(f *testing.F) {
 	if err != nil {
 		f.Fatal(err)
 	}
-	for _, s := range []string{`x=y`, `x+1>0`, `x~y`, `x:[list[int]]=[1]`, `x!.a=null`, `x[0]=y`} {
+	for _, s := range []string{`x=y`, `x+1>0`, `x~y`, `x:[list[int]]=[1]`, `x!.a=null`, `x[0]=y`, `x:number()=y`, `x:[string]:contains(y)`, `x:matches(y)`, `x:in(y)`, `x:and(y)`, `x!:exists()`} {
 		f.Add(s, int64(42), []byte("abc"))
 	}
 	f.Fuzz(func(t *testing.T, source string, number int64, data []byte) {

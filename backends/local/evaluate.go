@@ -165,6 +165,8 @@ func (e *evaluation) eval(n plan.Node) (result, error) {
 		return null(), nil
 	case plan.BinaryNode:
 		return e.binary(n)
+	case plan.CallNode:
+		return e.call(n)
 	case plan.ListNode, plan.ObjectNode:
 		if err := e.allocate(1); err != nil {
 			return result{}, err

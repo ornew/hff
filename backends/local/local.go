@@ -83,7 +83,11 @@ func checkSupported(ctx context.Context, n plan.Node) error {
 	}
 	if n.Kind() == plan.CallNode {
 		method, _ := n.Method()
-		return &hff.Error{Code: hff.BackendError, Message: fmt.Sprintf("local backend does not support method %q", method.Name())}
+		for _, signature := range method.Signatures() {
+			if !supportedMethod(signature.ID()) {
+				return &hff.Error{Code: hff.BackendError, Message: fmt.Sprintf("local backend does not support %s", signature.ID())}
+			}
+		}
 	}
 	if n.Kind() == plan.CallbackNode {
 		return &hff.Error{Code: hff.BackendError, Message: "local backend does not support callbacks"}

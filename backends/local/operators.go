@@ -160,21 +160,7 @@ func (e *evaluation) binary(n plan.Node) (result, error) {
 		if !ok || !ok2 {
 			return null(), nil
 		}
-		if err := e.charge(len(text)); err != nil {
-			return result{}, err
-		}
-		if err := e.charge(len(pattern)); err != nil {
-			return result{}, err
-		}
-		re, err := regexp.Compile(pattern)
-		if err != nil {
-			return null(), nil
-		}
-		yes := re.MatchString(text)
-		if op == plan.NotMatch {
-			yes = !yes
-		}
-		return ordinary(core.Bool(yes)), nil
+		return e.regex(text, pattern, op == plan.NotMatch)
 	}
 	if op == plan.Equal || op == plan.NotEqual {
 		if a.value.Kind() != b.value.Kind() && !(numeric(a.value) && numeric(b.value)) {
@@ -311,4 +297,22 @@ func (e *evaluation) equal(a, b core.Value) (bool, error) {
 		return true, nil
 	}
 	return false, nil
+}
+
+func (e *evaluation) regex(text, pattern string, invert bool) (result, error) {
+	if err := e.charge(len(text)); err != nil {
+		return result{}, err
+	}
+	if err := e.charge(len(pattern)); err != nil {
+		return result{}, err
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return null(), nil
+	}
+	yes := re.MatchString(text)
+	if invert {
+		yes = !yes
+	}
+	return ordinary(core.Bool(yes)), nil
 }

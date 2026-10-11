@@ -86,8 +86,11 @@ func NewSignature(id string, receiver core.Type, parameters []core.Type, result 
 func (s Signature) ID() string              { return s.id }
 func (s Signature) Receiver() core.Type     { return s.receiver }
 func (s Signature) Parameters() []core.Type { return append([]core.Type(nil), s.parameters...) }
-func (s Signature) Result() core.Type       { return s.result }
-func (s Signature) Variadic() bool          { return s.variadic }
+
+// ParametersView returns immutable internal storage. Callers must not modify it.
+func (s Signature) ParametersView() []core.Type { return s.parameters }
+func (s Signature) Result() core.Type           { return s.result }
+func (s Signature) Variadic() bool              { return s.variadic }
 
 type Method struct {
 	name       string
@@ -99,6 +102,9 @@ func NewMethod(name string, signatures ...Signature) Method {
 }
 func (m Method) Name() string            { return m.name }
 func (m Method) Signatures() []Signature { return append([]Signature(nil), m.signatures...) }
+
+// SignaturesView is an internal read-only view; callers must not mutate it.
+func (m Method) SignaturesView() []Signature { return m.signatures }
 
 // Spec is internal compiler storage, never exposed by the public hff package.
 type Spec struct {
