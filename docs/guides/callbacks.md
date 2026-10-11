@@ -10,6 +10,8 @@ list and are scoped to the callback expression. The full rules are in the
 ```hff
 items:any(item=>item.price>100)
 items:all(item=>item.available)
+orders:any(order=>order.active order.items:any(item=>item.price>10))
+items:any(item=>item.active | item.price>10)
 ```
 
 `any()` is true when at least one callback result converts to true;
@@ -40,9 +42,13 @@ and possible callback results; a null result becomes the next accumulator, and
 guarded no-value propagates to the entire fold.
 
 Callback parameters use lexical scope and may capture unshadowed outer schema
-variables. Parameter names may shadow an outer name. Nested callbacks keep
-their own parameter bindings. Callback expressions cannot call general
-user-defined functions or perform side effects.
+variables and outer callback parameters. Parameter names may shadow an outer
+name. Nested callbacks keep their own parameter bindings. AND and OR retain
+left-to-right short-circuit behavior inside callbacks; in the nested example,
+the inner list is examined only for active orders. Nested callbacks require the
+`NestedCallbacks` capability, which depends on `Callbacks`. `MaxCallbackDepth`
+defaults to 64, counting the outermost callback as depth 1. Callback expressions
+cannot call general user-defined functions or perform side effects.
 
 ## Run the example
 

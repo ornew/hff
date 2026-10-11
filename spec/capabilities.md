@@ -99,8 +99,13 @@ need explicit integration contracts before a SQL backend is implemented.
 
 Services configure resource limits. Exceeding a runtime limit returns an explicit
 evaluation-cancellation result rather than null or a partial boolean result.
-Compiler limits reject the query before execution. Exact default limit values
-belong to the engine configuration, not to a syntax subset.
+Compiler limits, including `MaxCompileSteps` and `MaxCallbackDepth`, reject the
+query before execution. `MaxSteps` and `MaxGeneratedValues` are local runtime
+budgets. A backend reports the execution constraints it can enforce; callers
+configure database timeouts through their database integration. If a requested
+constraint cannot be enforced by the selected backend, it must reject the build
+instead of silently ignoring it. Exact default limit values belong to engine
+configuration, not to a syntax subset.
 
 ## Conformance and discoverability
 

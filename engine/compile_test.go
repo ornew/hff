@@ -14,6 +14,40 @@ import (
 func compilerSchema() hff.Type {
 	return schema.Struct(schema.String("name"), schema.Int("age"), schema.Bool("flag"), schema.Any("x"), schema.List("items", schema.IntType), schema.Map("labels", schema.StringType), schema.Field("mixed", schema.Union(schema.StringType, schema.ListOf(schema.StringType))), schema.Nullable(schema.String("maybe")))
 }
+
+func TestCallbackNestingPolicy(t *testing.T) {
+	ctx := context.Background()
+	flat := `items:any(x=>x>0) items:all(x=>x>0)`
+	nested := `items:any(x=>[x]:all(y=>y>0))`
+	deep := `items:foldl(0,(acc,x)=>[x]:foldl(acc,(a,y)=>[y]:foldl(a,(b,z)=>b+z)))`
+	restricted := newEngine(t, compilerSchema(), engine.WithCapabilities(capabilities.Standard().Without(capabilities.NestedCallbacks)))
+	if _, err := restricted.Compile(ctx, flat); err != nil {
+		t.Fatal("sequential callbacks are not nesting:", err)
+	}
+	_, err := restricted.Compile(ctx, nested)
+	requireCode(t, err, hff.CapabilityError)
+	one := newEngine(t, compilerSchema(), engine.WithLimits(hff.Limits{MaxCallbackDepth: 1}))
+	if _, err := one.Compile(ctx, flat); err != nil {
+		t.Fatal("the first callback has depth one:", err)
+	}
+	_, err = one.Compile(ctx, nested)
+	requireCode(t, err, hff.LimitError)
+	limited := newEngine(t, compilerSchema(), engine.WithLimits(hff.Limits{MaxCallbackDepth: 2}))
+	if _, err := limited.Compile(ctx, nested); err != nil {
+		t.Fatal(err)
+	}
+	_, err = limited.Compile(ctx, deep)
+	requireCode(t, err, hff.LimitError)
+	unlimited := newEngine(t, compilerSchema(), engine.WithLimits(hff.Limits{MaxCallbackDepth: 1}), engine.WithUnlimitedLimits())
+	if _, err := unlimited.Compile(ctx, deep); err != nil {
+		t.Fatal("explicit unlimited mode:", err)
+	}
+	// An evaluator budget must not consume the compiler's separate work budget.
+	e := newEngine(t, compilerSchema(), engine.WithLimits(hff.Limits{MaxSteps: 1}))
+	if _, err := e.Compile(ctx, nested); err != nil {
+		t.Fatal("runtime budget affected compilation:", err)
+	}
+}
 func TestCompileConformance(t *testing.T) {
 	e := newEngine(t, compilerSchema())
 	valid := []string{"", `age>10 name~"^A"`, `(age>=10 | age<=5) name="Alice"`, `!name="Female"`, `age name`, `labels.env="prod"`, `labels["app"]="auth"`, `items[-1]>10`, `items[1.0]`, `age+10<10`, `age>(10+2)`, `(10+age)<20`, `flag=(1<2)`, `x:[string]:contains("foo")`, `x:[list[string]]:contains("foo")`, `(age+1):[int]:exists()`, `x:[(string|list[int])]:exists()`, `x:[map[list[string|null]]]:size()`, `items:map(x=>x+age)`, `items:any(x=>x>10)`, `items:all(x=>x!)`, `items:flatmap(x=>[x,age])`, `items:foldl(0,(acc,x)=>acc+x)`, `items:foldr(0,(x,acc)=>x+acc)`, `items:map(x=>[x]:map(y=>y+age))`, `items:map(age=>age+1)`, `items:map(x=>1)`, `items:map(x=>null:size())`, `items:map(x=>null+null)`, `items:map(x=>{"a":"12h":duration()})`, `age=-9223372036854775808`, `age=9223372036854775808`, `age!`, `maybe=null`, `maybe!=null`}
@@ -186,7 +220,7 @@ func FuzzCompile(f *testing.F) {
 }
 
 func TestCompileStepBudget(t *testing.T) {
-	e := newEngine(t, compilerSchema(), engine.WithLimits(hff.Limits{MaxSteps: 1}))
+	e := newEngine(t, compilerSchema(), engine.WithLimits(hff.Limits{MaxCompileSteps: 1}))
 	_, err := e.Compile(context.Background(), `age>10`)
 	requireCode(t, err, hff.LimitError)
 }

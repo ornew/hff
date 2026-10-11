@@ -90,17 +90,22 @@ provides the same explicit choice when assembling configuration as data.
 | MaxInputValues | 100,000 | Every value, including root and containers, counts once |
 | MaxQueryBytes | 65,536 | UTF-8 source bytes per compilation |
 | MaxSyntaxDepth | 64 | Syntax nesting per compilation |
-| MaxSteps | 1,000,000 | Semantic expression visits per compilation; evaluated nodes and traversed data per local match |
+| MaxCallbackDepth | 64 | Nested callback depth per compilation; the outermost callback is depth 1 |
+| MaxCompileSteps | 1,000,000 | Semantic analysis visits per compilation, including repeated callback inference |
+| MaxSteps | 1,000,000 | Evaluated nodes and traversed data per local match |
 | MaxGeneratedValues | 100,000 | Generated collection containers and entries per local match |
 
-Compilation enforces query-byte, syntax-depth, and semantic-step limits; input
-validation enforces input-depth and input-value limits; the local backend
-enforces per-match step and generated-value limits. Runtime `MaxSteps` also
-counts values traversed by equality and type guards and the lengths processed
-by string and byte operations. `MaxGeneratedValues` counts collection
-containers and entries. DefaultLimits returns a value copy. Limits returns the
-engine's resolved configuration; zero ceilings in an explicitly unlimited
-engine indicate that opt-out.
+Compilation enforces query-byte, syntax-depth, callback-depth, and semantic-step
+limits; input validation enforces input-depth and input-value limits; the local
+backend enforces per-match step and generated-value limits. Runtime `MaxSteps`
+also counts values traversed by equality and type guards and the lengths
+processed by string and byte operations. `MaxGeneratedValues` counts collection
+containers and entries. SQL backends report the execution constraints they can
+enforce; configure database timeouts through the database integration. A
+requested constraint that the selected backend cannot enforce must be rejected.
+DefaultLimits returns a value copy. Limits returns the engine's resolved
+configuration; zero ceilings in an explicitly unlimited engine indicate that
+opt-out.
 
 The initial input benchmarks exercise records containing 1, 1,000, and 10,000
 integer list elements. Run them on your target hardware:

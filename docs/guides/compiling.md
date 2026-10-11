@@ -86,13 +86,16 @@ select, so all statically applicable candidates must be enabled. See the
 
 ## Compilation budgets
 
-Compilation enforces `MaxQueryBytes`, `MaxSyntaxDepth`, and `MaxSteps`. The
-first two bound UTF-8 source size and syntax nesting. `MaxSteps` counts semantic
-expression visits, including repeated callback-inference visits, and returns a
-limit error when exceeded. This is a compile-time work budget; it does not bound
-query execution. Cancellation is checked during compilation. Each operation
-uses the engine's configured finite limits unless unlimited mode was explicitly
-selected.
+Compilation enforces `MaxQueryBytes`, `MaxSyntaxDepth`, `MaxCallbackDepth`, and
+`MaxCompileSteps`. These bound UTF-8 source size, syntax nesting, nested callback
+depth, and semantic analysis visits (including repeated callback-inference
+visits). Exceeding a limit returns a limit error. These are compile-time limits;
+they do not bound query execution. Local execution uses the separate per-match
+`MaxSteps` and `MaxGeneratedValues` budgets. SQL backends report which execution
+constraints they can enforce; configure database timeouts through the database
+integration. A requested unsupported constraint must be rejected. Cancellation
+is checked during compilation. Each operation uses the engine's configured
+finite limits unless unlimited mode was explicitly selected.
 
 Compilation produces a typed plan only. The local backend supports core
 operators and collections; see the [local evaluation guide](local-evaluation.md)

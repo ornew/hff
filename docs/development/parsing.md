@@ -73,8 +73,10 @@ SQL. See the [compiler guide](../guides/compiling.md) for the public flow.
 
 `syntax.ParseQuery` accepts a context and parser configuration. Zero limit fields
 select the finite defaults; `hff.Limits.MaxQueryBytes` limits UTF-8 source bytes
-and `MaxSyntaxDepth` limits meaningful expression nesting. The current default
-for each is 65,536 bytes and 64 levels. The root expression is depth zero.
+and `MaxSyntaxDepth` limits meaningful expression nesting. `MaxCallbackDepth`
+limits nested callback structure during compilation, with an outermost callback
+at depth 1 and a default of 64. The current defaults for query bytes and syntax
+depth are 65,536 bytes and 64 levels. The root expression is depth zero.
 
 Depth counts parentheses, operators, collection nesting, guards, access parts,
 and callback bodies. Singleton logical wrappers and access nodes with no suffix

@@ -45,3 +45,15 @@ func TestBase64MethodsCanBeSelected(t *testing.T) {
 		}
 	}
 }
+
+func TestNestedCallbackDependency(t *testing.T) {
+	if !capabilities.Standard().Has(capabilities.NestedCallbacks) {
+		t.Fatal("standard profile must support nested callbacks")
+	}
+	if err := capabilities.None().Allow(capabilities.NestedCallbacks).Check(); err == nil {
+		t.Fatal("nested callbacks require callbacks")
+	}
+	if err := capabilities.None().Allow(capabilities.Callbacks, capabilities.NestedCallbacks).Check(); err != nil {
+		t.Fatal(err)
+	}
+}

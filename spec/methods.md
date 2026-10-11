@@ -147,6 +147,15 @@ declarations or recursion. `map()`, `flatmap()`, and `foldl()` visit elements
 left-to-right; `foldr()` visits right-to-left. The accumulator type `A` may differ
 from the element type `T`. An empty fold returns the initial accumulator.
 
+Callbacks may nest. Inner callbacks can capture unshadowed outer callback
+parameters; a nested parameter may shadow an outer name. Nested callback
+expressions require the `NestedCallbacks` capability, which depends on
+`Callbacks`. `MaxCallbackDepth` defaults to 64; the outermost callback has depth
+1. AND and OR use the ordinary left-to-right short-circuit semantics in callback
+bodies. Compilation also bounds semantic work with `MaxCompileSteps`; local
+execution separately charges evaluated callback work to its per-match
+`MaxSteps` budget.
+
 `map()` preserves null callback results as list elements. A non-list result in
 `flatmap()` yields null for the entire method. Guarded no-value in a callback
 propagates to the entire method; failed elements are never silently skipped.

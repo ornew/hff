@@ -93,6 +93,38 @@ func TestCallbackBudgetsAndShortCircuit(t *testing.T) {
 	code(t, err, hff.LimitError)
 }
 
+func TestNestedCollectionPredicates(t *testing.T) {
+	item := func(price int64, flag bool, tags ...hff.Value) hff.Value {
+		return hff.Object(map[string]hff.Value{
+			"price": hff.Int(price), "flag": hff.Bool(flag), "tags": hff.List(tags...),
+		})
+	}
+	// AND binds more tightly than OR inside a callback, just as at the root.
+	f := build(t, `x:any(x=>x.price>10 x.flag | x.tags:all(tag=>tag="production"))`)
+	for _, tc := range []struct {
+		items hff.Value
+		want  bool
+	}{
+		{hff.List(item(20, true, hff.String("development"))), true},
+		{hff.List(item(5, false, hff.String("production"))), true},
+		{hff.List(item(20, false, hff.String("development"))), false},
+		{hff.List(item(5, true, hff.String("production"), hff.String("development"))), false},
+	} {
+		got, err := f.Match(context.Background(), record(tc.items, hff.Null()))
+		if err != nil || got != tc.want {
+			t.Fatalf("nested predicate: got %v %v want %v", got, err, tc.want)
+		}
+	}
+	// All iterations, including those of an inner callback, share one budget.
+	bounded := build(t, `x:any(row=>row:all(v=>v))`, local.WithLimits(hff.Limits{MaxSteps: 30}))
+	values := make([]hff.Value, 100)
+	for i := range values {
+		values[i] = hff.Bool(true)
+	}
+	_, err := bounded.Match(context.Background(), record(hff.List(hff.List(values...)), hff.Null()))
+	code(t, err, hff.LimitError)
+}
+
 func TestCallbackCaptureAndConcurrency(t *testing.T) {
 	ctx := context.Background()
 	f := build(t, `x:map(v=>v+y)=[11,12] x:map(x=>x+y)=[11,12]`)

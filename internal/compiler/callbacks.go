@@ -13,6 +13,16 @@ func (c *compiler) callback(n *syntax.Callback, parameters []core.Type, predicat
 	if err := c.allow(capabilities.Callbacks, n); err != nil {
 		return plan.Node{}, err
 	}
+	if c.callbackDepth > 0 {
+		if err := c.allow(capabilities.NestedCallbacks, n); err != nil {
+			return plan.Node{}, err
+		}
+	}
+	c.callbackDepth++
+	defer func() { c.callbackDepth-- }()
+	if !c.config.Unlimited && c.config.Limits.MaxCallbackDepth > 0 && c.callbackDepth > c.config.Limits.MaxCallbackDepth {
+		return plan.Node{}, c.failure(core.LimitError, n, "callback nesting depth exceeds limit")
+	}
 	if len(n.Params) != len(parameters) {
 		return plan.Node{}, c.failure(core.TypeError, n, fmt.Sprintf("callback requires %d parameters", len(parameters)))
 	}

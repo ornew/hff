@@ -22,13 +22,14 @@ type Config struct {
 	Unlimited    bool
 }
 type compiler struct {
-	ctx    context.Context
-	source string
-	config Config
-	next   plan.BindingID
-	steps  int
-	roots  map[string]plan.Binding
-	scope  *scope
+	ctx           context.Context
+	source        string
+	config        Config
+	next          plan.BindingID
+	steps         int
+	roots         map[string]plan.Binding
+	scope         *scope
+	callbackDepth int
 }
 type scope struct {
 	parent   *scope
@@ -246,7 +247,7 @@ func (c *compiler) expression(expr syntax.Expr) (plan.Node, error) {
 		return plan.Node{}, &core.Error{Code: core.CancelledError, Message: err.Error(), Cause: err}
 	}
 	c.steps++
-	if !c.config.Unlimited && c.config.Limits.MaxSteps > 0 && c.steps > c.config.Limits.MaxSteps {
+	if !c.config.Unlimited && c.config.Limits.MaxCompileSteps > 0 && c.steps > c.config.Limits.MaxCompileSteps {
 		return plan.Node{}, c.failure(core.LimitError, expr, "compilation step limit exceeded")
 	}
 	switch n := expr.(type) {
