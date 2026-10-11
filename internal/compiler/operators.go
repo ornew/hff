@@ -68,6 +68,11 @@ func (c *compiler) binary(n *syntax.Binary) (plan.Node, error) {
 	if !valid {
 		return plan.Node{}, c.failure(core.TypeError, n, "operator has no applicable operand types")
 	}
+	if op == plan.Equal || op == plan.NotEqual {
+		if err := c.equalityCapabilities(left.Type(), right.Type(), n); err != nil {
+			return plan.Node{}, err
+		}
+	}
 	typ := primitive(core.BoolType)
 	may := false
 	if arithmetic {

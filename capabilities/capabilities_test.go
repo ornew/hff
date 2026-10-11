@@ -57,3 +57,21 @@ func TestNestedCallbackDependency(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestStructuralEqualityGroup(t *testing.T) {
+	standard := capabilities.Standard()
+	without := standard.Without(capabilities.StructuralEquality)
+	if !standard.Has(capabilities.StructuralEquality) || without.Has(capabilities.ListEquality) || without.Has(capabilities.ObjectEquality) {
+		t.Fatal("group removal mutated the standard profile or left a permission")
+	}
+	listOnly := without.Allow(capabilities.ListEquality)
+	if !listOnly.Has(capabilities.ListEquality) || listOnly.Has(capabilities.StructuralEquality) || listOnly.Has(capabilities.ObjectEquality) {
+		t.Fatal("list and object permissions are not independent")
+	}
+	if err := capabilities.None().Allow(capabilities.StructuralEquality).Check(); err != nil {
+		t.Fatal(err)
+	}
+	if !without.Allow(capabilities.StructuralEquality).Has(capabilities.StructuralEquality) {
+		t.Fatal("group cannot be restored")
+	}
+}

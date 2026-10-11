@@ -86,6 +86,23 @@ func (c *compiler) call(receiver plan.Node, n *syntax.MethodCall, span core.Span
 		if err := c.allow(capabilities.Method(d.family+"."+d.name), n); err != nil {
 			return plan.Node{}, err
 		}
+		switch d.family + "." + d.name {
+		case "any.in", "list.contains":
+			compared := receiver.Type()
+			if d.family == "list" {
+				compared = element(compared)
+			}
+			for _, arg := range args {
+				if err := c.equalityCapabilities(compared, arg.Type(), n); err != nil {
+					return plan.Node{}, err
+				}
+			}
+		case "list.unique":
+			item := element(receiver.Type())
+			if err := c.equalityCapabilities(item, item, n); err != nil {
+				return plan.Node{}, err
+			}
+		}
 		parameters := d.params
 		if higher {
 			parameters = make([]core.Type, len(args))

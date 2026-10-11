@@ -6,6 +6,25 @@ A service configures the features that its filters may use. This includes
 available methods; the configuration model must also cover selectable language
 operations as the implementation is designed.
 
+Structural equality uses `comparison:list-equality` and
+`comparison:object-equality` permissions. `group:structural-equality` selects
+both. Compilation checks only structural value families that the static types
+can actually compare, recursively through compatible nested lists and objects.
+Scalar comparisons and explicit comparisons with a null literal are exempt.
+The permissions apply to `=`, `!=`, membership (`in()` and
+`list:contains()`), and `list:unique()`. A list of scalar values therefore
+does not need structural equality for `list:unique()`, while comparing the list
+value itself does.
+
+For `Any` and union operands, compilation checks all statically possible
+structural comparisons. An explicit type guard narrows those possibilities and
+can avoid requiring a permission for excluded value families. For example,
+`value:[list[string]]:unique` needs no structural equality permission, while
+`value:[list[string]]=["a"]` requires list equality because the list values are
+compared. A structural comparison without its required permission is a
+compile-time capability error; runtime values do not turn a disabled structural
+operation into null.
+
 The parser MUST recognize the same syntax for every configuration. A statically
 known operation outside the enabled set MUST be rejected during semantic
 compilation. For a call on a union or `Any`, every statically applicable method
@@ -75,6 +94,14 @@ For a receiver known only as null, no non-null family selects a method, so all
 known applicable candidates require permission. A `T|null` receiver selects
 method candidates from its non-null `T` members; null still propagates normally.
 See [types](types.md), [syntax](syntax.md), and [evaluation](evaluation.md).
+
+Structural equality permissions are checked for `=`, `!=`, `in()`,
+`list:contains()`, and `list:unique()`. The compiler recursively checks
+compatible composite types that can be compared. `Any` and unions require each
+statically possible list or object permission, while explicit type guards
+narrow the checked types. Scalar comparisons and explicit null tests need no
+structural equality permission. `group:structural-equality` selects both
+`comparison:list-equality` and `comparison:object-equality`.
 
 ## Backend translation
 

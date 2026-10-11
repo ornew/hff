@@ -9,18 +9,21 @@ import (
 type ID string
 
 const (
-	Logical         ID = "operator:logical"
-	Comparison      ID = "operator:comparison"
-	Arithmetic      ID = "operator:arithmetic"
-	Access          ID = "access:field"
-	Index           ID = "access:index"
-	Guard           ID = "access:guard"
-	TypeGuard       ID = "access:type-guard"
-	Collections     ID = "literal:collection"
-	Callbacks       ID = "expression:callback"
-	NestedCallbacks ID = "expression:nested-callback"
-	Regex           ID = "group:regex"
-	RegexOperators  ID = "operator:regex"
+	Logical            ID = "operator:logical"
+	Comparison         ID = "operator:comparison"
+	Arithmetic         ID = "operator:arithmetic"
+	Access             ID = "access:field"
+	Index              ID = "access:index"
+	Guard              ID = "access:guard"
+	TypeGuard          ID = "access:type-guard"
+	Collections        ID = "literal:collection"
+	Callbacks          ID = "expression:callback"
+	NestedCallbacks    ID = "expression:nested-callback"
+	ListEquality       ID = "comparison:list-equality"
+	ObjectEquality     ID = "comparison:object-equality"
+	StructuralEquality ID = "group:structural-equality"
+	Regex              ID = "group:regex"
+	RegexOperators     ID = "operator:regex"
 )
 
 // Method identifies a built-in or declared extension, e.g. Method("string.matches").
@@ -33,6 +36,8 @@ func init() {
 		builtins[id] = nil
 	}
 	builtins[NestedCallbacks] = []ID{Callbacks}
+	builtins[ListEquality] = nil
+	builtins[ObjectEquality] = nil
 	for _, name := range []string{"any.type", "any.tojson", "any.tostring", "any.in", "any.exists", "bool.and", "bool.or", "bool.not", "number.round", "number.ceil", "number.floor", "string.len", "string.contains", "string.matches", "string.startswith", "string.endswith", "string.lower", "string.upper", "string.timestamp", "string.duration", "string.bool", "string.number", "string.fromjson", "string.concat", "bytes.len", "list.size", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr", "object.size", "object.has", "object.get", "object.keys", "object.values", "object.items", "timestamp.year", "timestamp.month", "timestamp.dayofmonth", "timestamp.dayofyear", "timestamp.hours", "timestamp.minutes", "timestamp.seconds", "timestamp.milliseconds", "timestamp.string", "timestamp.after", "timestamp.before", "timestamp.add", "duration.hours", "duration.minutes", "duration.seconds", "duration.milliseconds", "duration.microseconds", "duration.nanoseconds"} {
 		builtins[Method(name)] = nil
 	}
@@ -60,6 +65,9 @@ func Standard() Set {
 }
 func (s Set) Specified() bool { return s.specified }
 func expand(id ID) []ID {
+	if id == StructuralEquality {
+		return []ID{ListEquality, ObjectEquality}
+	}
 	if id == Regex {
 		return []ID{RegexOperators, Method("string.matches")}
 	}

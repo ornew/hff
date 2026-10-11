@@ -242,13 +242,19 @@ func (c *compiler) reference(n *syntax.Variable) (plan.Node, error) {
 	}
 	return plan.NewNode(plan.Spec{Kind: plan.VariableNode, Type: b.Type(), Span: syntax.ExprSpan(n), Binding: b, Path: []string{name}}), nil
 }
-func (c *compiler) expression(expr syntax.Expr) (plan.Node, error) {
+func (c *compiler) chargeCompile(source any) error {
 	if err := c.ctx.Err(); err != nil {
-		return plan.Node{}, &core.Error{Code: core.CancelledError, Message: err.Error(), Cause: err}
+		return &core.Error{Code: core.CancelledError, Message: err.Error(), Cause: err}
 	}
 	c.steps++
 	if !c.config.Unlimited && c.config.Limits.MaxCompileSteps > 0 && c.steps > c.config.Limits.MaxCompileSteps {
-		return plan.Node{}, c.failure(core.LimitError, expr, "compilation step limit exceeded")
+		return c.failure(core.LimitError, source, "compilation step limit exceeded")
+	}
+	return nil
+}
+func (c *compiler) expression(expr syntax.Expr) (plan.Node, error) {
+	if err := c.chargeCompile(expr); err != nil {
+		return plan.Node{}, err
 	}
 	switch n := expr.(type) {
 	case *syntax.Empty:

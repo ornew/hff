@@ -48,6 +48,9 @@ program operations it implements.
 | Callbacks | Callback expressions |
 | RegexOperators | Regex operators |
 | Regex | Group selecting RegexOperators and string.matches |
+| ListEquality | Structural equality of list values |
+| ObjectEquality | Structural equality of object values |
+| StructuralEquality | Group selecting ListEquality and ObjectEquality |
 
 Method("string.len") selects a built-in method by receiver family and name.
 For example:
@@ -65,6 +68,14 @@ Missing dependencies are errors, not implicitly enabled features. The Regex
 group adds or removes both regex operators and string.matches. Unknown IDs are
 rejected. Custom method declaration/implementation registration is not yet
 implemented, so custom IDs are not accepted by the current engine.
+
+Structural equality permissions are checked during compilation for `=`/`!=`,
+`in()`, `list:contains()`, and `list:unique()`. Scalar comparisons and explicit
+null tests do not need them. Required permissions follow the statically
+possible compared types, recursively through compatible nested containers;
+explicit type guards narrow those types. The StructuralEquality group enables
+both list and object equality. Removing the group removes both permissions;
+each permission can then be selected independently.
 
 ## Limits
 
