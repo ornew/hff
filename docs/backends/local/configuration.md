@@ -158,6 +158,11 @@ that cannot be interrupted internally; HFF checks context after they return.
 This is cooperative cancellation, not immediate preemption during every
 decoding step.
 
+When local JSON serialization scans a long string to calculate its escaped
+length or quote its output, it checks context at approximately 4 KiB intervals
+and again before returning the encoded value. Cancellation returns no partial
+output. These checkpoints do not change input or output byte-budget accounting.
+
 ## Handle errors
 
 ```go

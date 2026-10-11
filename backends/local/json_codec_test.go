@@ -139,13 +139,18 @@ func FuzzJSONRoundTrip(f *testing.F) {
 type jsonScanContext struct {
 	context.Context
 	calls  int
+	at     int
 	cancel context.CancelCauseFunc
 	cause  error
 }
 
 func (c *jsonScanContext) Err() error {
 	c.calls++
-	if c.calls == 5 {
+	at := c.at
+	if at == 0 {
+		at = 5
+	}
+	if c.calls == at {
 		c.cancel(c.cause)
 	}
 	return c.Context.Err()
@@ -201,5 +206,49 @@ func TestJSONScannerStopsBeforeTokenEnd(t *testing.T) {
 				t.Fatalf("scanner did not stop within token: pos=%d length=%d error=%v", r.pos, len(r.text), r.err)
 			}
 		})
+	}
+}
+
+func TestJSONCancellationDuringOutputScans(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		at   int
+	}{{"escaped length", 5}, {"quoted output", 14}} {
+		t.Run(tc.name, func(t *testing.T) {
+			cause := errors.New("JSON output stopped")
+			ctx, cancel := context.WithCancelCause(context.Background())
+			defer cancel(nil)
+			probe := &jsonScanContext{Context: ctx, cancel: cancel, cause: cause, at: tc.at}
+			e := evaluation{ctx: probe, limits: core.DefaultLimits()}
+			got, err := e.encodeJSON(core.String(strings.Repeat("a", 32768)), 64)
+			if !errors.Is(err, context.Canceled) || !errors.Is(err, cause) {
+				t.Fatalf("cancellation lost: %v", err)
+			}
+			if got.present || got.value.Kind() != core.InvalidKind {
+				t.Fatalf("partial output: %#v", got)
+			}
+			// Distinguish cancellation before output reservation from the quoting pass.
+			wantSteps := 1 + 32768
+			if tc.name == "quoted output" {
+				wantSteps += 32768 + 2
+			}
+			if e.steps != wantSteps {
+				t.Fatalf("wrong scan phase: steps=%d want=%d", e.steps, wantSteps)
+			}
+		})
+	}
+}
+
+func TestJSONQuotedOutputBudget(t *testing.T) {
+	text := strings.Repeat("a\n\x00", 3000)
+	e := evaluation{ctx: context.Background(), limits: core.DefaultLimits()}
+	got, err := e.encodeJSON(core.String(text), 64)
+	output, _ := got.value.AsString()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// One value visit, input bytes, and escaped output bytes; checkpoints add no steps.
+	if e.steps != 1+len(text)+len(output) {
+		t.Fatalf("byte work counted twice: %d", e.steps)
 	}
 }

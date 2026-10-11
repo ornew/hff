@@ -252,11 +252,16 @@ func durationText(d time.Duration) string {
 	return out.String()
 }
 
-func quoteJSON(text string) string {
+func (e *evaluation) quoteJSON(text string) (string, error) {
 	var out strings.Builder
 	out.WriteByte('"')
 	const hex = "0123456789abcdef"
 	for i := 0; i < len(text); i++ {
+		if i%4096 == 0 {
+			if err := cancelled(e.ctx); err != nil {
+				return "", err
+			}
+		}
 		ch := text[i]
 		switch ch {
 		case '"', '\\':
@@ -283,7 +288,10 @@ func quoteJSON(text string) string {
 		}
 	}
 	out.WriteByte('"')
-	return out.String()
+	if err := cancelled(e.ctx); err != nil {
+		return "", err
+	}
+	return out.String(), nil
 }
 
 func (e *evaluation) scalarText(v core.Value) (string, error) {
@@ -343,6 +351,11 @@ func (e *evaluation) encodeJSON(value core.Value, maxDepth int) (result, error) 
 		}
 		n := len(s) + 2
 		for i := 0; i < len(s); i++ {
+			if i%4096 == 0 {
+				if err := cancelled(e.ctx); err != nil {
+					return err
+				}
+			}
 			switch s[i] {
 			case '"', '\\', '\b', '\f', '\n', '\r', '\t':
 				n++
@@ -355,7 +368,11 @@ func (e *evaluation) encodeJSON(value core.Value, maxDepth int) (result, error) 
 		if err := e.charge(n); err != nil {
 			return err
 		}
-		out.WriteString(quoteJSON(s))
+		quoted, err := e.quoteJSON(s)
+		if err != nil {
+			return err
+		}
+		out.WriteString(quoted)
 		return nil
 	}
 	var visit func(core.Value, int) error
