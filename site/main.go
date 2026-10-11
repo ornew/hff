@@ -59,7 +59,7 @@ func navigation(pages []*page, current *page) []navSection {
 			i = 1
 		case strings.HasPrefix(p.Source, "docs/design/"):
 			i = 3
-		case p.Source == "docs/commit-messages.md" || p.Source == "docs/site.md":
+		case p.Source == "docs/commit-messages.md" || strings.HasPrefix(p.Source, "docs/development/"):
 			i = 4
 		}
 		sections[i].Pages = append(sections[i].Pages, p)
@@ -147,7 +147,7 @@ func build(repo, out string) (int, error) {
 			return 0, err
 		}
 	}
-	order := []string{"README.md", "spec/README.md", "spec/syntax.md", "spec/types.md", "spec/evaluation.md", "spec/methods.md", "spec/capabilities.md", "docs/guides/README.md", "docs/guides/getting-started.md", "docs/guides/schemas-and-values.md", "docs/guides/configuration.md", "docs/site.md", "docs/design/README.md"}
+	order := []string{"README.md", "spec/README.md", "spec/syntax.md", "spec/types.md", "spec/evaluation.md", "spec/methods.md", "spec/capabilities.md", "docs/guides/README.md", "docs/guides/getting-started.md", "docs/guides/schemas-and-values.md", "docs/guides/configuration.md", "docs/development/README.md", "docs/development/parser.md", "docs/development/parsing.md", "docs/development/site.md", "docs/design/README.md"}
 	rank := func(s string) int {
 		for i, v := range order {
 			if v == s {

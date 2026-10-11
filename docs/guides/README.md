@@ -5,7 +5,6 @@ Go 1.27.1. The [language specification](../../spec/README.md) describes query
 semantics; the [Go API record](../design/004-go-api.md) describes the complete
 compilation and backend lifecycle.
 
-- [Parse HFF syntax during development](parsing.md)
 - [Inspect the compiled program](program-ir.md)
 - [Configure an engine and validate records](getting-started.md)
 - [Compile a query](compiling.md)
@@ -20,3 +19,6 @@ query compilation, core local matching, and scalar/string methods including
 byte length. List/object
 methods, collection callbacks, additional temporal/JSON/base64 methods, SQL
 translation, and extension implementation registration remain unavailable.
+Parser generation and the internal syntax parser are documented in the
+[Development section](../development/README.md), separately from integration
+guides.

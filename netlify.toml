@@ -1,5 +1,5 @@
 # Build the landing page and documentation from repository Markdown.
-# See docs/site.md for local preview and deployment configuration.
+# See docs/development/site.md for local preview and deployment configuration.
 [build]
   command = "sh site/build.sh"
   publish = "site/dist"
@@ -19,6 +19,16 @@
   to = "https://hff.ornew.net/:splat"
   status = 301
   force = true
+
+[[redirects]]
+  from = "/docs/site.html"
+  to = "/docs/development/site.html"
+  status = 301
+
+[[redirects]]
+  from = "/docs/guides/parsing.html"
+  to = "/docs/development/parsing.html"
+  status = 301
 
 [[headers]]
   for = "/*"

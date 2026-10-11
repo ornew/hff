@@ -3,8 +3,8 @@
 This example shows the repository's syntax-only parser. It turns source text
 into a typed syntax tree and reports source locations for malformed input. It
 does not resolve names against a schema, check types or enabled capabilities,
-or decide whether a query depends on service data. Those checks belong to the
-future common `Compile` stage.
+or decide whether a query depends on service data. Those checks belong to
+`engine.Compile`; see the [compilation guide](../guides/compiling.md).
 
 The parser currently lives in the module-internal package
 `internal/syntax`. The example is runnable from this repository, but Go's
@@ -64,10 +64,10 @@ go run ./examples/parsing
 
 The example accepts any syntactically valid variable name. Parsing does not
 prove that a name exists in a service schema. For example, `unknown>0` parses
-successfully; a future `Compile` call will resolve names, validate types and
-capabilities, enforce the filter-dependence rule, and produce a reusable
-program. A syntax tree is not yet a compiled filter and cannot be evaluated or
-translated to SQL.
+successfully; `engine.Compile` resolves names, validates types and capabilities,
+enforces the filter-dependence rule, and produces a reusable typed program. A
+syntax tree is not an `hff.Program` and cannot be evaluated or translated to
+SQL. See the [compiler guide](../guides/compiling.md) for the public flow.
 
 ## Syntax limits and cancellation
 
