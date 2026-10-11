@@ -262,6 +262,9 @@ Services configure resource limits, including query length, depth, evaluation
 steps, and generated element counts. Exceeding a limit produces an explicit
 evaluation-cancellation result, distinct from null and from a completed boolean
 result. Partial evaluation must not be presented as a completed filter result.
+`MaxJSONDepth` defaults to 64 and counts the JSON root as depth one. It bounds
+JSON parsing and serialization, including JSON output produced by list/object
+`tostring()`. Exceeding it aborts with a limit error.
 
 ## Evaluation order
 

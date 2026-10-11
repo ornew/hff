@@ -10,7 +10,7 @@ import (
 
 func supportedMethod(id string) bool {
 	switch id {
-	case "any.type", "any.exists", "any.in", "bool.and", "bool.or", "bool.not", "number.round", "number.ceil", "number.floor", "string.len", "bytes.len", "string.contains", "string.matches", "string.startswith", "string.endswith", "string.lower", "string.upper", "string.bool", "string.number", "string.concat":
+	case "string.fromjson", "any.tojson", "any.tostring", "any.type", "any.exists", "any.in", "bool.and", "bool.or", "bool.not", "number.round", "number.ceil", "number.floor", "string.len", "bytes.len", "string.contains", "string.matches", "string.startswith", "string.endswith", "string.lower", "string.upper", "string.bool", "string.number", "string.concat":
 		return true
 	case "list.size", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "object.size", "object.has", "object.get", "object.keys", "object.values", "object.items":
 		return true
@@ -63,7 +63,7 @@ func (e *evaluation) call(n plan.Node) (result, error) {
 		switch name {
 		case "exists":
 			return ordinary(core.Bool(false)), nil
-		case "type":
+		case "type", "tojson", "tostring":
 			return ordinary(core.String("null")), nil
 		}
 		return null(), nil
@@ -136,6 +136,22 @@ func (e *evaluation) call(n plan.Node) (result, error) {
 		text, _ := receiver.value.AsString()
 		pattern, _ := args[0].AsString()
 		return e.regex(text, pattern, false)
+	}
+	switch id {
+	case "string.fromjson":
+		text, _ := receiver.value.AsString()
+		return e.decodeJSON(text, e.limits.MaxJSONDepth)
+	case "any.tojson":
+		return e.encodeJSON(receiver.value, e.limits.MaxJSONDepth)
+	case "any.tostring":
+		if receiver.value.Kind() == core.ListKind || receiver.value.Kind() == core.ObjectKind {
+			return e.encodeJSON(receiver.value, e.limits.MaxJSONDepth)
+		}
+		text, err := e.scalarText(receiver.value)
+		if err != nil {
+			return result{}, err
+		}
+		return ordinary(core.String(text)), nil
 	}
 	if err := e.scalarCost(id, receiver.value, args); err != nil {
 		return result{}, err

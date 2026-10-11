@@ -87,13 +87,6 @@ func TestScalarMethods(t *testing.T) {
 
 func TestScalarSupportAndBudgets(t *testing.T) {
 	ctx := context.Background()
-	e := configured(t)
-	p, err := e.Compile(ctx, `x:fromjson()`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = local.Build(ctx, p)
-	code(t, err, hff.BackendError) // JSON decoding is implemented in a later feature unit.
 	for _, q := range []string{`x:type()="string"`, `x:exists()`} {
 		f := build(t, q, local.WithLimits(hff.Limits{MaxSteps: 20}))
 		got, err := f.Match(ctx, record(hff.String(strings.Repeat("a", 1000)), hff.Null()))
@@ -102,7 +95,7 @@ func TestScalarSupportAndBudgets(t *testing.T) {
 		}
 	}
 	f := build(t, `x:lower()`, local.WithLimits(hff.Limits{MaxSteps: 20}))
-	_, err = f.Match(ctx, record(hff.String(strings.Repeat("a", 1000)), hff.Null()))
+	_, err := f.Match(ctx, record(hff.String(strings.Repeat("a", 1000)), hff.Null()))
 	code(t, err, hff.LimitError)
 	// A boolean receiver can skip a costly argument entirely.
 	f = build(t, `x:and(y:lower()="a")=false`, local.WithLimits(hff.Limits{MaxSteps: 20}))

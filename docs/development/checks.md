@@ -76,8 +76,20 @@ go test -race ./internal/syntax ./engine ./backends/local -run '^TestShared'
 ```
 
 The fixture covers the current parser/compiler/local contract. SQL parity,
-JSON conversion methods, extension evaluators, and a comprehensive runtime
-budget matrix remain outside its coverage.
+extension evaluators, and a comprehensive runtime budget matrix remain outside
+its coverage. JSON parsing and serialization have focused package tests and a
+round-trip fuzz target.
+
+## Fuzz and benchmark JSON conversion
+
+The strict JSON codec fuzz target checks round trips and malformed-input
+handling. The benchmarks measure codec work at several object sizes; they do
+not establish a performance guarantee or justify changing default limits.
+
+```sh
+go test ./backends/local -run '^$' -fuzz '^FuzzJSONRoundTrip$' -fuzztime=10s -parallel=2
+go test ./backends/local -run '^$' -bench JSON -benchmem
+```
 
 ## Test PostgreSQL integration
 

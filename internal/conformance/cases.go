@@ -42,6 +42,20 @@ func Cases() []Case {
 	common := schema.Struct(schema.Int("age"), schema.String("name"), schema.Bool("flag"),
 		schema.Any("x"), schema.Any("y"), schema.List("items", schema.AnyType), schema.Map("labels", schema.AnyType))
 	cases := []Case{
+		{Name: "json_preserves_float", Source: `x:tojson:fromjson:[float]=1`, Records: []Record{
+			record("float", map[string]hff.Value{"x": hff.Float(1)}, true),
+			record("int", map[string]hff.Value{"x": hff.Int(1)}, false),
+		}},
+		{Name: "json_duplicate_keys_fail", Source: `x:fromjson=null`, Records: []Record{
+			record("duplicate", map[string]hff.Value{"x": hff.String(`{"a":1,"\u0061":2}`)}, true),
+			record("valid", map[string]hff.Value{"x": hff.String(`{"a":1}`)}, false),
+		}},
+		{Name: "json_null_is_observable", Source: `x:tojson="null" x:tostring="null"`, Records: []Record{
+			record("null", nil, true), record("integer", map[string]hff.Value{"x": hff.Int(1)}, false),
+		}},
+		{Name: "json_guard_stays_absent", Source: `x!:tojson:exists`, Records: []Record{
+			record("null", nil, false), record("zero", map[string]hff.Value{"x": hff.Int(0)}, true),
+		}},
 		{Name: "empty_filter", Source: " \t\n", Records: []Record{record("default", nil, true)}},
 		{Name: "and_before_or", Source: `age>=10 | age<=5 name="Alice"`, Records: []Record{
 			record("or_left", map[string]hff.Value{"age": hff.Int(10), "name": hff.String("Bob")}, true),

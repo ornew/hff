@@ -104,7 +104,13 @@ null, and null propagates through both conversion methods.
 `bool()` accepts exactly `true` or `false`. `number()` accepts JSON numeric
 spelling and follows literal subtype selection. Neither trims surrounding
 whitespace. `fromjson()` rejects duplicate keys and out-of-range numbers with
-a null result, even when its receiver is a constant string.
+a null result, even when its receiver is a constant string. JSON parsing and
+canonical JSON serialization use the dedicated `MaxJSONDepth` resource limit:
+64 by default, counting the JSON root at depth one and incrementing for each
+nested array or object. It applies to `fromjson()`, `tojson()`, and list/object
+`tostring()` serialization. A scalar `tostring()` value has depth one. Exceeding
+the limit aborts evaluation with a limit error rather than returning null or a
+partial serialization.
 
 ## Lists
 

@@ -128,7 +128,9 @@ func TestLocalContractsAndConcurrency(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = local.Build(ctx, method)
-	code(t, err, hff.BackendError)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = local.Build(ctx, p, local.WithConfig(nil))
 	code(t, err, hff.ConfigurationError)
 }

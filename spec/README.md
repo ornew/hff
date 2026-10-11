@@ -52,9 +52,10 @@ These are development references, not dependencies of the HFF language contract.
 
 The public compiler and a local evaluator for core operators, literals,
 indexing, guards, short-circuit logic, scalar/string methods, list/object
-methods, and collection callbacks are implemented. Base64 conversion methods
-are also available locally. A SQL package builds parameterized PostgreSQL
-predicates for its documented scalar subset. JSON/stringification methods,
-broader SQL semantics and additional dialects, and extension registration are
-still in progress. A backend rejects unsupported compiled operations explicitly;
-compile validity alone does not promise support from every backend.
+methods, collection callbacks, and JSON/stringification methods are implemented.
+Base64 conversion methods are also available locally. A SQL package builds
+parameterized PostgreSQL predicates for its documented scalar subset and
+rejects JSON/stringification methods. Broader SQL semantics and additional
+dialects, and extension registration, remain in progress. A backend rejects
+unsupported compiled operations explicitly; compile validity alone does not
+promise support from every backend.

@@ -99,6 +99,7 @@ provides the same explicit choice when assembling configuration as data.
 |:--|--:|:--|
 | MaxInputDepth | 64 | Root depth is zero; each value nested in a container adds one |
 | MaxInputValues | 100,000 | Every value, including root and containers, counts once |
+| MaxJSONDepth | 64 | JSON root is depth one; nested arrays and objects add one per level |
 | MaxQueryBytes | 65,536 | UTF-8 source bytes per compilation |
 | MaxSyntaxDepth | 64 | Syntax nesting per compilation |
 | MaxCallbackDepth | 64 | Nested callback depth per compilation; the outermost callback is depth 1 |
@@ -107,8 +108,9 @@ provides the same explicit choice when assembling configuration as data.
 | MaxGeneratedValues | 100,000 | Generated collection containers and entries per local match |
 
 Compilation enforces query-byte, syntax-depth, callback-depth, and semantic-step
-limits; input validation enforces input-depth and input-value limits; the local
-backend enforces per-match step and generated-value limits. Runtime `MaxSteps`
+limits; JSON parsing and JSON serialization enforce `MaxJSONDepth`; input
+validation enforces input-depth and input-value limits; the local backend
+enforces per-match step and generated-value limits. Runtime `MaxSteps`
 also counts values traversed by equality and type guards and the lengths
 processed by string and byte operations. `MaxGeneratedValues` counts collection
 containers and entries. SQL backends report the execution constraints they can

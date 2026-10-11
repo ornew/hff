@@ -17,6 +17,7 @@ reference and operational detail.
 - [Timestamps, durations, and time zones](temporal.md)
 - [List and object methods](collections.md)
 - [List callbacks and transformations](callbacks.md)
+- [JSON parsing and serialization](json.md)
 - [Build PostgreSQL predicates](sql.md)
 - [Schemas and immutable values](schemas-and-values.md)
 - [Capabilities and resource limits](configuration.md)
@@ -24,9 +25,9 @@ reference and operational detail.
 The current implementation provides values, schemas, feature selection, engine
 configuration, validated input, an internal syntax-only parser, public common
 query compilation, core local matching, scalar/string and list/object methods,
-base64 conversions, temporal methods, collection callbacks, and a PostgreSQL
-scalar predicate backend. JSON/stringification methods, broader SQL semantics,
-additional SQL dialects, and extension implementation registration remain unavailable.
+base64 and JSON conversions, temporal methods, collection callbacks, and a
+PostgreSQL scalar predicate backend. Broader SQL semantics, additional SQL
+dialects, and extension implementation registration remain unavailable.
 Parser generation and the internal syntax parser are documented in the
 [Development section](../development/README.md), separately from integration
 guides.

@@ -494,7 +494,10 @@ per-item overrides; zero selects the default and does not mean unlimited.
 Explicit WithUnlimitedLimits is the opt-out. Negative ordinary limit values
 are configuration errors. Configuration objects support the same explicit choice.
 Limits cover source size, syntax depth, input depth and value count, evaluation
-steps, and generated elements. Each item documents its unit and counting rules.
+steps, generated elements, and JSON parse/serialization depth. `MaxJSONDepth`
+defaults to 64, counts the JSON root at depth one, and applies to JSON decoding,
+JSON encoding, and list/object `tostring()` output. A zero value selects the
+default; a negative value is a configuration error.
 
 Default values are established with initial implementation benchmarks and
 published alongside those measurements. They are service defaults rather than
