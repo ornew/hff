@@ -142,6 +142,20 @@ structural-check workload, not peak or resident memory. This one schema/query
 shape demonstrates behavior near the default compile-work ceiling; it does
 not establish that the default suits every service or query workload.
 
+After reducing repeated field-slice copies and reusing the per-compilation
+visited map, the same benchmark produced these medians:
+
+| Case | Median time | Allocated bytes | Allocations |
+|:--|--:|--:|--:|
+| 496 fields, completed | 15.321 ms/op | 1,839,253 B/op | 12,123 allocs/op |
+| 497 fields, limit error | 15.287 ms/op | 1,917,176 B/op | 12,128 allocs/op |
+
+For this workload, required steps remained exactly 998,002 and 1,000,002. The
+optimization does not memoize structural checks or change compile-step
+accounting, and the public `Type.Fields()` copy behavior remains unchanged.
+This before/after comparison is specific to the benchmark's repeated
+structural checks; it does not predict gains for other compiler workloads.
+
 ## Remaining evidence gaps
 
 Boundary correctness and selected depth-64 workload costs are now measured.

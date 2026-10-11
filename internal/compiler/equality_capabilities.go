@@ -12,7 +12,14 @@ func (c *compiler) equalityCapabilities(left, right core.Type, source any) error
 	if c.config.Capabilities.Has(capabilities.StructuralEquality) {
 		return nil
 	}
-	seen := make(map[[2]core.Type]bool)
+	// A compiler belongs to one Compile call. Reuse storage, but never reuse
+	// visited results: every check retains its own work and cancellation budget.
+	if c.equalitySeen == nil {
+		c.equalitySeen = make(map[[2]core.Type]bool)
+	} else {
+		clear(c.equalitySeen)
+	}
+	seen := c.equalitySeen
 	var visit func(core.Type, core.Type) error
 	visit = func(l, r core.Type) error {
 		pair := [2]core.Type{l, r}
@@ -63,7 +70,8 @@ func (c *compiler) equalityCapabilities(left, right core.Type, source any) error
 			if r.Kind() == core.MapType {
 				return visit(l, r.Element())
 			}
-			for _, field := range r.Fields() {
+			for i := 0; i < r.FieldCount(); i++ {
+				field, _ := r.FieldAt(i)
 				if err := c.chargeCompile(source); err != nil {
 					return err
 				}
@@ -80,7 +88,8 @@ func (c *compiler) equalityCapabilities(left, right core.Type, source any) error
 			return visit(r, l)
 		}
 		if l.Kind() == core.MapType {
-			for _, field := range r.Fields() {
+			for i := 0; i < r.FieldCount(); i++ {
+				field, _ := r.FieldAt(i)
 				if err := c.chargeCompile(source); err != nil {
 					return err
 				}
@@ -91,18 +100,19 @@ func (c *compiler) equalityCapabilities(left, right core.Type, source any) error
 			return nil
 		}
 		// Struct fields are sorted. Only values under a shared key can be compared.
-		lf, rf := l.Fields(), r.Fields()
-		for i, j := 0, 0; i < len(lf) && j < len(rf); {
+		for i, j := 0, 0; i < l.FieldCount() && j < r.FieldCount(); {
 			if err := c.chargeCompile(source); err != nil {
 				return err
 			}
+			lf, _ := l.FieldAt(i)
+			rf, _ := r.FieldAt(j)
 			switch {
-			case lf[i].Name < rf[j].Name:
+			case lf.Name < rf.Name:
 				i++
-			case lf[i].Name > rf[j].Name:
+			case lf.Name > rf.Name:
 				j++
 			default:
-				if err := visit(lf[i].Type, rf[j].Type); err != nil {
+				if err := visit(lf.Type, rf.Type); err != nil {
 					return err
 				}
 				i++

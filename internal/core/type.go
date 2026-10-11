@@ -120,6 +120,22 @@ func (t Type) Fields() []Field {
 	}
 	return append([]Field(nil), t.node.fields...)
 }
+
+// FieldCount and FieldAt traverse immutable fields without copying the slice.
+// FieldAt returns a field value; callers cannot mutate the stored collection.
+func (t Type) FieldCount() int {
+	if t.node == nil {
+		return 0
+	}
+	return len(t.node.fields)
+}
+
+func (t Type) FieldAt(index int) (Field, bool) {
+	if t.node == nil || index < 0 || index >= len(t.node.fields) {
+		return Field{}, false
+	}
+	return t.node.fields[index], true
+}
 func (t Type) Members() []Type {
 	if t.node == nil {
 		return nil

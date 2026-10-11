@@ -29,6 +29,7 @@ type compiler struct {
 	next          plan.BindingID
 	steps         int
 	roots         map[string]plan.Binding
+	equalitySeen  map[[2]core.Type]bool
 	scope         *scope
 	callbackDepth int
 }
