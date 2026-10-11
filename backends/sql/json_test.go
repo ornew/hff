@@ -39,6 +39,18 @@ func jsonBindings(format hffsql.JSONFormat) []hffsql.Binding {
 
 func jsonQueries() []string {
 	return []string{
+		`scores:foldl(0,(acc,x)=>acc+x)=30`, `scores:foldl(0,(acc,x)=>acc+x)=null`,
+		`scores:foldr(0,(x,acc)=>x-acc)=26`, `scores:foldl(0,(acc,x)=>acc-x)=-34`,
+		`scores:foldl(null,(acc,x)=>x)=null`, `scores:foldr(null,(x,acc)=>x)=null`,
+		`scores:foldl(null,(acc,x)=>x)=scores[-1]`, `scores:foldr(null,(x,acc)=>x)=scores[0]`,
+		`scores:foldl(0,(acc,x)=>x!)=null`, `!scores:foldl(0,(acc,x)=>x!)=null`,
+		`scores:foldl(profile!.age,(acc,x)=>x)=null`, `!scores:foldl(profile!.age,(acc,x)=>x)=null`,
+		`scores:foldl([],(acc,x)=>acc:concat([x]))=scores`, `scores:foldr([],(x,acc)=>acc:concat([x]))[0]=scores[-1]`,
+		`groups:foldl(0,(acc,xs)=>acc+xs:foldl(0,(a,x)=>a+x))=null`,
+		`people:any(x=>scores:foldl(0,(acc,y)=>acc+y)=x.age)`, `scores:foldl(0,(acc,x)=>acc+x+profile.age)>0`,
+		`labels:keys:foldl("",(acc,x)=>acc:concat(x))="appteam"`,
+		`labels:keys:foldr("",(x,acc)=>x:concat(acc))="appteam"`, `scores:foldl(false,(acc,x)=>acc|x>10)`,
+		`scores:foldl(0,(acc,x)=>x+1)=scores[-1]+1`,
 		`scores:map(x=>x)=scores`, `scores:map(x=>x+1)=[11,21,null]`, `scores:map(x=>null)=[null,null,null]`,
 		`scores:map(x=>x!)=null`, `!scores:map(x=>x!)=null`, `scores:map(x=>[x,null]):size=scores:size`,
 		`people:map(x=>x.age)=[18,null]`, `people:map(x=>x!.age)=null`, `!people:map(x=>x!.age)=null`,
@@ -144,7 +156,7 @@ func TestJSONBindingRejectsConflictingPhysicalMappings(t *testing.T) {
 
 func TestJSONUnsupportedSemanticsAreExplicitBuildErrors(t *testing.T) {
 	ctx := context.Background()
-	for _, source := range []string{`labels:tojson="{}"`, `scores=[10,20.0]`} {
+	for _, source := range []string{`labels:tojson="{}"`, `scores=[10,20.0]`, `scores:foldl(0.0,(acc,x)=>x)>0`, `scores:foldl("",(acc,x)=>x):exists`} {
 		p, err := jsonEngine(t).Compile(ctx, source)
 		if err != nil {
 			t.Fatal(source, err)
@@ -166,7 +178,7 @@ func TestJSONUnsupportedSemanticsAreExplicitBuildErrors(t *testing.T) {
 
 func TestJSONCallbacksConcurrentBuildsPreserveScopes(t *testing.T) {
 	ctx := context.Background()
-	p, err := jsonEngine(t).Compile(ctx, `people:any(x=>scores:any(y=>y<x.age) x.name="Alice" scores:contains(x.age,null)) groups:all(xs=>xs:all(x=>x!=null) xs:unique) scores:map(x=>[x,null]):flatmap(xs=>xs):contains(null)`)
+	p, err := jsonEngine(t).Compile(ctx, `people:any(x=>scores:any(y=>y<x.age) x.name="Alice" scores:contains(x.age,null)) groups:all(xs=>xs:all(x=>x!=null) xs:unique) scores:map(x=>[x,null]):flatmap(xs=>xs):contains(null) scores:foldl([],(acc,x)=>acc:concat([x]))=scores`)
 	if err != nil {
 		t.Fatal(err)
 	}

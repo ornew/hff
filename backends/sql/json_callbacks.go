@@ -9,6 +9,7 @@ import (
 type jsonParameter struct {
 	code   string
 	format JSONFormat
+	typ    hff.Type
 }
 
 // Callback projections belong to their element subquery. Captures retain the

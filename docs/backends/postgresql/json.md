@@ -115,6 +115,25 @@ promise PostgreSQL's physical callback evaluation order. Callback result types
 must be determined by the schema; dynamic `Any` and ambiguous int/float unions
 remain Build errors.
 
+`foldl()` and `foldr()` use the same known-type boundary for accumulators:
+int64, bool, string, or schema-known lists. The accumulator type includes the
+initial value and every callback result, and the callback must type-check for
+that inferred type. Mixed distinct scalar accumulator types, dynamic `Any`, and
+ambiguous int/float unions remain Build errors. Folds visit list elements in
+ordinal order (`foldl`) or reverse ordinal order (`foldr`). An empty list returns
+the initial value, including null; a null receiver returns null. A null callback
+result becomes the next accumulator, while guarded no-value propagates to the
+whole fold.
+
+```hff
+profile.scores:foldl(0,(acc,score)=>acc-score)=-170
+profile.scores:foldr(0,(score,acc)=>score-acc)=-10
+```
+
+These are HFF result-order guarantees. SQL does not promise physical callback
+evaluation order or local `MaxSteps`/`MaxGeneratedValues` enforcement; unsupported
+explicit execution-budget requirements are rejected by `Build`.
+
 Nested callbacks can capture outer callback values and schema fields, with
 lexical shadowing:
 
@@ -173,7 +192,7 @@ a source-located `hff.BackendError` from `Build`:
 
 - Dynamic `Any` decoding and unions with multiple non-null families when the
   stored representation cannot determine the HFF type.
-- `foldl()`, `foldr()`, and other unsupported collection transformations.
+- Other unsupported collection transformations.
 - JSON parsing/serialization methods, conversions to bytes/timestamps/durations,
   and operations requiring a runtime type not fixed by the schema.
 
@@ -207,7 +226,7 @@ the service remains responsible for database timeouts and cancellation.
 ## Verification
 
 The repository's tagged integration suite compares JSON and JSONB bindings
-against local evaluation on PostgreSQL 18.6. The verified matrix covers 4,092
+against local evaluation on PostgreSQL 18.6. The verified matrix covers 4,554
 JSON/JSONB query-record pairs for scalar and nested access, null and missing-key
 cases, list indexing, object/list inspection and equality, callbacks, type
 guards, and type/truthiness predicates.

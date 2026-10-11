@@ -124,7 +124,11 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		if !ok {
 			return expression{}, b.failure(n, "unbound callback parameter")
 		}
-		return b.jsonDecode(n, parameter.code, parameter.format, n.Type(), "TRUE")
+		typ := n.Type()
+		if parameter.typ.Kind() != hff.InvalidType {
+			typ = parameter.typ
+		}
+		return b.jsonDecode(n, parameter.code, parameter.format, typ, "TRUE")
 	case hff.VariableNode, hff.FieldNode:
 		if value, handled, err := b.jsonPath(n); handled {
 			return value, err
@@ -487,6 +491,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 	}
 	if name == "map" || name == "flatmap" {
 		return b.jsonTransform(n, name)
+	}
+	if name == "foldl" || name == "foldr" {
+		return b.jsonFold(n, name)
 	}
 	switch name {
 	case "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":

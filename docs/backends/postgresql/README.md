@@ -123,8 +123,9 @@ remain unsupported there. JSON list/object structural equality, list
 `contains()` and `unique()`, `sort()`, `concat(list)`, and `any()`/`all()` are
 available for schema-known values when their required capabilities are enabled;
 `map()` and `flatmap()` are supported when callback result types are known.
-Folds, other collection transformations, and JSON conversions remain
-unsupported.
+Folds are supported for known accumulator types; see the JSON guide for their
+type and null rules. Other collection transformations and JSON conversions
+remain unsupported.
 Unsupported operations do not fall back to local evaluation.
 PostgreSQL is the only currently supported SQL dialect.
 
