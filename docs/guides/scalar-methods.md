@@ -1,28 +1,12 @@
 # Scalar and String Methods
 
-This guide covers the scalar and string method families provided by the local
-backend. Query syntax and signatures are defined in the [method
-specification](../../spec/methods.md); the local backend may support only a
-subset of that catalog.
-
-## Supported methods
-
-The local scalar/string set is:
-
-| Receiver family | Methods |
-|:--|:--|
-| Any | `type()`, `exists()`, `in(any...)` |
-| Bool | `and(bool)`, `or(bool)`, `not()` |
-| Number | `round()`, `ceil()`, `floor()` |
-| String | `len()`, `contains(string...)`, `matches(string)`, `startswith(string)`, `endswith(string)`, `lower()`, `upper()`, `bool()`, `number()`, `concat(string)`, `frombase64()` |
-| Bytes | `len()`, `tobase64()` |
-
-This set excludes `any:tostring()` and `any:tojson()`, temporal conversions,
-and JSON parsing. See the [JSON guide](json.md) for those methods. List/object
-methods are covered in the [collections guide](collections.md), and callback
-methods in the [callback guide](callbacks.md). A query can compile successfully
-while still failing local `Build` with `hff.BackendError` for an unsupported
-method.
+This guide explains common scalar and string query patterns. The
+[method reference](../reference/methods.md) indexes exact signatures and
+contracts. Backend support is listed separately in the
+[local backend guide](../backends/local/README.md); the local backend supports
+the complete built-in catalog. See the [JSON guide](json.md),
+[temporal guide](temporal.md), [collections guide](collections.md), and
+[callback guide](callbacks.md) for other method families.
 
 ## Use the methods in a filter
 
@@ -77,7 +61,7 @@ It prints:
 "AQIDBA==\n" -> false
 ```
 
-See the [configuration guide](configuration.md) for limit behavior.
+See the [local backend configuration](../backends/local/configuration.md) for limit behavior.
 
 ## Generic value methods
 

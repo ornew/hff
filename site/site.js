@@ -19,6 +19,19 @@
 
   var drawer = document.getElementById('navigation-dialog');
   var menu = document.querySelector('.menu-toggle');
+  var sidebar = document.getElementById('documentation-sidebar');
+  var narrowNavigation = window.matchMedia('(max-width:800px)');
+  var sidebarHidden = false;
+  function updateNavigation() {
+    var desktop = sidebar && !narrowNavigation.matches;
+    if (desktop && drawer.open) drawer.close();
+    menu.setAttribute('aria-controls', desktop ? sidebar.id : drawer.id);
+    menu.setAttribute('aria-expanded', String(desktop ? !sidebarHidden : drawer.open));
+    menu.setAttribute('aria-label', desktop ? (sidebarHidden ? 'Show navigation' : 'Hide navigation') : 'Open navigation');
+    if (desktop) menu.removeAttribute('aria-haspopup');
+    else menu.setAttribute('aria-haspopup', 'dialog');
+    root.classList.toggle('sidebar-hidden', Boolean(desktop && sidebarHidden));
+  }
   var search = document.getElementById('search-dialog');
   var input = document.getElementById('search-input');
   var results = document.getElementById('search-results');
@@ -35,7 +48,7 @@
   [drawer, search].forEach(function (dialog) {
     dialog.addEventListener('close', function () {
       document.body.classList.remove('modal-open');
-      menu.setAttribute('aria-expanded', 'false');
+      updateNavigation();
       if (opener) opener.focus();
     });
     dialog.addEventListener('click', function (event) {
@@ -47,8 +60,14 @@
   document.querySelectorAll('[data-close]').forEach(function (button) {
     button.addEventListener('click', function () { closeDialog(document.getElementById(button.dataset.close)); });
   });
-  menu.setAttribute('aria-expanded', 'false');
-  menu.addEventListener('click', function () { openDialog(drawer, menu); });
+  menu.addEventListener('click', function () {
+    if (sidebar && !narrowNavigation.matches) {
+      sidebarHidden = !sidebarHidden;
+      updateNavigation();
+    } else openDialog(drawer, menu);
+  });
+  narrowNavigation.addEventListener('change', updateNavigation);
+  updateNavigation();
   drawer.querySelectorAll('a').forEach(function (link) { link.addEventListener('click', function () { closeDialog(drawer); }); });
   document.querySelector('.search-trigger').addEventListener('click', function (event) { openDialog(search, event.currentTarget); });
   document.addEventListener('keydown', function (event) {

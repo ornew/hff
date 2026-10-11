@@ -45,6 +45,7 @@ svg { display: block; width: 19px; height: 19px; fill: none; stroke: currentColo
 .icon-button { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 0; background: transparent; color: var(--muted); border-radius: 7px; text-decoration: none; }
 .icon-button:hover { background: var(--soft); color: var(--text); }
 .menu-toggle { display: none; }
+.menu-toggle.sidebar-toggle { display: inline-flex; }
 .search-trigger { display: flex; align-items: center; gap: 9px; padding: 6px 10px; min-width: 180px; background: var(--surface); border: 1px solid var(--line); border-radius: 7px; color: var(--muted); font-size: 12px; }
 .search-trigger svg { width: 15px; height: 15px; }
 kbd { font: 11px ui-monospace,monospace; border: 1px solid var(--line); padding: 0 5px; border-radius: 4px; margin-left: auto; }
@@ -157,8 +158,18 @@ dialog::backdrop { background: #0009; backdrop-filter: blur(3px); }
 
 .nav-section { margin: 0 0 24px; }
 .nav-section h2,.nav-section summary { margin: 0 0 8px; padding: 0 10px; font-size: 12px; font-weight: 650; color: var(--text); }
-.nav-section summary { cursor: pointer; }
-.nav-section summary::marker { color: var(--muted); }
+.nav-section summary { cursor: pointer; display: flex; align-items: center; gap: 12px; list-style: none; line-height: 1.5; padding: 7px 10px; margin: 2px 0; border-radius: 6px; font-size: inherit; font-weight: inherit; color: var(--muted); }
+.nav-section>summary { margin: 0 0 8px; padding: 0 10px; font-size: 12px; font-weight: 650; color: var(--text); }
+.nav-section summary::-webkit-details-marker { display: none; }
+.nav-section summary::marker { content: ""; }
+.nav-section summary::after { content: ""; width: 5px; height: 5px; margin-left: auto; margin-right: 2px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg); flex: 0 0 auto; }
+.nav-section[open]>summary::after,.nav-section details[open]>summary::after { transform: rotate(45deg); }
+.nav-section summary:hover { color: var(--text); background: var(--soft); }
+.nav-section summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+.nav-subsection { margin: 0; }
+details.nav-section>a,.nav-subsection>a { padding-left: 24px; }
+.nav-subsection summary { margin: 2px 0; padding: 7px 10px; color: var(--muted); font-size: inherit; font-weight: inherit; }
+
 .drawer .nav-section { margin-bottom: 24px; }
 
 .hero .hero-identity { font-size: inherit; line-height: 1; letter-spacing: normal; }
@@ -172,3 +183,6 @@ dialog::backdrop { background: #0009; backdrop-filter: blur(3px); }
 .feature-icon { display: block; width: 24px; height: 24px; margin-bottom: 16px; color: var(--accent); }
 
 @media(min-width:1250px) { .feature-card h3 { min-height: 1.25em; } }
+
+@media(min-width:801px) { .sidebar-hidden .sidebar { display: none; }.sidebar-hidden .doc-shell { grid-template-columns: minmax(0,1fr) 180px; } }
+@media(min-width:801px) and (max-width:1150px) { .sidebar-hidden .doc-shell { grid-template-columns: minmax(0,1fr); } }

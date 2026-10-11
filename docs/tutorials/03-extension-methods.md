@@ -3,7 +3,7 @@
 This tutorial adds a pure `hasprefix` method for string fields, selects its
 capability, compiles a human-authored query, and registers a local evaluator.
 The full declaration and metering reference is in the
-[extension-method guide](../guides/extensions.md).
+[local extension guide](../backends/local/extensions.md).
 
 These snippets belong in a Go program using the following imports:
 
@@ -121,4 +121,4 @@ go run ./examples/extensions
 ```
 
 For overloads, optional/variadic parameters, explicit null invocation, and
-metering details, continue with the [extension-method guide](../guides/extensions.md).
+metering details, continue with the [local extension guide](../backends/local/extensions.md).

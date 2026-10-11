@@ -52,11 +52,13 @@ output directories.
 
 ## Rendering and link checks
 
-The site includes a README-derived landing page, top navigation, documentation
-sidebar grouped into Language, Guides, Design Records, and Development,
-heading links, adjacent-page links, and GitHub source links. Design Records and
-Development use collapsible groups. Small
-screens use a modal navigation drawer instead of a horizontally scrolling menu.
+The site includes a README-derived landing page, top navigation, and a sidebar
+ordered Overview, Tutorials, Guides, Cookbook, Backends, Reference,
+Specification, Design Records, and Development. Backends groups local and
+PostgreSQL pages in expandable subsections. Section introductions appear first,
+and adjacent-page links stay within the current section. Design Records and
+Development use collapsible groups. Small screens use a modal navigation
+drawer instead of a horizontally scrolling menu.
 Color mode cycles between system, light, and dark, storing the choice locally.
 Dark mode uses neutral near-black surfaces with green accents.
 Markdown tables and fenced code blocks are rendered directly. Source Markdown
@@ -86,5 +88,7 @@ go vet ./...
 ```
 
 Build the actual documentation as well as running tests. Tests cover link
-rewriting and fragments, stale-output removal, and refusing unrelated output
-directories. Build failures preserve existing output when source links are invalid.
+rewriting and fragments, stale-output removal, refusing unrelated output
+directories, section grouping and order, section-local paging, and local
+redirects for moved documentation pages. Redirect aliases are not included in
+search. Build failures preserve existing output when source links are invalid.

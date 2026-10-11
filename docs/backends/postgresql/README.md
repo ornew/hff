@@ -1,4 +1,4 @@
-# PostgreSQL Predicate Building
+# PostgreSQL Backend
 
 The SQL backend turns a compiled HFF program into a reusable PostgreSQL
 predicate and ordered parameters. It does not open a database connection or
@@ -227,7 +227,7 @@ PostgreSQL MaxSteps guarantee: false
 ```
 
 For a step-by-step extension walkthrough, see the [PostgreSQL translator
-tutorial](../tutorials/04-postgresql-translator.md).
+tutorial](../../tutorials/04-postgresql-translator.md).
 
 ## Test against PostgreSQL
 

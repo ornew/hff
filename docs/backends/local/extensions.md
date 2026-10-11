@@ -1,4 +1,4 @@
-# Extension Methods
+# Local Extension Methods
 
 An extension adds a typed receiver method to the common compiler and supplies a
 local evaluator separately. Declarations are immutable and shared by the
@@ -135,8 +135,8 @@ produce a false filter result after HFF's ordinary boolean conversion.
 SQL extensions need a separate translator registration for the selected
 dialect; a local evaluator does not provide SQL support by itself. PostgreSQL
 translators can target the currently supported scalar expression profile. See
-the [SQL guide](sql.md) for registration, parameter helpers, and backend
-guarantees.
+the [PostgreSQL backend guide](../postgresql/README.md) for registration,
+parameter helpers, and backend guarantees.
 
 ## Run the example
 

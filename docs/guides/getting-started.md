@@ -74,7 +74,7 @@ Field declaration order does not affect compatibility. Field types, optional
 presence, and nullability do. Changing only the engine's feature selection does
 not change the input contract. Validated input can be reused by a local filter
 through `MatchInput`. Continue with the [compilation guide](compiling.md) and
-[local evaluation guide](local-evaluation.md) to build and run a query.
+[local backend guide](../backends/local/README.md) to build and run a query.
 
 ## Run the complete example
 
@@ -85,5 +85,5 @@ go run ./examples/configuration
 ```
 
 The example prints `Alice true`. See [schemas and values](schemas-and-values.md)
-for nested records and [configuration](configuration.md) for feature policies,
+for nested records and [local backend configuration](../backends/local/configuration.md) for feature policies,
 limits, and error handling.

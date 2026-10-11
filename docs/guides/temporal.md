@@ -2,7 +2,7 @@
 
 The local backend supports timestamp parsing and comparison, fixed-duration
 arithmetic, component extraction, and formatting. The signatures and edge cases
-are defined in the [method specification](../../spec/methods.md).
+are defined in the [method reference](../reference/methods.md).
 
 ## Parse, compare, and format timestamps
 
@@ -86,4 +86,4 @@ created:add("30m":duration):string("UTC")="2026-10-11T10:00:00Z" -> true
 The parser charges timestamp and zone-name input length to the local per-match
 `MaxSteps` budget. Duration parsing reserves a conservative cost based on the
 input length before allocating exact decimal intermediates. See the
-[configuration guide](configuration.md) for local runtime limits.
+[local backend configuration](../backends/local/configuration.md) for local runtime limits.

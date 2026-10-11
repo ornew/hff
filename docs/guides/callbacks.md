@@ -3,7 +3,7 @@
 List callbacks let a query inspect or transform each element without adding a
 general-purpose function language. Callback parameters are inferred from the
 list and are scoped to the callback expression. The full rules are in the
-[method catalog](../../spec/methods.md) and [type specification](../../spec/types.md).
+[method reference](../reference/methods.md) and [type specification](../../spec/types.md).
 
 ## Select and check elements
 
@@ -70,4 +70,4 @@ items:foldl(0,(total,item)=>total+item.price)>100 -> true
 Local evaluation applies the per-match step and generated-value budgets and
 checks context cancellation while traversing callbacks. An error aborts the
 match without returning a partial result; see the
-[local evaluation guide](local-evaluation.md) for configuration.
+[local backend guide](../backends/local/README.md) for configuration.

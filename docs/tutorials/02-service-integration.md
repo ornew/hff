@@ -70,7 +70,7 @@ if err != nil {
 If records were not validated at ingestion, use `Match` with the original HFF
 value instead. Both operations use fresh per-call state and return errors for
 cancellation and exceeded evaluation limits. See [Build and run a local
-filter](../guides/local-evaluation.md) for limit configuration and error codes.
+filter](../backends/local/README.md) for limit configuration and error codes.
 
 ## Reject invalid query changes
 

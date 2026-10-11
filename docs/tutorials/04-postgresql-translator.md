@@ -104,7 +104,7 @@ go run ./examples/sql-extensions
 The example prints whether a predicate was built, its parameter count, and the
 PostgreSQL budget guarantees. It never opens a database connection. For the
 complete current scalar support matrix and parameter-mapping rules, see the
-[PostgreSQL predicate guide](../guides/sql.md).
+[PostgreSQL backend guide](../backends/postgresql/README.md).
 
 Expected output:
 

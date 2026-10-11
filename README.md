@@ -12,9 +12,10 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/ornew/hff.svg)](https://pkg.go.dev/github.com/ornew/hff)
 [![Go version](https://img.shields.io/badge/Go-1.27.1-00ADD8?logo=go&logoColor=white)](https://go.dev/doc/install)
 
-[Website](https://hff.ornew.net/) · [Specification](spec/README.md) ·
-[Syntax](spec/syntax.md) · [Methods](spec/methods.md) ·
-[Design Records](docs/design/README.md)
+[Website](https://hff.ornew.net/) · [Tutorials](docs/tutorials/README.md) ·
+[Guides](docs/guides/README.md) · [Cookbook](docs/cookbook/README.md) ·
+[Backends](docs/backends/README.md) · [Reference](docs/reference/README.md) ·
+[Specification](spec/README.md) · [Design Records](docs/design/README.md)
 
 </div>
 
@@ -86,21 +87,18 @@ methods and local extension evaluators are also available. The SQL backend
 builds parameterized PostgreSQL predicates for a documented scalar subset;
 broader SQL operations, extension translators, and additional dialects remain
 in progress.
-Start with the
-[tutorials](docs/tutorials/README.md) for a staged local-service example, then
-use the [Go guides](docs/guides/README.md), including the
-[local evaluation guide](docs/guides/local-evaluation.md),
-[scalar/string method guide](docs/guides/scalar-methods.md),
-[JSON guide](docs/guides/json.md),
-[collections guide](docs/guides/collections.md),
-[PostgreSQL predicate guide](docs/guides/sql.md),
-[callback guide](docs/guides/callbacks.md), and the
-[extension-method guide](docs/guides/extensions.md).
+Start with the [tutorials](docs/tutorials/README.md) for a staged
+local-service example. Use the [guides](docs/guides/README.md) for feature
+behavior, the [cookbook](docs/cookbook/README.md) for practical filter recipes,
+[backend documentation](docs/backends/README.md) for local and PostgreSQL
+support, and the [reference](docs/reference/README.md) for exact method and Go
+API lookups.
 
 Read the [language specification](spec/README.md), beginning with
 [syntax](spec/syntax.md), [types and schemas](spec/types.md), and
-[evaluation](spec/evaluation.md). The [method catalog](spec/methods.md) describes
-the configurable library; [capabilities and backends](spec/capabilities.md)
+[evaluation](spec/evaluation.md). The normative [method catalog](spec/methods.md)
+defines the configurable library; the [reference index](docs/reference/methods.md)
+provides a receiver-family lookup. [Capabilities](spec/capabilities.md)
 describe integration requirements.
 
 [Design records](docs/design/README.md) explain the rationale for individual

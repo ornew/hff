@@ -39,7 +39,8 @@ HFF aims to ship engines that services can use by supplying a schema and a
 capability selection. Backend support is extensible without introducing a
 service-specific grammar. The [Go API record](../docs/design/004-go-api.md) defines configuration, common
 compilation, and separate backend construction. The implemented configuration
-APIs are described in the [Go guides](../docs/guides/README.md).
+APIs are described in the [Go reference](../docs/reference/README.md); backend
+support and configuration are in [Backends](../docs/backends/README.md).
 
 ## Compilation
 

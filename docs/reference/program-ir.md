@@ -1,4 +1,4 @@
-# Inspect a Compiled Program
+# Program and Node Reference
 
 HFF is designed to compile a query once into an immutable, backend-independent
 program. Local and SQL builders can inspect that program without depending on

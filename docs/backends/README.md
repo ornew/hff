@@ -1,0 +1,15 @@
+# Introduction
+
+HFF keeps query syntax and common compilation separate from backend building.
+Compile checks language semantics and selected capabilities; a backend then
+checks whether it can implement the compiled operations. Unsupported behavior
+must fail explicitly rather than being silently omitted.
+
+- [Local backend](local/README.md): build reusable filters, match validated
+  values, configure local limits, and register local extension evaluators.
+- [PostgreSQL backend](postgresql/README.md): build parameterized predicates,
+  inspect backend guarantees, and register PostgreSQL method translators.
+
+These builders do not own database execution. The application owns connections,
+transactions, and database timeouts. Consult the backend support matrices before
+relying on a particular operation.

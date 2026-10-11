@@ -1,0 +1,111 @@
+# Go API Reference
+
+This page lists the public construction path and stable package entry points.
+See [pkg.go.dev](https://pkg.go.dev/github.com/ornew/hff) for the complete
+exported Go documentation and the accepted [API design record](../design/004-go-api.md)
+for rationale. Query semantics remain defined by the
+[language specification](../../spec/README.md).
+
+## Main packages
+
+| Package | Purpose |
+|:--|:--|
+| `github.com/ornew/hff` | Immutable values, types, limits, errors, and compiled-plan inspection. |
+| `github.com/ornew/hff/schema` | Struct, map, and primitive schema constructors. |
+| `github.com/ornew/hff/capabilities` | Standard and custom capability sets. |
+| `github.com/ornew/hff/engine` | Engine configuration, validation, and query compilation. |
+| `github.com/ornew/hff/backends/local` | Reusable local filters and matching. |
+| `github.com/ornew/hff/backends/sql` | Pure SQL translation and parameterized artifacts. |
+
+## Configure and compile
+
+Configure the schema and capability policy once, then compile query strings to
+immutable programs:
+
+```go
+e, err := engine.New(
+    engine.WithSchema(schema.Struct(
+        schema.String("name"),
+        schema.Int("age"),
+    )),
+    engine.WithCapabilities(capabilities.Standard()),
+)
+if err != nil {
+    return err
+}
+
+program, err := e.Compile(ctx, `name="Alice" age>=18`)
+if err != nil {
+    return err
+}
+```
+
+`engine.Engine` is safe for concurrent validation and compilation. A
+`hff.Program` is immutable and can be passed to supported backend builders.
+Compilation returns typed `*hff.Error` diagnostics; inspect its `Code` and
+source `Span` rather than branching on message text.
+
+## Construct values and validate input
+
+The explicit value API avoids reflection and conversions:
+
+```go
+record := hff.Object(map[string]hff.Value{
+    "name": hff.String("Alice"),
+    "age":  hff.Int(18),
+})
+input, err := e.Validate(ctx, record)
+if err != nil {
+    return err
+}
+```
+
+The `schema` package provides constructors such as `schema.String`,
+`schema.Int`, `schema.Bool`, `schema.Number`, `schema.List`, `schema.Map`, and
+`schema.Struct`. `hff.Value` and `hff.Type` are immutable. Use `Value` accessors
+such as `Kind`, `AsString`, `AsInt`, `Lookup`, `At`, and `Equal` to inspect
+them. `Input.Value()` returns the validated immutable value and
+`Input.Compatible(type)` checks exact schema compatibility.
+
+## Build and run a local filter
+
+```go
+filter, err := local.Build(ctx, program)
+if err != nil {
+    return err
+}
+matched, err := filter.Match(ctx, record)
+// Or pass a previously validated Input to MatchInput.
+```
+
+The filter is immutable and safe for concurrent matches. `Match` validates its
+record; `MatchInput` checks schema compatibility and reuses validated input.
+Local runtime limits can be set with `local.WithConfig`, `local.WithLimits`, or
+`local.WithUnlimitedLimits`. Inspect typed errors with `errors.As` into
+`*hff.Error`.
+
+## Build a SQL artifact
+
+SQL construction also accepts a `hff.Program` and performs no database I/O:
+
+```go
+query, err := hffsql.Build(ctx, program,
+    hffsql.WithDialect(hffsql.PostgreSQL),
+    hffsql.WithBindings(
+        hffsql.Bind(hff.Path{"name"}, hffsql.Column("records", "name")),
+        hffsql.Bind(hff.Path{"age"}, hffsql.Column("records", "age")),
+    ),
+)
+```
+
+Inspect `query.Where`, `query.Args`, and `query.Guarantees`. Their accessors
+return copies. The caller owns database connections, execution, transactions,
+and timeouts. Consult the [PostgreSQL backend reference](../backends/postgresql/README.md)
+for supported operations and constraints.
+
+## Related lookup pages
+
+- [Built-in method signatures](methods.md)
+- [Program and Node inspection](program-ir.md)
+- [Specification](../../spec/README.md)
+- [Backend options and support matrices](../backends/README.md)

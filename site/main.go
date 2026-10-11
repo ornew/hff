@@ -45,25 +45,47 @@ type page struct {
 type navSection struct {
 	Name                string
 	Pages               []*page
+	Children            []navSection
 	Collapsible, Active bool
 }
 
+func sectionIndex(source string) int {
+	switch {
+	case source == "README.md":
+		return 0
+	case strings.HasPrefix(source, "docs/tutorials/"):
+		return 1
+	case strings.HasPrefix(source, "docs/guides/"):
+		return 2
+	case strings.HasPrefix(source, "docs/cookbook/"):
+		return 3
+	case strings.HasPrefix(source, "docs/reference/"):
+		return 5
+	case strings.HasPrefix(source, "docs/backends/"):
+		return 4
+	case strings.HasPrefix(source, "spec/"):
+		return 6
+	case strings.HasPrefix(source, "docs/design/"):
+		return 7
+	default:
+		return 8
+	}
+}
+
 func navigation(pages []*page, current *page) []navSection {
-	sections := []navSection{{Name: "Overview"}, {Name: "Language"}, {Name: "Tutorials"}, {Name: "Guides"}, {Name: "Design Records", Collapsible: true}, {Name: "Development", Collapsible: true}}
+	sections := []navSection{
+		{Name: "Overview"},
+		{Name: "Tutorials"},
+		{Name: "Guides"},
+		{Name: "Cookbook"},
+		{Name: "Backends"},
+		{Name: "Reference"},
+		{Name: "Specification"},
+		{Name: "Design Records", Collapsible: true},
+		{Name: "Development", Collapsible: true},
+	}
 	for _, p := range pages {
-		i := 3
-		switch {
-		case p.Source == "README.md":
-			i = 0
-		case strings.HasPrefix(p.Source, "spec/"):
-			i = 1
-		case strings.HasPrefix(p.Source, "docs/tutorials/"):
-			i = 2
-		case strings.HasPrefix(p.Source, "docs/design/"):
-			i = 4
-		case p.Source == "docs/commit-messages.md" || strings.HasPrefix(p.Source, "docs/development/"):
-			i = 5
-		}
+		i := sectionIndex(p.Source)
 		sections[i].Pages = append(sections[i].Pages, p)
 		if p == current {
 			sections[i].Active = true
@@ -73,6 +95,34 @@ func navigation(pages []*page, current *page) []navSection {
 		sort.SliceStable(sections[i].Pages, func(a, b int) bool {
 			return path.Base(sections[i].Pages[a].Source) == "README.md" && path.Base(sections[i].Pages[b].Source) != "README.md"
 		})
+	}
+	backends := &sections[4]
+	var localPages, postgresPages []*page
+	for _, p := range backends.Pages {
+		switch {
+		case p.Source == "docs/backends/README.md":
+		case strings.HasPrefix(p.Source, "docs/backends/local/"):
+			localPages = append(localPages, p)
+		case strings.HasPrefix(p.Source, "docs/backends/postgresql/"):
+			postgresPages = append(postgresPages, p)
+		}
+	}
+	child := func(name string, pages []*page) navSection {
+		sort.SliceStable(pages, func(a, b int) bool {
+			return path.Base(pages[a].Source) == "README.md" && path.Base(pages[b].Source) != "README.md"
+		})
+		section := navSection{Name: name, Pages: pages, Collapsible: true}
+		for _, p := range pages {
+			section.Active = section.Active || p == current
+		}
+		return section
+	}
+	backends.Children = []navSection{child("Local", localPages), child("PostgreSQL", postgresPages)}
+	for _, p := range backends.Pages {
+		if p.Source == "docs/backends/README.md" {
+			backends.Pages = []*page{p}
+			break
+		}
 	}
 	var result []navSection
 	for _, section := range sections {
@@ -154,7 +204,17 @@ func build(repo, out string) (int, error) {
 			return 0, err
 		}
 	}
-	order := []string{"README.md", "spec/README.md", "spec/syntax.md", "spec/types.md", "spec/evaluation.md", "spec/methods.md", "spec/capabilities.md", "docs/guides/README.md", "docs/guides/getting-started.md", "docs/guides/schemas-and-values.md", "docs/guides/configuration.md", "docs/guides/scalar-methods.md", "docs/guides/collections.md", "docs/guides/callbacks.md", "docs/development/README.md", "docs/development/parser.md", "docs/development/parsing.md", "docs/development/site.md", "docs/design/README.md"}
+	order := []string{
+		"README.md",
+		"spec/README.md", "spec/syntax.md", "spec/types.md", "spec/evaluation.md", "spec/methods.md", "spec/capabilities.md",
+		"docs/tutorials/README.md",
+		"docs/guides/README.md", "docs/guides/getting-started.md", "docs/guides/compiling.md", "docs/guides/schemas-and-values.md", "docs/guides/scalar-methods.md", "docs/guides/collections.md", "docs/guides/callbacks.md", "docs/guides/json.md", "docs/guides/temporal.md",
+		"docs/cookbook/README.md",
+		"docs/reference/README.md", "docs/reference/methods.md", "docs/reference/go-api.md", "docs/reference/program-ir.md",
+		"docs/backends/README.md", "docs/backends/local/README.md", "docs/backends/local/configuration.md", "docs/backends/local/extensions.md", "docs/backends/postgresql/README.md",
+		"docs/design/README.md",
+		"docs/development/README.md", "docs/development/parser.md", "docs/development/parsing.md", "docs/development/site.md",
+	}
 	rank := func(s string) int {
 		for i, v := range order {
 			if v == s {
@@ -317,11 +377,17 @@ func build(repo, out string) (int, error) {
 	for i, p := range pages {
 		var b bytes.Buffer
 		v := view{Current: p, Pages: pages, Sections: navigation(pages, p), Root: relative(p.URL, "index.html")}
-		if i > 0 {
-			v.Prev = pages[i-1]
+		for j := i - 1; j >= 0; j-- {
+			if sectionIndex(pages[j].Source) == sectionIndex(p.Source) {
+				v.Prev = pages[j]
+				break
+			}
 		}
-		if i+1 < len(pages) {
-			v.Next = pages[i+1]
+		for j := i + 1; j < len(pages); j++ {
+			if sectionIndex(pages[j].Source) == sectionIndex(p.Source) {
+				v.Next = pages[j]
+				break
+			}
 		}
 		if err := tmpl.Execute(&b, v); err != nil {
 			return 0, err
@@ -331,6 +397,23 @@ func build(repo, out string) (int, error) {
 			return 0, err
 		}
 		if err := os.WriteFile(file, b.Bytes(), 0644); err != nil {
+			return 0, err
+		}
+	}
+	for old, target := range map[string]string{
+		"docs/guides/local-evaluation.html": "docs/backends/local/index.html",
+		"docs/guides/configuration.html":    "docs/backends/local/configuration.html",
+		"docs/guides/extensions.html":       "docs/backends/local/extensions.html",
+		"docs/guides/sql.html":              "docs/backends/postgresql/index.html",
+		"docs/guides/program-ir.html":       "docs/reference/program-ir.html",
+	} {
+		file := filepath.Join(out, filepath.FromSlash(old))
+		if err := os.MkdirAll(filepath.Dir(file), 0755); err != nil {
+			return 0, err
+		}
+		href := relative(old, target)
+		body := fmt.Sprintf("<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><meta http-equiv=\"refresh\" content=\"0; url=%s\"><link rel=\"canonical\" href=\"%s\"><title>Page moved</title><p>This page moved to <a href=\"%s\">its new location</a>.</p></html>\n", html.EscapeString(href), html.EscapeString(href), html.EscapeString(href))
+		if err := os.WriteFile(file, []byte(body), 0644); err != nil {
 			return 0, err
 		}
 	}

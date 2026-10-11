@@ -1,4 +1,4 @@
-# Build and Run a Local Filter
+# Local Backend
 
 Compile a query once, build a reusable local filter, and match records against
 the schema used by the engine. A filter is immutable and safe for concurrent
@@ -114,17 +114,33 @@ during evaluation. These budgets apply to each match call independently.
 The local evaluator supports core boolean and arithmetic operators, equality
 and ordering, regex operators, truthiness, null and no-value propagation,
 postfix guards and explicit type guards, indexing, collection literals, and
-logical short-circuiting. It supports the scalar and string methods in the
-[scalar/string guide](scalar-methods.md) and list/object methods in the
-[collections guide](collections.md) and [callback guide](callbacks.md).
-JSON conversions are covered in the [JSON guide](json.md). Local custom methods
-are supported; see the [extension guide](extensions.md) for declaration,
-capability, evaluator, and metering requirements. Base64 conversions are covered in the
-[scalar/string guide](scalar-methods.md). A program containing a method or
+logical short-circuiting. It supports every built-in method family in the
+[method catalog](../../reference/methods.md):
+
+| Receiver family | Methods |
+|:--|:--|
+| Any | `type()`, `tojson()`, `tostring()`, `in(any...)`, `exists()` |
+| Bool | `and(bool)`, `or(bool)`, `not()` |
+| Number | `round()`, `ceil()`, `floor()` |
+| String and bytes | Text, JSON/base64, timestamp/duration conversions, and byte length |
+| List | Size, index presence, membership, uniqueness, sort, concat, callbacks, and folds |
+| Object | Size, key presence, get, keys, values, and items |
+| Timestamp and duration | Parsing, comparison, arithmetic, components, and formatting |
+
+For exact parameter and result types, consult the
+[method reference](../../reference/methods.md). The backend
+supports the scalar and string examples in the
+[scalar/string guide](../../guides/scalar-methods.md) and list/object methods in
+the [collections guide](../../guides/collections.md) and
+[callback guide](../../guides/callbacks.md). JSON conversions are covered in
+the [JSON guide](../../guides/json.md). Local custom methods are supported; see
+[Local extension methods](extensions.md) for declaration, capability,
+evaluator, and metering requirements. Base64 conversions are covered in the
+[scalar/string guide](../../guides/scalar-methods.md). A program containing a method or
 operation not supported by the local backend fails during `Build` with
 `hff.BackendError`. Build never silently drops an operation. Use the
-[method catalog](../../spec/methods.md) and language specification for query
-semantics; backend support is reported separately from compile validity.
+[normative method specification](../../../spec/methods.md) for query semantics;
+backend support is reported separately from compile validity.
 
 Local regex matching follows HFF's RE2 reference syntax except that `\C` is
 excluded and is treated as an invalid pattern, producing null. Other backends

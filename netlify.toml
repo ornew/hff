@@ -30,6 +30,31 @@
   to = "/docs/development/parsing.html"
   status = 301
 
+[[redirects]]
+  from = "/docs/guides/local-evaluation.html"
+  to = "/docs/backends/local/index.html"
+  status = 301
+
+[[redirects]]
+  from = "/docs/guides/configuration.html"
+  to = "/docs/backends/local/configuration.html"
+  status = 301
+
+[[redirects]]
+  from = "/docs/guides/extensions.html"
+  to = "/docs/backends/local/extensions.html"
+  status = 301
+
+[[redirects]]
+  from = "/docs/guides/sql.html"
+  to = "/docs/backends/postgresql/index.html"
+  status = 301
+
+[[redirects]]
+  from = "/docs/guides/program-ir.html"
+  to = "/docs/reference/program-ir.html"
+  status = 301
+
 [[headers]]
   for = "/*"
   [headers.values]

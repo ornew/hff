@@ -204,7 +204,7 @@ func TestGroupedNavigationAndRemovedPages(t *testing.T) {
 	}
 	for _, name := range []string{"spec/syntax.html", "docs/design/001-test.html"} {
 		page := read(t, out, name)
-		for _, want := range []string{"<h2>Language</h2>", "<summary>Design Records</summary>"} {
+		for _, want := range []string{"<h2>Specification</h2>", "<summary>Design Records</summary>"} {
 			if !strings.Contains(page, want) {
 				t.Errorf("%s lacks grouped navigation %q", name, want)
 			}
@@ -225,9 +225,19 @@ func TestNavigationPutsSectionIntroductionsFirst(t *testing.T) {
 		{Source: "spec/README.md", URL: "spec/index.html"},
 		{Source: "docs/design/001-record.md", URL: "docs/design/001-record.html"},
 		{Source: "docs/design/README.md", URL: "docs/design/index.html"},
+		{Source: "docs/guides/first.md", URL: "docs/guides/first.html"},
+		{Source: "docs/guides/README.md", URL: "docs/guides/index.html"},
+		{Source: "docs/cookbook/recipe.md", URL: "docs/cookbook/recipe.html"},
+		{Source: "docs/cookbook/README.md", URL: "docs/cookbook/index.html"},
+		{Source: "docs/reference/methods.md", URL: "docs/reference/methods.html"},
+		{Source: "docs/reference/README.md", URL: "docs/reference/index.html"},
+		{Source: "docs/backends/local/README.md", URL: "docs/backends/local/index.html"},
+		{Source: "docs/backends/README.md", URL: "docs/backends/index.html"},
+		{Source: "docs/development/checks.md", URL: "docs/development/checks.html"},
+		{Source: "docs/development/README.md", URL: "docs/development/index.html"},
 	}
 	sections := navigation(pages, current)
-	for _, name := range []string{"Tutorials", "Language", "Design Records"} {
+	for _, name := range []string{"Tutorials", "Guides", "Cookbook", "Backends", "Reference", "Specification", "Design Records", "Development"} {
 		var found *navSection
 		for i := range sections {
 			if sections[i].Name == name {
@@ -243,5 +253,123 @@ func TestNavigationPutsSectionIntroductionsFirst(t *testing.T) {
 		if section.Name == "Tutorials" && !section.Active {
 			t.Fatal("current tutorials section is not active")
 		}
+	}
+}
+
+func TestBackendsNavigationGroupsAndExpandsCurrentBackend(t *testing.T) {
+	localIntro := &page{Source: "docs/backends/local/README.md", URL: "docs/backends/local/index.html"}
+	localConfig := &page{Source: "docs/backends/local/configuration.md", URL: "docs/backends/local/configuration.html"}
+	pgIntro := &page{Source: "docs/backends/postgresql/README.md", URL: "docs/backends/postgresql/index.html"}
+	backendIntro := &page{Source: "docs/backends/README.md", URL: "docs/backends/index.html"}
+	current := localConfig
+	sections := navigation([]*page{pgIntro, localConfig, backendIntro, localIntro}, current)
+	var backends *navSection
+	for i := range sections {
+		if sections[i].Name == "Backends" {
+			backends = &sections[i]
+			break
+		}
+	}
+	if backends == nil || len(backends.Pages) != 1 || backends.Pages[0] != backendIntro {
+		t.Fatalf("backend introduction is not the parent entry: %#v", backends)
+	}
+	if len(backends.Children) != 2 || backends.Children[0].Name != "Local" || backends.Children[1].Name != "PostgreSQL" {
+		t.Fatalf("unexpected backend groups: %#v", backends.Children)
+	}
+	if !backends.Active || !backends.Children[0].Active || backends.Children[1].Active {
+		t.Fatalf("active backend group mismatch: %#v", backends)
+	}
+	if backends.Children[0].Pages[0] != localIntro {
+		t.Fatal("local introduction is not first within its group")
+	}
+}
+
+func TestBackendDisclosuresWithinPlainSections(t *testing.T) {
+	repo := fixture(t)
+	write(t, repo, "docs/backends/README.md", "# Backends\n")
+	write(t, repo, "docs/backends/local/README.md", "# Local backend\n")
+	write(t, repo, "docs/backends/local/configuration.md", "# Configuration\n")
+	write(t, repo, "docs/backends/postgresql/README.md", "# PostgreSQL\n")
+	write(t, repo, "docs/reference/README.md", "# Reference\n")
+	write(t, repo, "docs/reference/methods.md", "# Methods\n")
+	out := filepath.Join(t.TempDir(), "output")
+	if _, err := build(repo, out); err != nil {
+		t.Fatal(err)
+	}
+	local := read(t, out, "docs/backends/local/configuration.html")
+	for _, want := range []string{"<h2>Backends</h2>", "<summary>Local</summary>", "<summary>PostgreSQL</summary>", "aria-current=\"page\""} {
+		if !strings.Contains(local, want) {
+			t.Errorf("local backend sidebar lacks %q", want)
+		}
+	}
+	if !strings.Contains(local, `<details class="nav-subsection" open><summary>Local</summary>`) {
+		t.Fatal("active backend child is not expanded")
+	}
+	reference := read(t, out, "docs/reference/methods.html")
+	if !strings.Contains(reference, `<h2>Reference</h2>`) {
+		t.Fatal("Reference must remain a plain section heading")
+	}
+}
+
+func TestSectionClassificationOrderAndPager(t *testing.T) {
+	want := map[string]int{
+		"README.md":                  0,
+		"docs/tutorials/README.md":   1,
+		"docs/guides/README.md":      2,
+		"docs/cookbook/README.md":    3,
+		"docs/backends/README.md":    4,
+		"docs/reference/README.md":   5,
+		"spec/README.md":             6,
+		"docs/design/README.md":      7,
+		"docs/development/README.md": 8,
+	}
+	for source, index := range want {
+		if got := sectionIndex(source); got != index {
+			t.Errorf("sectionIndex(%q) = %d, want %d", source, got, index)
+		}
+	}
+	repo := fixture(t)
+	write(t, repo, "docs/tutorials/README.md", "# Tutorials\n")
+	write(t, repo, "docs/tutorials/01.md", "# First tutorial\n")
+	write(t, repo, "docs/tutorials/02.md", "# Second tutorial\n")
+	write(t, repo, "docs/guides/README.md", "# Guides\n")
+	out := filepath.Join(t.TempDir(), "output")
+	if _, err := build(repo, out); err != nil {
+		t.Fatal(err)
+	}
+	first := read(t, out, "docs/tutorials/01.html")
+	if !strings.Contains(first, "<small>Next</small>Second tutorial") {
+		t.Fatal("tutorial pager lacks next page in the same section")
+	}
+	if strings.Contains(first, "<small>Next</small>Guides") {
+		t.Fatal("tutorial pager crossed into Guides")
+	}
+}
+
+func TestMovedPagesHaveLocalRedirectsAndStayOutOfSearch(t *testing.T) {
+	repo := fixture(t)
+	write(t, repo, "docs/backends/local/README.md", "# Local backend\n")
+	write(t, repo, "docs/backends/local/configuration.md", "# Configuration\n")
+	write(t, repo, "docs/backends/local/extensions.md", "# Extensions\n")
+	write(t, repo, "docs/backends/postgresql/README.md", "# PostgreSQL\n")
+	write(t, repo, "docs/reference/program-ir.md", "# Program reference\n")
+	out := filepath.Join(t.TempDir(), "output")
+	if _, err := build(repo, out); err != nil {
+		t.Fatal(err)
+	}
+	redirects := map[string]string{
+		"docs/guides/local-evaluation.html": "../backends/local/index.html",
+		"docs/guides/configuration.html":    "../backends/local/configuration.html",
+		"docs/guides/extensions.html":       "../backends/local/extensions.html",
+		"docs/guides/sql.html":              "../backends/postgresql/index.html",
+		"docs/guides/program-ir.html":       "../reference/program-ir.html",
+	}
+	for old, target := range redirects {
+		if body := read(t, out, old); !strings.Contains(body, target) {
+			t.Errorf("redirect %s does not target %s", old, target)
+		}
+	}
+	if strings.Contains(read(t, out, "search-index.js"), "docs/guides/local-evaluation.html") {
+		t.Fatal("redirect alias was added to search index")
 	}
 }

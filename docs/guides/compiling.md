@@ -29,7 +29,7 @@ Compilation parses the complete query, resolves schema references and method
 signatures, checks types and enabled capabilities, and enforces the rule that a
 filter must depend on service data. The method registry includes configured
 extension declarations. Local implementations are registered when building a
-filter; see the [extension guide](extensions.md). See [the program guide](program-ir.md)
+filter; see the [local extension guide](../backends/local/extensions.md). See [the program guide](../reference/program-ir.md)
 for the immutable IR and its source spans.
 
 ## Handle diagnostics
@@ -99,9 +99,9 @@ finite limits unless unlimited mode was explicitly selected.
 
 Compilation produces a typed plan only. The local backend checks support and
 requires implementations for used extension methods when building a filter; see
-the [local evaluation guide](local-evaluation.md) for supported operations and
+the [local backend guide](../backends/local/README.md) for supported operations and
 limits. SQL extensions require separate dialect-specific translators; see the
-[PostgreSQL guide](sql.md) for typed expressions and execution guarantees.
+[PostgreSQL backend guide](../backends/postgresql/README.md) for typed expressions and execution guarantees.
 
 Run the complete example from the repository root:
 

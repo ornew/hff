@@ -2,8 +2,8 @@
 
 The local backend supports strict JSON parsing, canonical JSON serialization,
 and string conversion for every HFF value. Method signatures are listed in the
-[method specification](../../spec/methods.md). JSON methods use the local
-runtime limits described in the [configuration guide](configuration.md).
+[method reference](../reference/methods.md). JSON methods use the local
+runtime limits described in the [local backend configuration](../backends/local/configuration.md).
 
 ## Parse JSON
 

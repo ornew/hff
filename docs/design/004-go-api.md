@@ -274,7 +274,7 @@ Callback, and TypeGuard. TypeGuard is appended after the existing kinds to
 preserve their numeric values. Its child is the guarded expression and its
 payload is available through `Constraint()`. Their child order and payload
 mapping are documented in the
-[program IR guide](../guides/program-ir.md). Binding IDs are unique within one
+[program IR reference](../reference/program-ir.md). Binding IDs are unique within one
 Program, including nested and shadowed callbacks; zero is invalid, and IDs from
 different programs have no shared identity. Callback metadata exposes parameter
 bindings in declaration order and captures by binding ID.

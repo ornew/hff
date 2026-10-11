@@ -2,7 +2,7 @@
 
 The local backend implements the list and object method families for immutable
 HFF values. The complete signatures and language rules are in the [method
-catalog](../../spec/methods.md); this guide focuses on useful query patterns.
+catalog](../reference/methods.md); this guide focuses on useful query patterns.
 
 ## List queries
 
@@ -66,7 +66,7 @@ Collection results are newly allocated and the input values remain immutable.
 Local per-match `MaxSteps` and `MaxGeneratedValues` limits cover traversal and
 generated collection containers and entries. Cancellation or a limit error
 aborts evaluation without returning a partial match. See the [local evaluation
-guide](local-evaluation.md) for backend configuration and error handling.
+guide](../backends/local/README.md) for backend configuration and error handling.
 
 Run the complete example from the repository root:
 

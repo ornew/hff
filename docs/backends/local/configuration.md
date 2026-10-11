@@ -1,4 +1,4 @@
-# Capabilities and Resource Limits
+# Local Backend Configuration and Limits
 
 ## Configuration options
 
@@ -69,7 +69,7 @@ group adds or removes both regex operators and string.matches. Unknown IDs are
 rejected. A declared extension uses `capabilities.Method(declaration.ID())` and
 must also be included in `engine.WithMethods`. The engine checks that every
 capability ID is built in or belongs to a configured declaration. See the
-[extension guide](extensions.md) for the complete flow.
+[local extension guide](extensions.md) for the complete flow.
 
 Structural equality permissions are checked during compilation for `=`/`!=`,
 `in()`, `list:contains()`, and `list:unique()`. Scalar comparisons and explicit

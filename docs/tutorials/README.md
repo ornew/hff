@@ -1,4 +1,4 @@
-# Tutorials
+# Introduction
 
 These tutorials build an HFF filter into a small Go service, one step at a
 time. They use Go 1.27.1 and only APIs available in this repository.
@@ -23,5 +23,8 @@ go run ./examples/extensions
 go run ./examples/sql-extensions
 ```
 
-For API details, continue with the [Go guides](../guides/README.md); for
-language behavior, see the [specification](../../spec/README.md).
+For feature explanations, continue with the [guides](../guides/README.md).
+Use the [cookbook](../cookbook/README.md) for focused filter recipes, the
+[reference](../reference/README.md) for exact contracts, and
+[Backends](../backends/README.md) for local and PostgreSQL behavior. The
+[language specification](../../spec/README.md) is normative.

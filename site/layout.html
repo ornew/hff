@@ -15,7 +15,7 @@
   <a class="skip" href="#content">Skip to content</a>
   <header class="topbar">
     <div class="topbar-inner">
-      <button class="icon-button menu-toggle" type="button" aria-label="Open navigation" aria-haspopup="dialog" aria-controls="navigation-dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <button class="icon-button menu-toggle{{if not .Current.Home}} sidebar-toggle{{end}}" type="button" aria-label="Open navigation" aria-haspopup="dialog" aria-controls="navigation-dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
       <a class="brand" href="{{.Root}}" aria-label="HFF home"><span class="brand-mark" aria-hidden="true">H<span>F</span>F</span></a>
       <nav class="topnav" aria-label="Main">
         {{range .Sections}}{{$section := .}}{{with index .Pages 0}}<a href="{{rel $.Current.URL .URL}}" {{if $section.Active}}{{if eq .URL $.Current.URL}}aria-current="page"{{else}}aria-current="location"{{end}}{{end}}>{{$section.Name}}</a>{{end}}{{end}}
@@ -31,7 +31,7 @@
   <main id="content" tabindex="-1">{{template "landing" .}}</main>
   {{else}}
   <div class="doc-shell">
-    <nav class="sidebar" aria-label="Documentation">{{template "doclinks" .}}</nav>
+    <nav id="documentation-sidebar" class="sidebar" aria-label="Documentation">{{template "doclinks" .}}</nav>
     <main id="content" tabindex="-1"><article class="prose">{{.Current.Body}}</article>
       <footer class="doc-footer"><a class="source-link" href="https://github.com/ornew/hff/blob/main/{{.Current.Source}}">View source on GitHub ↗</a>
         <nav class="pager" aria-label="Adjacent pages">{{with .Prev}}<a href="{{rel $.Current.URL .URL}}"><small>Previous</small>{{.Title}}</a>{{end}}{{with .Next}}<a href="{{rel $.Current.URL .URL}}"><small>Next</small>{{.Title}}</a>{{end}}</nav>
@@ -57,7 +57,8 @@
 </body>
 </html>
 {{define "doclinks"}}{{range .Sections}}
-{{if .Collapsible}}<details class="nav-section" {{if .Active}}open{{end}}><summary>{{.Name}}</summary>{{else}}<section class="nav-section"><h2>{{.Name}}</h2>{{end}}
-{{range .Pages}}<a href="{{rel $.Current.URL .URL}}" {{if eq .URL $.Current.URL}}aria-current="page"{{end}}>{{if eq .Source "README.md"}}Home{{else if eq .Source "spec/README.md"}}Introduction{{else if eq .Source "docs/design/README.md"}}Introduction{{else}}{{.Title}}{{end}}</a>{{end}}
+{{if .Collapsible}}<details class="nav-section" {{if or .Active (eq .Name "Backends") (eq .Name "Reference")}}open{{end}}><summary>{{.Name}}</summary>{{else}}<section class="nav-section"><h2>{{.Name}}</h2>{{end}}
+{{range .Pages}}<a href="{{rel $.Current.URL .URL}}" {{if eq .URL $.Current.URL}}aria-current="page"{{end}}>{{if eq .Source "README.md"}}Home{{else if eq .Source "spec/README.md"}}Introduction{{else if eq .Source "docs/design/README.md"}}Introduction{{else if eq .Source "docs/backends/README.md"}}Introduction{{else}}{{.Title}}{{end}}</a>{{end}}
+{{range .Children}}<details class="nav-subsection" {{if .Active}}open{{end}}><summary>{{.Name}}</summary>{{range .Pages}}<a href="{{rel $.Current.URL .URL}}" {{if eq .URL $.Current.URL}}aria-current="page"{{end}}>{{if or (eq .Source "docs/backends/local/README.md") (eq .Source "docs/backends/postgresql/README.md")}}Introduction{{else}}{{.Title}}{{end}}</a>{{end}}</details>{{end}}
 {{if .Collapsible}}</details>{{else}}</section>{{end}}
 {{end}}{{end}}

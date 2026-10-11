@@ -1,4 +1,4 @@
-# Design Records
+# Introduction
 
 These documents explain the rationale, contracts, and tradeoffs behind HFF's
 language design. The [language specification](../../spec/README.md) defines the
