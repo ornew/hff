@@ -29,3 +29,19 @@ func TestSelectionDoesNotMutateProfiles(t *testing.T) {
 		t.Fatal("empty and unspecified policies conflated")
 	}
 }
+
+func TestBase64MethodsCanBeSelected(t *testing.T) {
+	for _, name := range []string{"string.frombase64", "bytes.tobase64"} {
+		id := capabilities.Method(name)
+		if !capabilities.Standard().Has(id) {
+			t.Fatalf("standard profile omits %s", name)
+		}
+		selected := capabilities.None().Allow(id)
+		if err := selected.Check(); err != nil {
+			t.Fatalf("explicitly selecting %s: %v", name, err)
+		}
+		if selected.Without(id).Has(id) {
+			t.Fatalf("cannot disable %s", name)
+		}
+	}
+}

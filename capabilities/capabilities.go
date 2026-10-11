@@ -36,6 +36,9 @@ func init() {
 	for _, name := range []string{"list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr"} {
 		builtins[Method(name)] = []ID{Callbacks}
 	}
+	for _, name := range []string{"string.frombase64", "bytes.tobase64"} {
+		builtins[Method(name)] = nil
+	}
 }
 
 // Set's zero value means unspecified. None is an explicitly empty policy.
