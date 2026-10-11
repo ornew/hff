@@ -85,9 +85,9 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 	if err != nil {
 		return expression{}, err
 	}
-	// Give each value and its no-value flag a relational name. Parent nodes
-	// reference these names rather than expanding child SQL repeatedly. This
-	// keeps chained calls linear in output size while retaining both states.
+	// Give each value and any dynamic no-value flag a relational name. Parent
+	// nodes reference these names rather than expanding child SQL repeatedly.
+	// Preserve constant presence so it simplifies surrounding conditions.
 	if value.kind == hff.NullType && value.present == "TRUE" {
 		return value, nil
 	}
@@ -101,12 +101,16 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 	// OFFSET 0 keeps PostgreSQL from pulling these projections into their
 	// consumers and recursively duplicating a chained expression during
 	// planning. Each step still returns exactly one row.
-	b.steps = append(b.steps, "(SELECT "+value.code+" AS v, "+value.present+" AS p OFFSET 0) AS "+alias)
+	projection := "(SELECT " + value.code + " AS v"
+	if value.present != "TRUE" {
+		projection += ", " + value.present + " AS p"
+		value.present = alias + ".p"
+	}
+	b.steps = append(b.steps, projection+" OFFSET 0) AS "+alias)
 	value.code = alias + ".v"
 	if isJSON {
 		b.jsonValues[value.code] = format
 	}
-	value.present = alias + ".p"
 	return value, nil
 }
 

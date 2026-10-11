@@ -49,6 +49,25 @@ func compile(t *testing.T, source string) hff.Program {
 	return p
 }
 
+func TestConstantPresenceDoesNotCreateProjectionColumns(t *testing.T) {
+	for _, source := range []string{`age>=18 name="Alice"`, `age=null | flag`} {
+		query, err := hffsql.Build(context.Background(), compile(t, source), hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(query.Where(), " AS p") {
+			t.Fatalf("constant presence creates a redundant column for %s: %s", source, query.Where())
+		}
+	}
+	query, err := hffsql.Build(context.Background(), compile(t, `age!:[int]=null`), hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(query.Where(), " AS p") {
+		t.Fatal("guard-dependent presence must remain in the SQL plan:", query.Where())
+	}
+}
+
 func TestBuildConfigurationAndOwnership(t *testing.T) {
 	ctx := context.Background()
 	p := compile(t, `age>=18 name="O'Reilly"`)

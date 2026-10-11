@@ -146,6 +146,11 @@ PostgreSQL is the only currently supported SQL dialect.
 The builder uses relational subqueries for chained operations to keep generated
 SQL growth linear. This may make the predicate shape more involved; callers
 should treat it as opaque and rely on the bound parameters, not its exact text.
+When a step's presence is statically known to be true, the translator can retain
+that constant instead of projecting a separate presence column. Presence that
+depends on null or type guards remains explicit, as do value projections, so
+this simplification preserves null and no-value behavior. It is a conservative
+SQL-shape optimization; no performance improvement is claimed.
 
 ## Add a PostgreSQL translator
 
