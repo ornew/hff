@@ -79,17 +79,33 @@ and propagates through the ordinary HFF evaluation rules.
 For schema-known JSON objects, the backend supports `size()`, `has(key)`,
 `get(key)`, `keys()`, `values()`, and `items()`. Enumeration orders keys with
 PostgreSQL's `C` collation. For schema-known JSON lists, it supports `size()`
-and `has(index)`. Truthiness, `exists()`, `type()`, scalar comparison, and
-structural type guards are available when their types are known from the
-schema. The backend rejects an operation during `Build` when the JSON storage
-type cannot preserve the required HFF semantics.
+`has(index)`, `any()`, and `all()`. Nested callbacks can capture outer callback
+values and schema fields, with lexical shadowing:
+
+```hff
+orders:any(order=>order.items:any(item=>item.price>100))
+```
+
+The SQL backend preserves the callback result rules: a null list yields null,
+an empty list yields false for `any()` and true for `all()`, and each callback
+result is boolean-converted (including guarded no-value as false). AND, OR, and
+NOT keep their normal short-circuit and boolean behavior. This describes HFF
+results; SQL does not promise a physical callback evaluation order or enforce
+local `MaxSteps`/`MaxGeneratedValues` budgets. Explicit SQL execution-budget
+requirements unsupported by the selected backend are rejected by `Build`.
+
+Truthiness, `exists()`, `type()`, scalar comparison, and structural type guards
+are available when their types are known from the schema. The backend rejects
+an operation during `Build` when the JSON storage type cannot preserve the
+required HFF semantics.
 
 The following operations remain unsupported for JSON-backed values and return
 a source-located `hff.BackendError` from `Build`:
 
 - Dynamic `Any` decoding and unions with multiple non-null families.
-- Collection callbacks, structural equality, `contains()`, `unique()`,
-  `sort()`, and other collection transformations.
+- Transforming callbacks such as `map()`, `flatmap()`, `foldl()`, and `foldr()`;
+  structural equality, `contains()`, `unique()`, `sort()`, and other collection
+  transformations.
 - JSON parsing/serialization methods, conversions to bytes/timestamps/durations,
   and operations requiring a runtime type not fixed by the schema.
 
@@ -123,7 +139,7 @@ the service remains responsible for database timeouts and cancellation.
 
 The repository's tagged integration suite compares JSON and JSONB bindings
 against local evaluation on PostgreSQL 18.6. The current verified matrix has
-980 query/record pairs and covers scalar and nested
+1,320 query/record pairs and covers scalar and nested
 access, null and missing-key cases, list indexing, object/list inspection,
 type guards, and type/truthiness predicates. To run it against a PostgreSQL
 container with `psql` installed:

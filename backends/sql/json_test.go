@@ -2,6 +2,8 @@ package sql_test
 
 import (
 	"context"
+	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/ornew/hff"
@@ -18,6 +20,8 @@ func jsonEngine(t *testing.T) *engine.Engine {
 		schema.Nullable(schema.List("scores", schema.NullableType(schema.IntType))),
 		schema.Nullable(schema.Map("labels", schema.NullableType(schema.StringType))),
 		schema.Nullable(schema.List("factors", schema.FloatType)),
+		schema.Nullable(schema.List("groups", schema.NullableType(schema.ListOf(schema.NullableType(schema.IntType))))),
+		schema.Nullable(schema.List("people", schema.NullableType(schema.Struct(schema.Nullable(schema.String("name")), schema.Nullable(schema.Int("age")), schema.Nullable(schema.Field("father", schema.Struct(schema.Nullable(schema.String("name"))))))))),
 	)), engine.WithCapabilities(capabilities.Standard()))
 	if err != nil {
 		t.Fatal(err)
@@ -27,7 +31,7 @@ func jsonEngine(t *testing.T) *engine.Engine {
 
 func jsonBindings(format hffsql.JSONFormat) []hffsql.Binding {
 	var result []hffsql.Binding
-	for _, name := range []string{"profile", "scores", "labels", "factors"} {
+	for _, name := range []string{"profile", "scores", "labels", "factors", "groups", "people"} {
 		result = append(result, hffsql.BindJSON(hff.Path{name}, hffsql.Column("records", name), format))
 	}
 	return result
@@ -35,10 +39,17 @@ func jsonBindings(format hffsql.JSONFormat) []hffsql.Binding {
 
 func jsonQueries() []string {
 	return []string{
+		`people:any(x=>x.age>=18 x.name="Alice")`, `people:all(x=>x!.age>=0)`,
+		`people:any(x=>x.father!.name="Bob"|x.name="Alice")`, `people:any(x=>scores:any(y=>y<x.age))`,
+		`people:any(x=>people:any(x=>x.name="Alice"))`, `people:any(x=>!x!.age)`,
 		`profile.father.name="Bob"`, `profile!.father!.name=null`, `profile.father:has("name")`,
 		`profile.age=9007199254740992.0`, `profile.age>9007199254740992.0`, `profile.age<9223372036854775808.0`,
 		`profile.name="Alice"`, `profile.age>=18`, `profile=null`, `profile!.name=null`, `!profile!.name=null`,
 		`profile:has("name")`, `profile:get("name")="Alice"`, `profile:size=2`, `profile`, `profile:exists`,
+		`scores:any(x=>x>10)`, `scores:all(x=>x>0)`, `scores:any(x=>x=null)`, `scores:all(x=>x!:exists)`,
+		`scores:any(x=>profile.age>x profile.name="Alice")`, `scores:any(x=>scores:all(y=>y>x))`,
+		`scores:any(x=>scores:any(x=>x=20))`, `groups:any(xs=>xs:any(x=>x>10))`, `groups:all(xs=>xs:all(x=>x!:exists))`,
+		`groups:any(xs=>xs:all(x=>x>0)|xs:size=0)`, `!groups:any(xs=>xs!:exists)`,
 		`scores[0]=10`, `scores[-1]=null`, `scores[1.0]=20`, `scores[0.5]=null`, `scores[2147483648]=null`,
 		`scores:size=3`, `scores:has(-1)`, `scores:has(99)`, `scores:has(0.5)=null`, `scores`,
 		`scores:[list[int|null]]:size=3`, `scores:[list[string]]:exists`, `!scores:[list[string]]:exists`,
@@ -94,7 +105,7 @@ func TestJSONBindingRejectsConflictingPhysicalMappings(t *testing.T) {
 
 func TestJSONUnsupportedSemanticsAreExplicitBuildErrors(t *testing.T) {
 	ctx := context.Background()
-	for _, source := range []string{`scores=[10,20]`, `labels:tojson="{}"`, `scores:any(x=>x>10)`, `scores:unique`, `scores:sort[0]=10`, `scores:contains(10)`} {
+	for _, source := range []string{`scores=[10,20]`, `labels:tojson="{}"`, `scores:unique`, `scores:sort[0]=10`, `scores:contains(10)`} {
 		p, err := jsonEngine(t).Compile(ctx, source)
 		if err != nil {
 			t.Fatal(source, err)
@@ -112,4 +123,36 @@ func TestJSONUnsupportedSemanticsAreExplicitBuildErrors(t *testing.T) {
 	}
 	_, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindJSON(hff.Path{"x"}, hffsql.Column("x"), hffsql.JSONB)))
 	requireCode(t, err, hff.BackendError)
+}
+
+func TestJSONCallbacksConcurrentBuildsPreserveScopes(t *testing.T) {
+	ctx := context.Background()
+	p, err := jsonEngine(t).Compile(ctx, `people:any(x=>scores:any(y=>y<x.age) x.name="Alice") groups:all(xs=>xs:all(x=>x!=null))`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	build := func() (*hffsql.Query, error) {
+		return hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(jsonBindings(hffsql.JSONB)...))
+	}
+	expected, err := build()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workers sync.WaitGroup
+	for range 8 {
+		workers.Go(func() {
+			for range 20 {
+				query, err := build()
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				if query.Where() != expected.Where() || !reflect.DeepEqual(query.Args(), expected.Args()) {
+					t.Error("callback scope leaked between builds")
+					return
+				}
+			}
+		})
+	}
+	workers.Wait()
 }

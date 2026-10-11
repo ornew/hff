@@ -21,6 +21,7 @@ type builder struct {
 	methods      map[string]MethodImplementation
 	jsonBindings map[string]JSONFormat
 	jsonValues   map[string]JSONFormat
+	parameters   map[hff.BindingID]jsonParameter
 }
 
 // present tracks HFF's internal no-value separately from SQL NULL.
@@ -114,6 +115,16 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		return boolean("TRUE"), nil
 	case hff.LiteralNode:
 		return b.literal(n)
+	case hff.ParameterNode:
+		binding, ok := n.Binding()
+		if !ok {
+			return expression{}, b.failure(n, "callback parameter has no binding")
+		}
+		parameter, ok := b.parameters[binding.ID()]
+		if !ok {
+			return expression{}, b.failure(n, "unbound callback parameter")
+		}
+		return b.jsonDecode(n, parameter.code, parameter.format, n.Type(), "TRUE")
 	case hff.VariableNode, hff.FieldNode:
 		if value, handled, err := b.jsonPath(n); handled {
 			return value, err
@@ -468,6 +479,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		if _, custom := signatures[0].Declaration(); custom {
 			return b.extension(n, method)
 		}
+	}
+	if name == "any" || name == "all" {
+		return b.jsonPredicate(n, name)
 	}
 	switch name {
 	case "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items":

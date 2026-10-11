@@ -72,6 +72,11 @@ func (b *builder) jsonDecode(n hff.Node, code string, format JSONFormat, typ hff
 }
 func (b *builder) hasJSONAncestor(n hff.Node) bool {
 	for n.Valid() {
+		if binding, ok := n.Binding(); ok {
+			if _, exists := b.parameters[binding.ID()]; exists {
+				return true
+			}
+		}
 		if path, ok := n.Path(); ok {
 			for size := len(path); size > 0; size-- {
 				if _, yes := b.jsonBindings[pathKey(path[:size])]; yes {

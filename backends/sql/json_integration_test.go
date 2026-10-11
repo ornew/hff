@@ -41,13 +41,34 @@ func TestPostgreSQLJSONParity(t *testing.T) {
 	for _, n := range []int64{9007199254740991, 9007199254740992, 9007199254740993, math.MaxInt64, math.MinInt64} {
 		rows = append(rows, row{[]hff.Value{obj(map[string]hff.Value{"name": hff.String("Alice"), "age": hff.Int(n), "father": obj(map[string]hff.Value{"name": hff.String("Bob")})}), hff.List(), obj(map[string]hff.Value{}), hff.List(hff.Float(math.SmallestNonzeroFloat64), hff.Float(math.MaxFloat64))}, []string{`{"name":"Alice","age":` + strconv.FormatInt(n, 10) + `,"father":{"name":"Bob"}}`, `[]`, `{}`, `[5e-324,1.7976931348623157e308]`}, false})
 	}
+	for i := range rows {
+		value := hff.List(hff.List(hff.Int(10), hff.Int(20)), hff.List(), hff.Null(), hff.List(hff.Null()))
+		document := `[[10,20],[],null,[null]]`
+		if i < 2 {
+			value = hff.Null()
+			document = "null"
+		} else if i == 3 {
+			value = hff.List()
+			document = "[]"
+		}
+		rows[i].values = append(rows[i].values, value)
+		rows[i].documents = append(rows[i].documents, document)
+		people := hff.List(rows[i].values[0], hff.Null())
+		peopleJSON := "[" + rows[i].documents[0] + ",null]"
+		if i < 2 {
+			people = hff.Null()
+			peopleJSON = "null"
+		}
+		rows[i].values = append(rows[i].values, people)
+		rows[i].documents = append(rows[i].documents, peopleJSON)
+	}
 	e := jsonEngine(t)
 	var script strings.Builder
 	var expected []string
 	var descriptions []string
 	for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
 		table := "hff_fixture_" + string(format)
-		fmt.Fprintf(&script, "CREATE TEMP TABLE %s (id integer,profile %s,scores %s,labels %s,factors %s);\n", table, format, format, format, format)
+		fmt.Fprintf(&script, "CREATE TEMP TABLE %s (id integer,profile %s,scores %s,labels %s,factors %s,groups %s,people %s);\n", table, format, format, format, format, format, format)
 		for ri, r := range rows {
 			var data []string
 			for _, document := range r.documents {
@@ -73,7 +94,7 @@ func TestPostgreSQLJSONParity(t *testing.T) {
 				t.Fatal(err)
 			}
 			for ri, r := range rows {
-				record := obj(map[string]hff.Value{"profile": r.values[0], "scores": r.values[1], "labels": r.values[2], "factors": r.values[3]})
+				record := obj(map[string]hff.Value{"profile": r.values[0], "scores": r.values[1], "labels": r.values[2], "factors": r.values[3], "groups": r.values[4], "people": r.values[5]})
 				match, err := filter.Match(ctx, record)
 				if err != nil {
 					t.Fatal(source, ri, err)
