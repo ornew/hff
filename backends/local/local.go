@@ -89,9 +89,6 @@ func checkSupported(ctx context.Context, n plan.Node) error {
 			}
 		}
 	}
-	if n.Kind() == plan.CallbackNode {
-		return &hff.Error{Code: hff.BackendError, Message: "local backend does not support callbacks"}
-	}
 	for i := 0; i < n.ChildCount(); i++ {
 		child, _ := n.Child(i)
 		if err := checkSupported(ctx, child); err != nil {

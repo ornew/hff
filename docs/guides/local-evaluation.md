@@ -116,11 +116,11 @@ and ordering, regex operators, truthiness, null and no-value propagation,
 postfix guards and explicit type guards, indexing, collection literals, and
 logical short-circuiting. It supports the scalar and string methods in the
 [scalar/string guide](scalar-methods.md) and list/object methods in the
-[collections guide](collections.md). Callback methods, temporal/JSON/base64
-conversions, and custom extension implementations are not yet supported. A
-program containing a method or operation not supported by the local backend
-fails during `Build` with `hff.BackendError`. Build never silently drops an
-operation. Use the
+[collections guide](collections.md) and [callback guide](callbacks.md).
+Temporal/JSON/base64 conversions and custom extension implementations are not
+yet supported. A program containing a method or operation not supported by the
+local backend fails during `Build` with `hff.BackendError`. Build never
+silently drops an operation. Use the
 [method catalog](../../spec/methods.md) and language specification for query
 semantics; backend support is reported separately from compile validity.
 

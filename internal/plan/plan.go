@@ -219,6 +219,14 @@ func (n Node) Parameters() ([]Binding, bool) {
 	}
 	return append([]Binding(nil), n.data.Parameters...), true
 }
+
+// ParametersView exposes immutable internal bindings without copying.
+func (n Node) ParametersView() ([]Binding, bool) {
+	if n.Kind() != CallbackNode {
+		return nil, false
+	}
+	return n.data.Parameters, true
+}
 func (n Node) Captures() ([]Binding, bool) {
 	if n.Kind() != CallbackNode {
 		return nil, false

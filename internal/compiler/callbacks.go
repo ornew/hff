@@ -71,6 +71,10 @@ func (c *compiler) higherOrder(receiver plan.Node, n *syntax.MethodCall) ([]plan
 			hasList := bottom(result)
 			var types []core.Type
 			for _, branch := range branches(result) {
+				if branch.Kind() == core.AnyType {
+					hasList = true
+					types = append(types, branch)
+				}
 				if branch.Kind() == core.ListType {
 					hasList = true
 					types = append(types, branch.Element())

@@ -19,6 +19,7 @@ func null() result                 { return ordinary(core.Null()) }
 type evaluation struct {
 	ctx              context.Context
 	record           core.Value
+	locals           map[plan.BindingID]core.Value
 	limits           core.Limits
 	steps, generated int
 }
@@ -67,6 +68,13 @@ func (e *evaluation) eval(n plan.Node) (result, error) {
 			v = core.Null()
 		}
 		return ordinary(v), nil
+	case plan.ParameterNode:
+		binding, _ := n.Binding()
+		value, exists := e.locals[binding.ID()]
+		if !exists {
+			return result{}, &core.Error{Code: core.BackendError, Message: "unbound callback parameter"}
+		}
+		return ordinary(value), nil
 	case plan.FieldNode:
 		receiver, err := e.child(n, 0)
 		if err != nil || !receiver.present {

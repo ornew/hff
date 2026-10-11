@@ -19,9 +19,9 @@ The local scalar/string set is:
 
 This set excludes `any:tostring()` and `any:tojson()`, temporal conversions,
 JSON parsing, and base64 conversions. List/object methods are covered in the
-[collections guide](collections.md); callback methods remain unavailable. A
-query can compile successfully while still failing local `Build` with
-`hff.BackendError` for an unsupported method.
+[collections guide](collections.md), and callback methods in the
+[callback guide](callbacks.md). A query can compile successfully while still
+failing local `Build` with `hff.BackendError` for an unsupported method.
 
 ## Use the methods in a filter
 

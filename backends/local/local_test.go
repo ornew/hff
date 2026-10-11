@@ -227,7 +227,7 @@ func FuzzLocalMatch(f *testing.F) {
 	if err != nil {
 		f.Fatal(err)
 	}
-	for _, s := range []string{`x=y`, `x+1>0`, `x~y`, `x:[list[int]]=[1]`, `x!.a=null`, `x[0]=y`, `x:number()=y`, `x:[string]:contains(y)`, `x:matches(y)`, `x:in(y)`, `x:and(y)`, `x!:exists()`, `x:sort()`, `x:unique()`, `x:items()`, `x:contains(null,y)`, `x:concat([y])`} {
+	for _, s := range []string{`x=y`, `x+1>0`, `x~y`, `x:[list[int]]=[1]`, `x!.a=null`, `x[0]=y`, `x:number()=y`, `x:[string]:contains(y)`, `x:matches(y)`, `x:in(y)`, `x:and(y)`, `x!:exists()`, `x:sort()`, `x:unique()`, `x:items()`, `x:contains(null,y)`, `x:concat([y])`, `x:map(v=>v+y)`, `x:flatmap(v=>v)`, `x:any(v=>v!)`, `x:foldr(0,(v,a)=>v-a)`, `x:map(v=>v:map(w=>w+1))`} {
 		f.Add(s, int64(42), []byte("abc"))
 	}
 	f.Fuzz(func(t *testing.T, source string, number int64, data []byte) {

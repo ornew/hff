@@ -14,6 +14,8 @@ func supportedMethod(id string) bool {
 		return true
 	case "list.size", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "object.size", "object.has", "object.get", "object.keys", "object.values", "object.items":
 		return true
+	case "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr":
+		return true
 	}
 	return false
 }
@@ -74,6 +76,9 @@ func (e *evaluation) call(n plan.Node) (result, error) {
 	}
 	if !found {
 		return null(), nil
+	}
+	if higherMethod(signature.ID()) {
+		return e.higher(n, receiver.value, signature.ID())
 	}
 	// Boolean methods preserve receiver-null propagation but evaluate their
 	// argument only when the receiver does not already determine the result.

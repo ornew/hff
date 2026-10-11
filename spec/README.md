@@ -51,8 +51,8 @@ These are development references, not dependencies of the HFF language contract.
 ## Implementation status
 
 The public compiler and a local evaluator for core operators, literals,
-indexing, guards, short-circuit logic, scalar/string methods, and list/object
-methods are implemented. Collection callbacks, temporal/JSON/base64 methods,
-SQL translation, and extension registration are not yet available in the local
-backend. A backend rejects unsupported compiled operations explicitly; compile
-validity alone does not promise support from every backend.
+indexing, guards, short-circuit logic, scalar/string methods, list/object
+methods, and collection callbacks are implemented. Temporal/JSON/base64
+methods, SQL translation, and extension registration are not yet available in
+the local backend. A backend rejects unsupported compiled operations
+explicitly; compile validity alone does not promise support from every backend.

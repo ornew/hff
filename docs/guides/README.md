@@ -11,13 +11,14 @@ compilation and backend lifecycle.
 - [Build and run a local filter](local-evaluation.md)
 - [Scalar and string methods](scalar-methods.md)
 - [List and object methods](collections.md)
+- [List callbacks and transformations](callbacks.md)
 - [Schemas and immutable values](schemas-and-values.md)
 - [Capabilities and resource limits](configuration.md)
 
 The current implementation provides values, schemas, feature selection, engine
 configuration, validated input, an internal syntax-only parser, public common
-query compilation, core local matching, scalar/string methods, and list/object
-methods. Collection callbacks, additional temporal/JSON/base64 methods, SQL
+query compilation, core local matching, scalar/string and list/object methods,
+and collection callbacks. Additional temporal/JSON/base64 methods, SQL
 translation, and extension implementation registration remain unavailable.
 Parser generation and the internal syntax parser are documented in the
 [Development section](../development/README.md), separately from integration
