@@ -9,6 +9,7 @@ query language; records provide context for individual design choices.
 | [001: Compact predicates](001-compact-predicates.md) | Whitespace as a visual and logical boundary |
 | [002: Guards and presence](002-guards-and-presence.md) | Value-preserving guards and explicit existence tests |
 | [003: Collection predicates](003-collection-predicates.md) | Short-circuiting any/all for common search intent |
+| [004: Go API](004-go-api.md) | Configuration, compilation, and backend construction |
 
 Use [000: Design Record Template](000-template.md) for a new `NNN-topic.md`
 record. Proposed, Accepted, and Implemented distinguish a proposal, an approved
