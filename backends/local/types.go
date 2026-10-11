@@ -40,8 +40,15 @@ func (e *evaluation) matchesType(v core.Value, t core.Type) (bool, error) {
 			return false, nil
 		}
 		fields := t.Fields()
+		// Missing optional fields still consume structural inspection work.
+		if err := e.charge(len(fields)); err != nil {
+			return false, err
+		}
 		known := make(map[string]bool, len(fields))
 		for _, field := range fields {
+			if err := cancelled(e.ctx); err != nil {
+				return false, err
+			}
 			known[field.Name] = true
 			value, present := values[field.Name]
 			if !present {

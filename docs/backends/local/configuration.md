@@ -106,7 +106,7 @@ provides the same explicit choice when assembling configuration as data.
 | MaxSyntaxDepth | 64 | Syntax nesting per compilation |
 | MaxCallbackDepth | 64 | Nested callback depth per compilation; the outermost callback is depth 1 |
 | MaxCompileSteps | 1,000,000 | Semantic analysis visits per compilation, including repeated callback inference |
-| MaxSteps | 1,000,000 | Evaluated nodes and traversed data per local match |
+| MaxSteps | 1,000,000 | Evaluated nodes, traversed data, and declared struct fields checked per local match |
 | MaxGeneratedValues | 100,000 | Generated collection containers and entries per local match |
 
 Compilation enforces query-byte, syntax-depth, callback-depth, and semantic-step
@@ -121,6 +121,13 @@ requested constraint that the selected backend cannot enforce must be rejected.
 DefaultLimits returns a value copy. Limits returns the engine's resolved
 configuration; zero ceilings in an explicitly unlimited engine indicate that
 opt-out.
+
+Local structural type checks charge one step for each declared struct field,
+including optional fields absent from the object, and check context while
+visiting those fields. Recursive checking of present values has its own normal
+work charge. A wide schema therefore cannot bypass `MaxSteps` merely because
+the record omits its optional fields; cancellation returns an error rather than
+a successful partial type check.
 
 The initial input benchmarks exercise records containing 1, 1,000, and 10,000
 integer list elements. Run them on your target hardware:
