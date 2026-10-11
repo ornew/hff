@@ -130,6 +130,27 @@ never reached. When the receiver is known to be non-null, `foo.nullvalue=null`
 can test the field directly. At the top level, `nullvalue=null` tests the
 variable's nullness without a parent path.
 
+## Explicit type guards
+
+The postfix expression `value:[Type]` checks a runtime value against a type
+constraint and narrows the expression's static type. It never converts or
+rewrites the value. A matching value is returned unchanged; a mismatch produces
+internal no-value. A type guard on a value that is already no-value propagates
+no-value. It can guard a schema value or a computed expression, and no-value
+propagation follows the same rules as other guarded expressions.
+
+For example, `value:[string]:contains("x")` calls string containment only when
+the guarded value is a string. Otherwise the guard yields no-value, so the call
+does not execute and the surrounding predicate converts to false. The existing
+no-value exceptions remain in effect: `exists()` reports false, and `type()`,
+`tojson()`, and `tostring()` may inspect the no-value receiver as specified in
+[methods](methods.md). A guard
+narrowing a union or `Any` lets compilation check subsequent methods against the
+narrowed type. Without that guard, every statically applicable method signature
+must be permitted by capabilities, even when a particular runtime value would
+not use every signature. This is a compile-time permission rule; a disabled
+candidate does not become null or a runtime capability error.
+
 Explicitly guarding a nullable receiver removes the ambiguity:
 
 ```hff

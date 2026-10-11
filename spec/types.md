@@ -76,8 +76,12 @@ Union types accept values from more than one type. `Any` is a predefined schema
 type accepting any HFF value.
 
 For a statically known receiver type, a method that cannot be called on that
-type is a compile-time error. For a union or `Any`, where a call's applicability
-depends on the actual value, an incompatible runtime type yields null.
+type is a compile-time error. For a union or `Any`, method signatures are
+resolved against every statically applicable member and argument combination;
+all such signatures must be enabled. An incompatible runtime type still yields
+null when the operation itself is enabled. Use an explicit type guard to narrow
+the receiver before a method call when only some union members should be
+permitted.
 
 ```text
 schema: x has type String | Int
@@ -85,18 +89,46 @@ expression: x:len()
 meaning: if x is a string, return its length; otherwise, return null
 ```
 
-Dynamic dispatch does not enable a method excluded by the capability
-configuration or unsupported by the backend. A union operation is allowed when
-at least one branch supports it with compatible arguments. Other runtime branches
-yield null. Result types combine applicable branch results and null propagation.
 Applicability is checked across receiver and argument type combinations, not
-only the receiver. Nullable types use their non-null members for domain checks;
-actual null values follow the null rules. An expression whose only possible value
-is null may participate in known built-in operations, including `null:size()` and
-`null+null`. This does not authorize unknown methods, wrong arity, disabled
-features, or incompatible non-null arguments. If no non-null type combination is
-applicable, compilation fails. Partially applicable Any/union combinations are
-checked at runtime and yield null when incompatible.
+only the receiver. Every statically applicable signature on a union or `Any`
+must be enabled; a capability-disabled candidate is a compile-time error even
+when other candidates are enabled. At runtime, a value incompatible with every
+applicable signature yields null. Result types combine applicable branch
+results and null propagation. For a statically known receiver, an applicable
+but disabled method is also a compile-time error.
+
+Nullable types use their non-null members for domain checks; actual null values
+follow the null rules. An expression whose only possible value is null may
+participate in known built-in operations, including `null:size()` and
+`null+null`. A known call still requires all statically applicable method
+capabilities to be enabled, then null propagates at runtime. For a receiver
+that is only known to be null, every known candidate family is applicable
+because no non-null receiver type selects one family. This does not
+authorize unknown methods, wrong arity, or incompatible non-null arguments. If
+no known method signature is applicable, compilation fails; any applicable but
+disabled signature produces a capability error.
+
+## Explicit type guards
+
+The postfix form `value:[Type]` checks a value against a type constraint without
+converting it. On a match, it returns the original value with the result type
+narrowed to the intersection of its existing type and the constraint, retaining
+the constraint's nullable members. On a mismatch, it produces internal
+no-value.
+The guard can be applied to a schema variable or a computed expression and can
+be chained with access and method calls. A following call is resolved and
+capability-checked against the narrowed type, not the original union or `Any`.
+
+Type guards are useful when only selected runtime types should be allowed to
+perform an operation. For example, `value:[string]:contains("x")` requires the
+string containment capability; if `value` has another runtime type, the guard
+produces no-value and the call does not run. Without the type guard, a call on a
+union or `Any` requires permission for every statically applicable signature.
+Type guards do not change the value or authorize a disabled method. For example,
+`value:[object|null]:size()` resolves the object family while retaining null in
+the guarded result type; a null runtime value propagates null through the call.
+The existing `type()` method remains string-valued and has no special flow
+narrowing behavior. Only an explicit type guard narrows method candidates.
 
 Method arguments must match the declared signature; boolean truthiness is not
 an arbitrary method-argument conversion.

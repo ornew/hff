@@ -28,10 +28,11 @@ const (
 	ObjectNode
 	CallNode
 	CallbackNode
+	TypeGuardNode
 )
 
 func (k NodeKind) String() string {
-	names := [...]string{"invalid", "match-all", "literal", "variable", "parameter", "field", "index", "guard", "null-test", "binary", "negate", "bool", "and", "or", "not", "list", "object", "call", "callback"}
+	names := [...]string{"invalid", "match-all", "literal", "variable", "parameter", "field", "index", "guard", "null-test", "binary", "negate", "bool", "and", "or", "not", "list", "object", "call", "callback", "type-guard"}
 	if int(k) >= len(names) {
 		return "invalid"
 	}
@@ -115,11 +116,12 @@ type Spec struct {
 	Parameters []Binding
 	Captures   []Binding
 	Keys       []string
+	Constraint core.Type
 }
 
 // Node has ordered children according to Kind:
 //   - Variable, Parameter, Literal, MatchAll: none.
-//   - Field, Guard, NullTest, Negate, Bool, Not: receiver or operand.
+//   - Field, Guard, TypeGuard, NullTest, Negate, Bool, Not: receiver or operand.
 //   - Index, Binary: receiver/index or left/right.
 //   - And, Or, List, Object: source order (Object.Keys parallels children).
 //   - Call: receiver first, then arguments in source order.
@@ -222,6 +224,12 @@ func (n Node) Keys() ([]string, bool) {
 		return nil, false
 	}
 	return append([]string(nil), n.data.Keys...), true
+}
+func (n Node) Constraint() (core.Type, bool) {
+	if n.Kind() != TypeGuardNode {
+		return core.Type{}, false
+	}
+	return n.data.Constraint, true
 }
 
 type Program struct{ data *program }

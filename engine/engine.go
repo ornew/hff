@@ -5,6 +5,8 @@ import (
 	"context"
 	"github.com/ornew/hff"
 	"github.com/ornew/hff/capabilities"
+	"github.com/ornew/hff/internal/compiler"
+	"github.com/ornew/hff/internal/core"
 )
 
 type Config struct {
@@ -72,6 +74,16 @@ func New(options ...Option) (*Engine, error) {
 func (e *Engine) Schema() hff.Type               { return e.config.Schema }
 func (e *Engine) Capabilities() capabilities.Set { return e.config.Capabilities }
 func (e *Engine) Limits() hff.Limits             { return e.config.Limits }
+
+// Compile checks syntax, types, and capabilities and produces a reusable plan.
+// It does not construct a local evaluator or a backend query.
+func (e *Engine) Compile(ctx context.Context, source string) (hff.Program, error) {
+	p, err := compiler.Compile(ctx, source, compiler.Config{
+		Schema: core.Type(e.config.Schema), Capabilities: e.config.Capabilities,
+		Limits: e.config.Limits, Unlimited: e.config.UnlimitedLimits,
+	})
+	return hff.Program(p), err
+}
 func (e *Engine) Validate(ctx context.Context, record hff.Value) (hff.Input, error) {
 	return hff.ValidateInput(ctx, e.config.Schema, record, hff.ValidationConfig{Limits: e.config.Limits, Unlimited: e.config.UnlimitedLimits})
 }

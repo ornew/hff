@@ -8,6 +8,8 @@ type ErrorCode string
 const (
 	ConfigurationError ErrorCode = "configuration"
 	SyntaxError        ErrorCode = "syntax"
+	TypeError          ErrorCode = "type"
+	CapabilityError    ErrorCode = "capability"
 	InputError         ErrorCode = "input"
 	LimitError         ErrorCode = "limit"
 	CancelledError     ErrorCode = "cancelled"

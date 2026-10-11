@@ -72,8 +72,9 @@ fmt.Println(input.Compatible(otherSchema)) // true
 
 Field declaration order does not affect compatibility. Field types, optional
 presence, and nullability do. Changing only the engine's feature selection does
-not change the input contract. Validated input will be accepted by MatchInput
-when that API is implemented; this tutorial currently stops at validation.
+not change the input contract. Validated input can be reused by a matching local
+filter through `MatchInput` once the local backend is available. Public query
+compilation is covered in the [compilation guide](compiling.md).
 
 ## Run the complete example
 

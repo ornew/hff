@@ -6,10 +6,15 @@ A service configures the features that its filters may use. This includes
 available methods; the configuration model must also cover selectable language
 operations as the implementation is designed.
 
-The parser MUST recognize the same syntax for every configuration. A feature
-outside the enabled set MUST be rejected during semantic compilation. Disabled
-features must not be silently ignored, rewritten to true, or interpreted as
-different syntax.
+The parser MUST recognize the same syntax for every configuration. A statically
+known operation outside the enabled set MUST be rejected during semantic
+compilation. For a call on a union or `Any`, every statically applicable method
+signature must have its capability enabled. An explicit type guard can narrow
+the receiver first, so only signatures applicable to the narrowed type require
+permission. A disabled operation is a compile-time capability error; runtime
+values do not turn a disabled operation into null or a runtime capability error.
+Disabled features must not be silently ignored, rewritten to true, or
+interpreted as different syntax.
 
 HFF aims to ship engines that services can use by supplying a schema and a
 capability selection. Backend support is extensible without introducing a
@@ -25,6 +30,8 @@ The intended compilation flow is:
 2. Resolve variables and fields against the supplied schema.
 3. Validate operator and method types and the field-related filter restriction.
 4. Check enabled capabilities and produce a backend-independent typed program.
+   For union/`Any` calls, require every statically applicable method signature;
+   explicit type guards may narrow the receiver before this check.
 5. Build the selected backend artifact, checking its support without constructing
    artifacts for other backends.
 
@@ -55,6 +62,19 @@ can be claimed. Runtime size and performance targets remain to be measured.
 Type safety includes checked dynamic dispatch: a union or `Any` must not allow
 an incompatible runtime operation to escape as an unchecked host-language call.
 See [types](types.md) and [null handling](evaluation.md).
+
+For a statically known receiver, every applicable method requires its capability
+to be enabled. A union or `Any` may have applicable signatures from several
+method families; every statically applicable signature must be enabled, even if
+some runtime values cannot use it. An explicit type guard narrows the receiver
+and permits a call whose applicable signatures are enabled for that narrowed
+type. A type guard succeeds by retaining the original value when it matches and
+produces internal no-value otherwise. This lets a service disable list
+containment while still allowing string containment after a string type guard.
+For a receiver known only as null, no non-null family selects a method, so all
+known applicable candidates require permission. A `T|null` receiver selects
+method candidates from its non-null `T` members; null still propagates normally.
+See [types](types.md), [syntax](syntax.md), and [evaluation](evaluation.md).
 
 ## Backend translation
 

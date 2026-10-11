@@ -1,0 +1,126 @@
+package compiler
+
+import (
+	"fmt"
+	"sort"
+
+	"github.com/ornew/hff/capabilities"
+	"github.com/ornew/hff/internal/core"
+	"github.com/ornew/hff/internal/plan"
+	"github.com/ornew/hff/internal/syntax"
+)
+
+func (c *compiler) call(receiver plan.Node, n *syntax.MethodCall, span core.Span) (plan.Node, error) {
+	name := syntax.DecodeName(n.Name)
+	declarations := builtins(name)
+	if len(declarations) == 0 {
+		return plan.Node{}, c.failure(core.TypeError, n, fmt.Sprintf("unknown method %q", name))
+	}
+	var compatible []declaration
+	for _, d := range declarations {
+		if len(n.Args) < d.min || (d.max >= 0 && len(n.Args) > d.max) {
+			continue
+		}
+		for _, branch := range nonNullBranches(receiver.Type()) {
+			if receiverMatches(branch, d.receiver) {
+				compatible = append(compatible, d)
+				break
+			}
+		}
+	}
+	if len(compatible) == 0 {
+		return plan.Node{}, c.failure(core.TypeError, n, "method has no applicable receiver/argument count")
+	}
+	higher := name == "map" || name == "flatmap" || name == "any" || name == "all" || name == "foldl" || name == "foldr"
+	var args []plan.Node
+	var callbackResult core.Type
+	if higher {
+		var err error
+		args, callbackResult, err = c.higherOrder(receiver, n)
+		if err != nil {
+			return plan.Node{}, err
+		}
+	} else {
+		for _, arg := range n.Args {
+			expr, ok := arg.(syntax.Expr)
+			if !ok {
+				return plan.Node{}, c.failure(core.TypeError, n, "callback is only valid in a higher-order method argument")
+			}
+			value, err := c.expression(expr)
+			if err != nil {
+				return plan.Node{}, err
+			}
+			args = append(args, value)
+		}
+	}
+	var signatures []plan.Signature
+	var results []core.Type
+	for _, d := range compatible {
+		valid := true
+		for i, arg := range args {
+			index := i
+			if d.variadic {
+				index = 0
+			}
+			if index >= len(d.params) || (!higher && !accepted(arg.Type(), d.params[index])) {
+				valid = false
+				break
+			}
+		}
+		if !valid {
+			continue
+		}
+		var familyResults []core.Type
+		for _, branch := range nonNullBranches(receiver.Type()) {
+			if !receiverMatches(branch, d.receiver) {
+				continue
+			}
+			typ, applicable := specialize(d, branch, args, callbackResult)
+			if applicable {
+				familyResults = append(familyResults, typ)
+			}
+		}
+		if len(familyResults) == 0 {
+			continue
+		}
+		if err := c.allow(capabilities.Method(d.family+"."+d.name), n); err != nil {
+			return plan.Node{}, err
+		}
+		parameters := d.params
+		if higher {
+			parameters = make([]core.Type, len(args))
+			for i, arg := range args {
+				parameters[i] = arg.Type()
+			}
+			if name == "foldl" || name == "foldr" {
+				parameters[0] = callbackResult
+			}
+		}
+		result := union(familyResults...)
+		signatures = append(signatures, plan.NewSignature(d.family+"."+d.name, d.receiver, parameters, result, d.variadic))
+		results = append(results, result)
+	}
+	if len(signatures) == 0 {
+		return plan.Node{}, c.failure(core.TypeError, n, "method has no applicable argument types")
+	}
+	sort.Slice(signatures, func(i, j int) bool { return signatures[i].ID() < signatures[j].ID() })
+	result := union(results...)
+	// type()/stringification observe ordinary null, whereas all other receivers
+	// propagate it. exists() additionally consumes guard failure as false.
+	if name != "type" && name != "tostring" && name != "tojson" && name != "exists" {
+		result = nullable(result)
+	}
+	children := append([]plan.Node{receiver}, args...)
+	may := false
+	for _, child := range children {
+		may = may || child.MayNoValue()
+		if child.Kind() == plan.CallbackNode {
+			body, _ := child.Child(0)
+			may = may || body.MayNoValue()
+		}
+	}
+	if name == "exists" {
+		may = false
+	}
+	return plan.NewNode(plan.Spec{Kind: plan.CallNode, Type: result, Span: span, Children: children, Method: plan.NewMethod(name, signatures...), MayNoValue: may}), nil
+}

@@ -31,8 +31,9 @@ e, err := engine.New(
 An omitted set is an error; None() is an explicitly empty set. Allow and Without
 return new sets. Has tests permission; IDs returns sorted, copied IDs. Standard
 contains the built-in language feature and method catalog, rather than promising
-that every backend implements every member. Query capability checks and backend
-support checks are applied when those stages are implemented.
+that every backend implements every member. Common query compilation checks
+enabled capabilities; each backend builder separately checks support for the
+program operations it implements.
 
 | ID constant | Meaning |
 |:--|:--|
@@ -42,6 +43,7 @@ support checks are applied when those stages are implemented.
 | Access | Field access |
 | Index | List and object indexing |
 | Guard | Postfix path guards |
+| TypeGuard | Explicit type guards (`value:[Type]`) |
 | Collections | List and object literals |
 | Callbacks | Callback expressions |
 | RegexOperators | Regex operators |
@@ -86,15 +88,16 @@ provides the same explicit choice when assembling configuration as data.
 |:--|--:|:--|
 | MaxInputDepth | 64 | Root depth is zero; each value nested in a container adds one |
 | MaxInputValues | 100,000 | Every value, including root and containers, counts once |
-| MaxQueryBytes | 65,536 | UTF-8 source bytes; reserved for compilation |
-| MaxSyntaxDepth | 64 | Syntax nesting; reserved for compilation |
-| MaxSteps | 1,000,000 | Evaluation work; reserved for the local runtime |
+| MaxQueryBytes | 65,536 | UTF-8 source bytes per compilation |
+| MaxSyntaxDepth | 64 | Syntax nesting per compilation |
+| MaxSteps | 1,000,000 | Semantic expression visits per compilation; local runtime accounting is separate |
 | MaxGeneratedValues | 100,000 | Generated values; reserved for the local runtime |
 
-Only input limits are enforced by the current implementation. Compilation and
-runtime counters will be specified and enforced with those stages. DefaultLimits
-returns a value copy. Limits returns the engine's resolved configuration; zero
-ceilings in an explicitly unlimited engine indicate that opt-out.
+Compilation enforces query-byte, syntax-depth, and semantic-step limits; input
+validation enforces input-depth and input-value limits. Local runtime and
+generated-value accounting remain backend work. DefaultLimits returns a value
+copy. Limits returns the engine's resolved configuration; zero ceilings in an
+explicitly unlimited engine indicate that opt-out.
 
 The initial input benchmarks exercise records containing 1, 1,000, and 10,000
 integer list elements. Run them on your target hardware:

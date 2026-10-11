@@ -8,10 +8,11 @@ compilation and backend lifecycle.
 - [Parse HFF syntax during development](parsing.md)
 - [Inspect the compiled program](program-ir.md)
 - [Configure an engine and validate records](getting-started.md)
+- [Compile a query](compiling.md)
 - [Schemas and immutable values](schemas-and-values.md)
 - [Capabilities and resource limits](configuration.md)
 
 The current implementation provides values, schemas, feature selection, engine
-configuration, validated input, and an internal syntax-only parser. Public query
-compilation, local matching, SQL translation, and extension implementation
-registration are subsequent stages.
+configuration, validated input, an internal syntax-only parser, and public
+common query compilation. Local matching, SQL translation, and extension
+implementation registration are subsequent stages.

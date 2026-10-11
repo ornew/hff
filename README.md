@@ -79,10 +79,9 @@ parser generator, not a requirement to compile grammars at runtime.
 
 ## Specification
 
-This repository provides the language specification and the Go configuration
-foundation: immutable values, schemas, capabilities, and validated input.
-Public query compilation, local evaluation, and backend translators are not yet
-available.
+This repository provides immutable values, schemas, capabilities, validated
+input, and public query compilation to an immutable typed program. Local
+evaluation and backend translators are not yet available.
 Start with the [Go guides](docs/guides/README.md) and
 [engine configuration tutorial](docs/guides/getting-started.md).
 

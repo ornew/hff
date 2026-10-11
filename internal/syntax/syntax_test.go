@@ -24,6 +24,8 @@ func TestGrammarConformance(t *testing.T) {
 		`[ ]`, `{ }`, `a:in( 1 , 2 )`, `a| b`, `a |b`,
 		"`日本語`=\"😀\"", "``", "`a\\`b\\\\c`", "`a\nb`",
 		`name="\ud83d\ude00"`, `name="\\ud800"`, `age=1e-3`,
+		`x:[string]:contains("foo")`, `x:[list[string|null]]`,
+		`(x+1):[int]`, `x:[(string | list[map[int]])]`,
 	}
 	for _, source := range valid {
 		t.Run(source, func(t *testing.T) {
@@ -39,6 +41,8 @@ func TestGrammarConformance(t *testing.T) {
 		`# comment`, `a // comment`, `x=>x.age`, `a=01`, `a=.5`,
 		`name="\ud800"`, `name="\udc00"`, `name="\ud800\u0041"`,
 		"`a\\n`", "name=\"a\nb\"", "a=\xff", `a|`, `()`,
+		`x :[string]`, `x: [string]`, `x:[]`, `x:[list[]]`,
+		`x:[string|]`, `x:[list[int,]]`,
 	}
 	for _, source := range invalid {
 		t.Run(source, func(t *testing.T) {
@@ -139,7 +143,7 @@ func TestLimitsAndLocations(t *testing.T) {
 }
 
 func FuzzParseQuery(f *testing.F) {
-	for _, s := range []string{`age>10 name`, `items:any(x=>x!)`, `"\ud800"`, strings.Repeat("(", 65), "\xff"} {
+	for _, s := range []string{`age>10 name`, `items:any(x=>x!)`, `x:[map[list[string|null]]]`, `"\ud800"`, strings.Repeat("(", 65), "\xff"} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, source string) {

@@ -4,7 +4,8 @@ package syntax
 type Expr = Empty | Or | And | Not | Binary | Unary | Access | Group | Number | String | Bool | Null | Variable | ListLiteral | ObjectLiteral
 type Name = PlainName | QuotedName
 type Argument = Expr | Callback
-type Suffix = FieldAccess | IndexAccess | MethodCall | Guard
+type Suffix = FieldAccess | IndexAccess | MethodCall | Guard | TypeGuard
+type TypeExpr = TypeUnion | TypeNamed | TypeGroup
 
 type Empty struct {}
 type Or struct { Terms []Expr }
@@ -29,6 +30,11 @@ type IndexAccess struct { Index Expr }
 type MethodCall struct { Name Name, Args []Argument }
 type Guard struct {}
 type Callback struct { Params []Name, Body Expr }
+type TypeGuard struct { Type TypeExpr }
+type TypeUnion struct { Types []TypeExpr }
+type TypeNamed struct { Name TypeName, Args []TypeExpr }
+type TypeGroup struct { X TypeExpr }
+type TypeName terminal
 
 def main: Expr = present / empty
 def present: Expr = ws x:expression ws $$ -> $x
@@ -52,11 +58,21 @@ def arithmetic: Expr = pratt {
     level { prefix "-" -> new Unary{Op: $op, X: $rhs} }
 }
 def access: Expr = base:primary parts:suffix* -> new Access{Base: $base, Parts: $parts}
-def suffix: Suffix = fieldaccess / indexaccess / methodcall / guard
+def suffix: Suffix = fieldaccess / indexaccess / typeguard / methodcall / guard
 def fieldaccess: FieldAccess = "." n:name -> new FieldAccess{Name: $n}
 def indexaccess: IndexAccess = "[" ws x:expression ws "]" -> new IndexAccess{Index: $x}
 def methodcall: MethodCall = ":" n:name "(" ws args:arguments? ws ")" -> new MethodCall{Name: $n, Args: concat($args)}
 def guard: Guard = "!" !("=" / "~") -> new Guard{}
+def typeguard: TypeGuard = ":" "[" ws t:typeref ws "]" -> new TypeGuard{Type: $t}
+def typeref: TypeExpr = first:typeatom rest:(-ws -"|" -ws t:typeatom)*
+    -> new TypeUnion{Types: concat(list($first), map($rest, (r) => $r.t))}
+def typeatom: TypeExpr = typegroup / typenamed
+def typegroup: TypeGroup = "(" ws t:typeref ws ")" -> new TypeGroup{X: $t}
+def typenamed: TypeNamed = n:typename args:typeparameters? -> new TypeNamed{Name: $n, Args: concat($args)}
+def typename: TypeName = (?a-zA-Z_) identpart*
+def typeparameters = "[" ws ts:typelist ws "]" -> $ts
+def typelist = first:typeref rest:(-ws -"," -ws t:typeref)*
+    -> concat(list($first), map($rest, (r) => $r.t))
 def primary: Expr = group / object / array / string / number / bool / null / variable
 def group: Group = "(" ws x:expression ws ")" -> new Group{X: $x}
 def variable: Variable = n:name -> new Variable{Name: $n}

@@ -147,6 +147,29 @@ null. Statically incompatible receiver/index types are rejected; incompatible
 dynamic combinations yield null. Struct dot access requires a declared field;
 a dynamic string-key lookup can report absence at runtime.
 
+## Explicit type guards
+
+```hff
+value:[string]
+value:[list[string]|null]
+value:[map[number]]
+value:[string]:contains("x")
+```
+
+The postfix form `value:[Type]` checks a value against a type expression. The
+colon immediately inside the brackets distinguishes a type guard from ordinary
+indexing. The primitive type names are `any`, `null`, `bool`, `number`, `int`,
+`float`, `string`, `bytes`, `timestamp`, `duration`, `object`, and `list`. `int`
+denotes `int64`, and `float` denotes `float64`. `list[T]` and `map[T]` constrain
+collection values; `T|U` denotes a union, and parentheses group a union when
+needed. These names describe HFF types.
+
+The guard preserves the original value when its type matches and produces
+internal no-value when it does not. It is an expression and can guard a
+computed value. Subsequent calls are resolved using the narrowed type. The
+type-guard capability is selected by `access:type-guard`; parsing remains the
+same for every capability set.
+
 ## Method calls
 
 ```hff

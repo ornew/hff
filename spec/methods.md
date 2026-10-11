@@ -2,8 +2,15 @@
 
 Methods are selected at compile time. A backend may support only some methods.
 Parsing a method call does not imply that it can be compiled. Calls on a
-statically incompatible receiver are compile-time errors; runtime type mismatch
-for a union or `Any` yields null.
+statically incompatible receiver are compile-time errors. A runtime type that
+matches no applicable, enabled signature yields null, but every statically
+applicable signature on a union or `Any` must be enabled at compile time. A
+value-only `null` receiver likewise has no type family to select a single
+signature, so all statically applicable candidates must be enabled. To permit
+only selected families, use the explicit `value:[Type]` guard described in
+[syntax](syntax.md#explicit-type-guards) and [types](types.md#explicit-type-guards).
+The `type()` method remains an ordinary string-valued runtime method and has no
+special flow-narrowing behavior.
 
 The catalog below records the supplied signatures. `any...` and `string...`
 denote variadic arguments; brackets in a signature denote an optional argument.

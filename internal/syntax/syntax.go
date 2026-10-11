@@ -241,6 +241,8 @@ func checkTree(ctx context.Context, source string, tree Expr, limit int) error {
 					for j := len(p.Args) - 1; j >= 0; j-- {
 						push(p.Args[j], next.depth+len(n.Parts)-i)
 					}
+				case *TypeGuard:
+					push(p.Type, next.depth+len(n.Parts)-i)
 				}
 			}
 		case *Not:
@@ -266,6 +268,19 @@ func checkTree(ctx context.Context, source string, tree Expr, limit int) error {
 			}
 		case *Callback:
 			push(n.Body, childDepth)
+		case *TypeUnion:
+			if len(n.Types) == 1 {
+				childDepth = next.depth
+			}
+			for _, typ := range n.Types {
+				push(typ, childDepth)
+			}
+		case *TypeNamed:
+			for _, typ := range n.Args {
+				push(typ, childDepth)
+			}
+		case *TypeGroup:
+			push(n.X, childDepth)
 		case *String:
 			if _, err := DecodeString(n.Text); err != nil {
 				return sourceError(hff.SyntaxError, source, n.Start, err.Error())

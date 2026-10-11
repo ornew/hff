@@ -10,8 +10,8 @@ to arbitrary processing systems.
 | Chapter | Defines |
 |:--|:--|
 | [Syntax](syntax.md) | Names, values, operators, precedence, access, method calls, and typed PEGO parsing |
-| [Types and schemas](types.md) | Value types, declared variables, structs, maps, unions, and dynamic dispatch |
-| [Evaluation](evaluation.md) | Boolean conversion, null propagation, comparisons, guarded access, and filter restrictions |
+| [Types and schemas](types.md) | Value types, declared variables, structs, maps, unions, explicit type guards, and dynamic dispatch |
+| [Evaluation](evaluation.md) | Boolean conversion, null propagation, comparisons, value and type guards, and filter restrictions |
 | [Methods](methods.md) | Configurable method signatures, durations, and time zones |
 | [Capabilities and backends](capabilities.md) | Compilation, feature selection, purity, portability, and backend equivalence |
 

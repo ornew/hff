@@ -215,6 +215,7 @@ func (n Node) Literal() (Value, bool)
 func (n Node) Path() (Path, bool)
 func (n Node) Field() (string, bool)
 func (n Node) Operator() (Operator, bool)
+func (n Node) Constraint() (Type, bool)
 func (n Node) Method() (Method, bool)
 func (n Node) Binding() (Binding, bool)
 func (n Node) Parameters() ([]Binding, bool)
@@ -227,14 +228,26 @@ an inapplicable node kind; Child returns false for an invalid index. Path return
 a copy. Span describes the half-open UTF-8 byte range in the original source.
 Type, Method, Operator, and Binding are immutable descriptors. A call's Method
 contains only signatures statically applicable to that call, not the entire
-method registry. An Any or union receiver can retain multiple family signatures
-for runtime dispatch. Each signature has a stable ID, receiver/parameter/result
-types, and variadic flag. Backends use those IDs without repeating common type
-resolution and preserve any required dynamic checks.
+method registry. An Any or union receiver can have multiple family signatures
+for runtime dispatch, and every statically applicable signature must be enabled
+or Compile reports a capability error. A TypeGuardNode narrows the receiver
+before method resolution, so a guarded call checks only signatures applicable to
+the narrowed type. A runtime value incompatible with all applicable signatures
+yields null. A null-only receiver has no non-null family to select a signature;
+all known applicable candidates must be enabled before null propagates. Each
+signature has a stable ID, receiver/parameter/result types, and variadic flag.
+Backends use those IDs without repeating common type resolution and preserve any
+required dynamic checks. `Constraint()` returns the exact user-specified type
+guard constraint, not the inferred node result type, and false for other node
+kinds. The node's `Type()` reports the constraint intersected with its known
+receiver type; runtime checking uses the original constraint.
 
 The public kinds are Invalid, MatchAll, Literal, Variable, Parameter, Field,
 Index, Guard, NullTest, Binary, Negate, Bool, And, Or, Not, List, Object, Call,
-and Callback. Their child order and payload mapping are documented in the
+Callback, and TypeGuard. TypeGuard is appended after the existing kinds to
+preserve their numeric values. Its child is the guarded expression and its
+payload is available through `Constraint()`. Their child order and payload
+mapping are documented in the
 [program IR guide](../guides/program-ir.md). Binding IDs are unique within one
 Program, including nested and shadowed callbacks; zero is invalid, and IDs from
 different programs have no shared identity. Callback metadata exposes parameter
@@ -274,10 +287,12 @@ profiles and their contents are documented so services can inspect their policy.
 
 Extension declaration does not imply permission. A declared extension's method
 ID must also be enabled. Engine configuration exposes the resolved feature set,
-method signatures, and limits for discovery. Compile rejects disabled features
-even if a backend could implement them. Build checks target support for the
-operations actually used in the program, rather than rejecting an unused feature
-merely because it belongs to the engine's enabled set.
+method signatures, and limits for discovery. Compile rejects statically selected
+disabled features even if a backend could implement them. For dynamic union/Any
+calls, all applicable signatures must be enabled. Explicit type guards narrow
+the receiver before capability checking. Build checks target support for the
+operations actually used in the program, rather than rejecting an unused
+feature merely because it belongs to the engine's enabled set.
 
 ### Extension declarations and implementations
 

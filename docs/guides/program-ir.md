@@ -2,9 +2,9 @@
 
 HFF is designed to compile a query once into an immutable, backend-independent
 program. Local and SQL builders can inspect that program without depending on
-parser nodes. The public `Program` and `Node` types are being implemented; the
-API below describes the intended inspection contract. Until compilation is
-available, a syntax tree cannot be evaluated or translated to SQL.
+parser nodes. The typed plan, public `Program` and `Node` inspection contracts,
+and common `engine.Compile` entry point are implemented. A syntax tree cannot be
+evaluated or translated to SQL.
 
 Only HFF's compiler constructs valid programs and nodes. A node is an opaque
 handle; callers cannot mutate compiler storage. Programs and their values are
@@ -12,7 +12,7 @@ safe to reuse concurrently.
 
 ## Program and node accessors
 
-The planned public inspection surface is:
+The public inspection surface is:
 
 ```go
 func (p Program) Valid() bool
@@ -34,6 +34,7 @@ func (n Node) Literal() (Value, bool)
 func (n Node) Path() (Path, bool)
 func (n Node) Field() (string, bool)
 func (n Node) Operator() (Operator, bool)
+func (n Node) Constraint() (Type, bool)
 func (n Node) Method() (Method, bool)
 func (n Node) Binding() (Binding, bool)
 func (n Node) Parameters() ([]Binding, bool)
@@ -86,6 +87,7 @@ values.
 | `ObjectNode` | Entry values in source order | `Keys`, aligned by index with children |
 | `CallNode` | Receiver, then arguments in source order | `Method` |
 | `CallbackNode` | Body | `Parameters`, `Captures` |
+| `TypeGuardNode` | Guarded value | `Constraint` |
 
 A callback passed as a call argument occupies that argument's child position.
 Its parameter and capture bindings are metadata; its body is its child. An
@@ -104,10 +106,24 @@ contains a stable ID, receiver type, parameter types, result type, and variadic
 flag. For a CallNode, `Method.Signatures()` contains only the signatures
 statically applicable to that call, not the entire method registry. A concrete
 receiver may have one applicable signature; an `Any` or union receiver may
-retain multiple family signatures for runtime dispatch. Each signature ID
+have multiple family signatures for runtime dispatch. Every applicable
+signature must be enabled or compilation fails with a capability error. A
+`TypeGuardNode` narrows the receiver before method resolution, so only the
+signatures applicable to the narrowed type are checked. A runtime value
+incompatible with all applicable signatures yields null. A null-only receiver
+has no non-null family to select a signature, so all known applicable
+candidates must be enabled before null propagates at runtime. Each signature ID
 identifies its concrete family and overload. Returned signatures and parameter
 slices are copies. Backends use these IDs to dispatch without repeating common
 type resolution; they must preserve required runtime checks for dynamic types.
+
+`Constraint` returns the user-specified type expression attached to a
+`TypeGuardNode`; it does not return the node's inferred result type. `Type()`
+reports the intersection with the receiver's known type, preserving known
+structural or element precision and nullable members. The runtime checker uses
+the original constraint. On a match, the node preserves the original value; a
+mismatch produces no-value and `MayNoValue()` is true. The accessor returns
+false for other node kinds.
 
 Each `Binding` exposes its `ID`, source `Name`, and inferred `Type`. Both root
 variable nodes and callback parameter nodes return their binding through

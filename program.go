@@ -53,6 +53,7 @@ const (
 	ObjectNode    = plan.ObjectNode
 	CallNode      = plan.CallNode
 	CallbackNode  = plan.CallbackNode
+	TypeGuardNode = plan.TypeGuardNode
 	Equal         = plan.Equal
 	NotEqual      = plan.NotEqual
 	Less          = plan.Less
@@ -110,6 +111,10 @@ func (n Node) Captures() ([]Binding, bool) {
 	return publicBindings(bs), ok
 }
 func (n Node) Keys() ([]string, bool) { return plan.Node(n).Keys() }
+
+// Constraint returns the declared runtime type test for a TypeGuardNode.
+// Type may be narrower when the input schema already provides more information.
+func (n Node) Constraint() (Type, bool) { typ, ok := plan.Node(n).Constraint(); return Type(typ), ok }
 func publicBindings(bs []plan.Binding) []Binding {
 	if bs == nil {
 		return nil
