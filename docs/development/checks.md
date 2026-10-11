@@ -71,6 +71,20 @@ bridge or establish a distribution contract or browser UI. See the
 [private bridge guide](wasm-bridge.md) for its separate native/WASM parity
 smoke test.
 
+## Test the internal Go-value conversion core
+
+The internal converter tests exercise exact supported Go representations,
+explicit struct-field mapping, nil versus empty values, schema validation,
+cycles versus shared references, wrapper-aware input depth/value limits,
+cancellation without partial values, and concurrent conversion. These checks
+cover `internal/govalue`; they do not establish a public adapter API.
+
+```sh
+go test -race ./internal/govalue
+go vet ./internal/govalue
+sh hack/check-wasm.sh -count=1 ./internal/govalue
+```
+
 ## Run focused benchmarks
 
 To reproduce the local validation, reusable-match, and compilation benchmark
