@@ -17,9 +17,9 @@ The [language specification](../../spec/README.md) defines their semantic contra
 
 The common compiler and local backend's core operators, values, indexing,
 guards, short-circuit behavior, per-match budgets, scalar/string method
-families, and byte length are implemented. List/object methods, callbacks, additional temporal,
-JSON, and base64 methods, extension registration, and SQL translation remain
-separate implementation stages.
+families, and list/object methods are implemented. Callbacks, additional
+temporal, JSON, and base64 methods, extension registration, and SQL translation
+remain separate implementation stages.
 
 ## Motivation
 
@@ -524,6 +524,6 @@ must accompany implementation rather than be inferred from examples.
 
 The record specifies behavior and public API direction; acceptance does not
 claim that every package or method family has been implemented. Common
-compilation and the core and scalar/string local evaluation paths are available.
-SQL translation and the remaining list/object method, callback, and extension
-surfaces remain incomplete.
+compilation and the core, scalar/string, and list/object local evaluation paths
+are available. SQL translation, callback methods, additional temporal/JSON/
+base64 method families, and extension implementations remain incomplete.

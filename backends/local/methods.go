@@ -12,6 +12,8 @@ func supportedMethod(id string) bool {
 	switch id {
 	case "any.type", "any.exists", "any.in", "bool.and", "bool.or", "bool.not", "number.round", "number.ceil", "number.floor", "string.len", "bytes.len", "string.contains", "string.matches", "string.startswith", "string.endswith", "string.lower", "string.upper", "string.bool", "string.number", "string.concat":
 		return true
+	case "list.size", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "object.size", "object.has", "object.get", "object.keys", "object.values", "object.items":
+		return true
 	}
 	return false
 }
@@ -84,12 +86,13 @@ func (e *evaluation) call(n plan.Node) (result, error) {
 	var buffer [4]core.Value
 	args := buffer[:0]
 	parameters := signature.ParametersView()
+	id := signature.ID()
 	for i := 1; i < n.ChildCount(); i++ {
 		arg, err := e.child(n, i)
 		if err != nil || !arg.present {
 			return arg, err
 		}
-		if arg.value.Kind() == core.NullKind && name != "in" {
+		if arg.value.Kind() == core.NullKind && name != "in" && id != "list.contains" {
 			return null(), nil
 		}
 		index := i - 1
@@ -105,7 +108,9 @@ func (e *evaluation) call(n plan.Node) (result, error) {
 		}
 		args = append(args, arg.value)
 	}
-	id := signature.ID()
+	if strings.HasPrefix(id, "list.") || strings.HasPrefix(id, "object.") {
+		return e.collectionMethod(id, receiver.value, args)
+	}
 	if id == "any.in" {
 		for _, arg := range args {
 			yes, err := e.equal(receiver.value, arg)

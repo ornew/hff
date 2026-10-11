@@ -26,20 +26,24 @@ func specialize(d declaration, receiver core.Type, args []plan.Node, callbackRes
 		switch d.name {
 		case "concat":
 			var types []core.Type
-			types = append(types, receiver.Element())
+			types = append(types, element(receiver))
 			for _, a := range args {
 				types = append(types, element(a.Type()))
 			}
 			result = core.NewListType(union(types...))
 		case "sort":
-			valid := receiver.Element().Kind() == core.NeverType
-			for _, t := range branches(receiver.Element()) {
-				valid = valid || ordered(t)
+			item := element(receiver)
+			valid := item.Kind() == core.NeverType || item.Kind() == core.AnyType
+			for _, t := range branches(item) {
+				valid = valid || t.Kind() == core.AnyType || ordered(t)
 			}
 			if !valid {
 				return core.Type{}, false
 			}
 			result = receiver
+			if receiver.Kind() == core.AnyType {
+				result = core.NewListType(item)
+			}
 		case "map", "flatmap", "any", "all", "foldl", "foldr":
 			result = callbackResult
 		}

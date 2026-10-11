@@ -18,9 +18,10 @@ The local scalar/string set is:
 | Bytes | `len()` |
 
 This set excludes `any:tostring()` and `any:tojson()`, temporal conversions,
-JSON parsing, and base64 conversions. List/object methods and callback methods
-are separate local backend features. A query can compile successfully while
-still failing local `Build` with `hff.BackendError` for an unsupported method.
+JSON parsing, and base64 conversions. List/object methods are covered in the
+[collections guide](collections.md); callback methods remain unavailable. A
+query can compile successfully while still failing local `Build` with
+`hff.BackendError` for an unsupported method.
 
 ## Use the methods in a filter
 
@@ -83,9 +84,12 @@ filter, err := local.Build(ctx, program)
 The explicit guard narrows the call to the string signature, so the query does
 not require the disabled `list.contains` capability. A matching string is
 preserved; a different runtime type yields internal no-value and therefore a
-completed false predicate. Without the guard, a call through an `Any` receiver
-requires every statically applicable method capability. Capability checks are
-compile-time checks, while backend support is checked by `Build`.
+completed false predicate. Since local `list.contains` is now implemented, this
+example demonstrates type-specific capability selection; the disabled method
+still cannot be used by an unguarded list call. Without the guard, a call
+through an `Any` receiver requires every statically applicable method
+capability. Capability checks are compile-time checks, while backend support
+is checked by `Build`.
 
 Run the complete example from the repository root:
 

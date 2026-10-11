@@ -80,12 +80,13 @@ parser generator, not a requirement to compile grammars at runtime.
 ## Specification
 
 This repository provides immutable values, schemas, capabilities, validated
-input, common query compilation, core local evaluation, and scalar/string
-methods including byte length. List/object method families, collection callbacks, additional temporal,
-JSON, and base64 methods, extension registration, and SQL translation are not
-yet available. Start with the [Go guides](docs/guides/README.md), including the
-[local evaluation guide](docs/guides/local-evaluation.md) and
-[scalar/string method guide](docs/guides/scalar-methods.md).
+input, common query compilation, core local evaluation, scalar/string methods,
+and list/object methods. Collection callbacks, additional temporal, JSON, and
+base64 methods, extension registration, and SQL translation are not yet
+available. Start with the [Go guides](docs/guides/README.md), including the
+[local evaluation guide](docs/guides/local-evaluation.md),
+[scalar/string method guide](docs/guides/scalar-methods.md), and
+[collections guide](docs/guides/collections.md).
 
 Read the [language specification](spec/README.md), beginning with
 [syntax](spec/syntax.md), [types and schemas](spec/types.md), and

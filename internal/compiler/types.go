@@ -49,8 +49,14 @@ func withoutNull(t core.Type) core.Type {
 	return union(types...)
 }
 func element(t core.Type) core.Type {
+	if t.Kind() == core.AnyType {
+		return t
+	}
 	var types []core.Type
 	for _, branch := range branches(t) {
+		if branch.Kind() == core.AnyType {
+			return branch
+		}
 		if branch.Kind() == core.ListType {
 			types = append(types, branch.Element())
 		}
@@ -97,6 +103,9 @@ func fieldType(t core.Type, name string) (core.Type, bool) {
 	return union(types...), applicable
 }
 func objectValues(t core.Type) core.Type {
+	if t.Kind() == core.AnyType {
+		return t
+	}
 	if t.Kind() == core.MapType {
 		return t.Element()
 	}

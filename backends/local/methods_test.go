@@ -88,12 +88,12 @@ func TestScalarMethods(t *testing.T) {
 func TestScalarSupportAndBudgets(t *testing.T) {
 	ctx := context.Background()
 	e := configured(t)
-	p, err := e.Compile(ctx, `x:contains("a")`)
+	p, err := e.Compile(ctx, `x:fromjson()`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = local.Build(ctx, p)
-	code(t, err, hff.BackendError) // Any also resolves list.contains, not implemented yet.
+	code(t, err, hff.BackendError) // JSON decoding is implemented in a later feature unit.
 	for _, q := range []string{`x:type()="string"`, `x:exists()`} {
 		f := build(t, q, local.WithLimits(hff.Limits{MaxSteps: 20}))
 		got, err := f.Match(ctx, record(hff.String(strings.Repeat("a", 1000)), hff.Null()))
