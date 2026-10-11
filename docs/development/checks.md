@@ -221,3 +221,18 @@ HFF_POSTGRES_CONTAINER=<container-name-or-id> go test -tags=integration ./backen
 The ordinary SQL tests need no database. The integration suite currently covers
 the implemented PostgreSQL scalar subset; unsupported operations are checked as
 Build errors in package tests.
+
+To measure server-side planning and execution for the controlled JSON/JSONB
+scan workload, run the dedicated benchmark with a PostgreSQL container:
+
+```sh
+HFF_POSTGRES_CONTAINER=<container-name-or-id> \
+go test -tags=integration ./backends/sql -run '^$' \
+  -bench '^BenchmarkPostgreSQLJSONExecution$' -benchtime=1x -count=3
+```
+
+Set `HFF_POSTGRES_PLAN_DIR` to save each case's first plan and SQL sample. The
+fixture setup and Docker/psql transport are excluded from the reported
+PostgreSQL `EXPLAIN` times. See the [PostgreSQL execution baseline](postgresql-execution.md)
+for workload details and the measured sample; it is not an index or service
+performance guarantee.

@@ -89,7 +89,7 @@ func TestPostgreSQLScalarParity(t *testing.T) {
 
 // Fixture literals are confined to test input. Production query literals are
 // always parameters; these helpers are not a replacement for driver binding.
-func sqlFixtureParameter(t *testing.T, value any) (string, string) {
+func sqlFixtureParameter(t testing.TB, value any) (string, string) {
 	t.Helper()
 	switch value := value.(type) {
 	case int64:
@@ -108,7 +108,7 @@ func sqlFixtureParameter(t *testing.T, value any) (string, string) {
 
 func sqlFixtureString(value string) string { return "'" + strings.ReplaceAll(value, "'", "''") + "'" }
 
-func sqlFixtureValue(t *testing.T, value hff.Value, typ string) string {
+func sqlFixtureValue(t testing.TB, value hff.Value, typ string) string {
 	t.Helper()
 	if value.Kind() == hff.NullKind {
 		return "NULL::" + typ

@@ -10,6 +10,7 @@ here. These pages support contributors; they are separate from the user-facing
 - [Inspect the internal syntax parser](parsing.md)
 - [Build and maintain the documentation site](site.md)
 - [Run development checks](checks.md)
+- [Review PostgreSQL execution baselines](postgresql-execution.md)
 - [Build and test the private WebAssembly bridge](wasm-bridge.md)
 - [Review finite resource limits](finite-limits.md)
 - [Commit message format](../commit-messages.md)
