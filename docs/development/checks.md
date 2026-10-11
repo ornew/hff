@@ -19,6 +19,26 @@ read access to repository contents. A successful local run does not establish
 that the remote workflow has completed; check the workflow result for the
 commit under review.
 
+## Test Go packages on WebAssembly
+
+Run the existing Go package tests for `js/wasm` through Node.js with:
+
+```sh
+sh hack/check-wasm.sh
+```
+
+The script requires Go 1.27.1 and Node.js. If `node` is not on `PATH`, set
+`HFF_WASM_NODE` to the absolute path of the Node.js executable. Arguments after
+the script replace the default `./...` package pattern; for example:
+
+```sh
+sh hack/check-wasm.sh -count=1 ./engine ./backends/local
+```
+
+This runs Go tests using Node's WebAssembly executor. It verifies package test
+compatibility with `js/wasm`; it does not define a browser-facing Go API,
+distribution contract, browser UI, or playground.
+
 ## Run focused benchmarks
 
 To reproduce the local validation, reusable-match, and compilation benchmark
