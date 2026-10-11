@@ -59,7 +59,7 @@
 </body>
 </html>
 {{define "doclinks"}}{{range .Sections}}
-{{if .Collapsible}}<details class="nav-section" {{if .Active}}open{{end}}><summary><h2>{{.Name}}</h2></summary>{{else}}<section class="nav-section"><h2>{{.Name}}</h2>{{end}}
+{{if .Collapsible}}<details class="nav-section" {{if .Active}}open{{end}}><summary class="nav-heading"><h2>{{.Name}}</h2></summary>{{else}}<section class="nav-section"><h2 class="nav-heading">{{.Name}}</h2>{{end}}
 {{range .Pages}}<a href="{{rel $.Current.URL .URL}}" {{if eq .URL $.Current.URL}}aria-current="page"{{end}}>{{if eq .Source "README.md"}}Home{{else if eq .Source "spec/README.md"}}Introduction{{else if eq .Source "docs/design/README.md"}}Introduction{{else if eq .Source "docs/backends/README.md"}}Introduction{{else}}{{.Title}}{{end}}</a>{{end}}
 {{range .Children}}<details class="nav-subsection" {{if .Active}}open{{end}}><summary>{{.Name}}</summary>{{range .Pages}}<a href="{{rel $.Current.URL .URL}}" {{if eq .URL $.Current.URL}}aria-current="page"{{end}}>{{if or (eq .Source "docs/backends/local/README.md") (eq .Source "docs/backends/postgresql/README.md")}}Introduction{{else}}{{.Title}}{{end}}</a>{{end}}</details>{{end}}
 {{if .Collapsible}}</details>{{else}}</section>{{end}}

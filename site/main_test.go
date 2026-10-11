@@ -204,7 +204,7 @@ func TestGroupedNavigationAndRemovedPages(t *testing.T) {
 	}
 	for _, name := range []string{"spec/syntax.html", "docs/design/001-test.html"} {
 		page := read(t, out, name)
-		for _, want := range []string{"<h2>Specification</h2>", "<summary><h2>Design Records</h2></summary>"} {
+		for _, want := range []string{"<h2 class=\"nav-heading\">Specification</h2>", "<summary class=\"nav-heading\"><h2>Design Records</h2></summary>"} {
 			if !strings.Contains(page, want) {
 				t.Errorf("%s lacks grouped navigation %q", name, want)
 			}
@@ -312,7 +312,7 @@ func TestBackendDisclosuresWithinPlainSections(t *testing.T) {
 		t.Fatal(err)
 	}
 	local := read(t, out, "docs/backends/local/configuration.html")
-	for _, want := range []string{"<h2>Backends</h2>", "<summary>Local</summary>", "<summary>PostgreSQL</summary>", "aria-current=\"page\""} {
+	for _, want := range []string{"<h2 class=\"nav-heading\">Backends</h2>", "<summary>Local</summary>", "<summary>PostgreSQL</summary>", "aria-current=\"page\""} {
 		if !strings.Contains(local, want) {
 			t.Errorf("local backend sidebar lacks %q", want)
 		}
@@ -321,7 +321,7 @@ func TestBackendDisclosuresWithinPlainSections(t *testing.T) {
 		t.Fatal("active backend child is not expanded")
 	}
 	reference := read(t, out, "docs/reference/methods.html")
-	if !strings.Contains(reference, `<h2>Reference</h2>`) {
+	if !strings.Contains(reference, `<h2 class="nav-heading">Reference</h2>`) {
 		t.Fatal("Reference must remain a plain section heading")
 	}
 }
