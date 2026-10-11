@@ -103,8 +103,70 @@ func TestDurationTextRoundTrip(t *testing.T) {
 	}
 }
 
+// Equality intentionally equates mixed numeric subtypes and signed zeros.
+// JSON round trips additionally promise to preserve those representations.
+func sameJSONRepresentation(a, b core.Value) bool {
+	if a.Kind() != b.Kind() {
+		return false
+	}
+	switch a.Kind() {
+	case core.FloatKind:
+		x, _ := a.AsFloat()
+		y, _ := b.AsFloat()
+		return math.Float64bits(x) == math.Float64bits(y)
+	case core.ListKind:
+		x, _ := a.ListView()
+		y, _ := b.ListView()
+		if len(x) != len(y) {
+			return false
+		}
+		for i := range x {
+			if !sameJSONRepresentation(x[i], y[i]) {
+				return false
+			}
+		}
+	case core.ObjectKind:
+		x, _ := a.ObjectView()
+		y, _ := b.ObjectView()
+		if len(x) != len(y) {
+			return false
+		}
+		for k, value := range x {
+			other, exists := y[k]
+			if !exists || !sameJSONRepresentation(value, other) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func TestJSONRoundTripRepresentationOracle(t *testing.T) {
+	negativeZero := core.Float(math.Copysign(0, -1))
+	for _, pair := range [][2]core.Value{
+		{core.Int(1), core.Float(1)},
+		{negativeZero, core.Float(0)},
+		{core.List(core.Int(1)), core.List(core.Float(1))},
+		{core.Object(map[string]core.Value{"x": negativeZero}), core.Object(map[string]core.Value{"x": core.Float(0)})},
+	} {
+		e := evaluation{ctx: context.Background(), limits: core.DefaultLimits()}
+		equal, err := e.equal(pair[0], pair[1])
+		if err != nil || !equal {
+			t.Fatalf("fixture must be equal under HFF comparison: %v", err)
+		}
+		if sameJSONRepresentation(pair[0], pair[1]) {
+			t.Fatal("round-trip oracle accepted changed numeric representation")
+		}
+		if !sameJSONRepresentation(pair[0], pair[0]) {
+			t.Fatal("round-trip oracle rejected unchanged representation")
+		}
+	}
+}
+
 func FuzzJSONRoundTrip(f *testing.F) {
-	for _, seed := range []string{`null`, `{"x":[1,-0.0,true]}`, `"\ud83d\ude00"`, `{"a":1,"a":2}`, `[1,]`} {
+	for _, seed := range []string{`null`, `{"x":[1,-0.0,true]}`, `"\ud83d\ude00"`, `{"a":1,"a":2}`, `[1,]`,
+		`[1,1.0,1e0,0.0,-0.0,5e-324,1e-999,-1e-999,9223372036854775807]`,
+		`{"nested":[{"int":1,"float":1.0,"zero":-0.0}]}`} {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, text string) {
@@ -129,7 +191,7 @@ func FuzzJSONRoundTrip(f *testing.F) {
 			t.Fatal(err)
 		}
 		equal, err := e.equal(decoded.value, again.value)
-		if err != nil || !equal {
+		if err != nil || !equal || !sameJSONRepresentation(decoded.value, again.value) {
 			t.Fatalf("round-trip value changed: %q %q %v", text, output, err)
 		}
 	})

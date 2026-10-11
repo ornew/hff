@@ -339,8 +339,18 @@ fuzz target.
 ## Fuzz and benchmark JSON conversion
 
 The strict JSON codec fuzz target checks round trips and malformed-input
-handling. The benchmarks measure codec work at several object sizes; they do
-not establish a performance guarantee or justify changing default limits.
+handling, and compares recursive HFF JSON representation in addition to
+semantic equality. This catches changes to numeric type and float bits that
+HFF equality intentionally treats as equal, including nested arrays and
+objects. Regression seeds include integral floats and exponents, signed zero,
+subnormals, underflow, and the `int64` maximum. A focused oracle test confirms
+that semantically equal values such as integer `1` versus float `1.0` and
+positive versus negative zero are rejected when their JSON representation
+changes. This is targeted codec coverage, not a claim that every JSON
+representation is exhaustively tested.
+
+The benchmarks measure codec work at several object sizes; they do not
+establish a performance guarantee or justify changing default limits.
 
 ```sh
 go test ./backends/local -run '^$' -fuzz '^FuzzJSONRoundTrip$' -fuzztime=10s -parallel=2
