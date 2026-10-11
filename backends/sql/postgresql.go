@@ -24,7 +24,6 @@ type builder struct {
 	jsonValues        map[string]JSONFormat
 	parameters        map[hff.BindingID]jsonParameter
 	sharedPaths       map[string]expression
-	projectionDepth   int
 }
 
 // present tracks HFF's internal no-value separately from SQL NULL.
@@ -128,28 +127,36 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 	return value, nil
 }
 
-// Share only schema-rooted, unguarded JSON paths in the outer projection scope.
-// Callback bindings and guards carry independent presence and scope information.
+// Share unguarded JSON paths only inside their current projection scope.
+// Parameter identity distinguishes captures from shadowed callback names.
 func (b *builder) shareableJSONPath(n hff.Node) (string, bool) {
-	if b.projectionDepth != 0 {
+	root := n
+	var fields []string
+	for root.Kind() == hff.FieldNode {
+		field, _ := root.Field()
+		fields = append(fields, field)
+		root, _ = root.Child(0)
+	}
+	if root.Kind() == hff.ParameterNode {
+		binding, ok := root.Binding()
+		if !ok {
+			return "", false
+		}
+		if _, exists := b.parameters[binding.ID()]; !exists {
+			return "", false
+		}
+		return fmt.Sprint("parameter:", binding.ID(), ":", pathKey(fields), ":", n.Type().Key()), true
+	}
+	if root.Kind() != hff.VariableNode {
 		return "", false
 	}
 	path, ok := n.Path()
 	if !ok {
 		return "", false
 	}
-	for parent := n; parent.Valid(); {
-		if parent.Kind() == hff.VariableNode {
-			break
-		}
-		if parent.Kind() != hff.FieldNode {
-			return "", false
-		}
-		parent, _ = parent.Child(0)
-	}
 	for size := len(path); size > 0; size-- {
 		if _, bound := b.jsonBindings[pathKey(path[:size])]; bound {
-			return pathKey(path), true
+			return "schema:" + pathKey(path) + ":" + n.Type().Key(), true
 		}
 	}
 	return "", false

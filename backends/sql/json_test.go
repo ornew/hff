@@ -40,6 +40,12 @@ func jsonBindings(format hffsql.JSONFormat) []hffsql.Binding {
 
 func jsonQueries() []string {
 	return []string{
+		`people:any(x=>x.age>=18 x.age<=100 x.age:exists)`,
+		`people:any(x=>x.age>=18 people:any(x=>x.age<=100))`,
+		`people:any(x=>x.name=null | x!.name=null)`,
+		`scores:map(x=>x+x)[0]=20`,
+		`scores:foldl(0,(acc,x)=>acc+acc+x)>=0`,
+		`people:any(x=>profile.age>=0 people:any(y=>profile.age>y.age) profile.age<=100)`,
 		`profile.age>=18 profile.age<=100 profile.age:exists`,
 		`profile.name:exists | profile!.name=null`,
 		`profile.father.name=null | profile.father.name="Bob"`,
@@ -130,6 +136,38 @@ func jsonQueries() []string {
 		`labels:keys[0]="app"`, `labels:values[-1]=null`, `labels:items[0]:size=2`, `labels:keys:size=2`, `labels:values:size=2`, `labels:items:size=2`,
 		`labels:size=2`, `labels:type="object"`, `labels`, `labels:[map[string|null]]:exists`,
 		`factors[0]>0`, `factors[0]:[int]:exists`, `factors[0]:[float]:exists`, `factors[0]=1.0`, `factors[0]:type="number"`, `factors:[list[float]]:exists`,
+	}
+}
+
+func TestCallbackPathSharingStaysInsideItsBindingScope(t *testing.T) {
+	e := jsonEngine(t)
+	for _, tc := range []struct {
+		source   string
+		keyCount int
+	}{
+		{`people:any(x=>x.age>=18 x.age<=100 x.age:exists)`, 1},
+		{`people:any(x=>x.age>=18) people:any(x=>x.age<=100)`, 2},
+		{`people:any(x=>x.age>=18 people:any(x=>x.age<=100))`, 2},
+	} {
+		p, err := e.Compile(context.Background(), tc.source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
+			q, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(jsonBindings(format)...))
+			if err != nil {
+				t.Fatal(err)
+			}
+			keys := 0
+			for _, arg := range q.Args() {
+				if name, ok := arg.(string); ok && name == "age" {
+					keys++
+				}
+			}
+			if keys != tc.keyCount {
+				t.Fatalf("%s: age key bound %d times, want %d", tc.source, keys, tc.keyCount)
+			}
+		}
 	}
 }
 

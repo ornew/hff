@@ -15,8 +15,9 @@ func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONForm
 	}
 	alias := b.nextAlias()
 	outer := b.steps
+	outerPaths := b.sharedPaths
 	b.steps = nil
-	b.projectionDepth++
+	b.sharedPaths = nil
 	if b.parameters == nil {
 		b.parameters = make(map[hff.BindingID]jsonParameter)
 	}
@@ -25,7 +26,7 @@ func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONForm
 	b.parameters[id] = jsonParameter{code: alias + ".value", format: format}
 	defer func() {
 		b.steps = outer
-		b.projectionDepth--
+		b.sharedPaths = outerPaths
 		if existed {
 			b.parameters[id] = previous
 		} else {

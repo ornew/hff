@@ -34,14 +34,15 @@ func (b *builder) jsonPredicate(n hff.Node, name string) (expression, error) {
 	}
 	alias := b.nextAlias()
 	outerSteps := b.steps
+	outerPaths := b.sharedPaths
 	b.steps = nil
-	b.projectionDepth++
+	b.sharedPaths = nil
 	if b.parameters == nil {
 		b.parameters = make(map[hff.BindingID]jsonParameter)
 	}
 	id := parameters[0].ID()
 	b.parameters[id] = jsonParameter{code: alias + ".value", format: format}
-	defer func() { b.steps = outerSteps; b.projectionDepth--; delete(b.parameters, id) }()
+	defer func() { b.steps = outerSteps; b.sharedPaths = outerPaths; delete(b.parameters, id) }()
 	body, _ := callback.Child(0)
 	result, err := b.expression(body)
 	if err != nil {

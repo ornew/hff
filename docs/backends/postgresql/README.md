@@ -151,11 +151,13 @@ that constant instead of projecting a separate presence column. Presence that
 depends on null or type guards remains explicit, as do value projections, so
 this simplification preserves null and no-value behavior. It is a conservative
 SQL-shape optimization; no performance improvement is claimed.
-For JSON, JSONB, and composite-backed values, repeated unguarded accesses to the
-same schema-known path can share extraction within an outer projection scope.
-Guarded, dynamic, and callback scopes remain separate so their aliases and
-presence behavior do not escape their scope. This also changes SQL shape only;
-it makes no measured performance claim.
+For JSON, JSONB, and composite-backed values, each projection scope has its own
+path cache. Repeated unguarded schema-known accesses can share extraction within
+that scope, including callback parameter field reads keyed by binding identity,
+field path, and type. Captures, shadowed bindings, and separate callbacks do not
+share entries across scopes. Guarded paths, dynamic indexes, and method calls
+are not cache entries. This preserves scope and presence behavior while
+changing SQL shape only; no measured performance improvement is claimed.
 The declared schema also permits limited check elimination: a non-nullable
 child does not need a redundant SQL null test, and a type guard needs no second
 type check when its constraint exactly matches the child's inferred type.
