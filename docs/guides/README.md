@@ -5,6 +5,7 @@ Go 1.27.1. The [language specification](../../spec/README.md) describes query
 semantics; the [Go API record](../design/004-go-api.md) describes the complete
 compilation and backend lifecycle.
 
+- [Parse HFF syntax during development](parsing.md)
 - [Configure an engine and validate records](getting-started.md)
 - [Schemas and immutable values](schemas-and-values.md)
 - [Capabilities and resource limits](configuration.md)

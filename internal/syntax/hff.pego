@@ -1,0 +1,96 @@
+// HFF's fixed grammar. Whitespace is a predicate boundary, not a global skip.
+package syntax
+
+type Expr = Empty | Or | And | Not | Binary | Unary | Access | Group | Number | String | Bool | Null | Variable | ListLiteral | ObjectLiteral
+type Name = PlainName | QuotedName
+type Argument = Expr | Callback
+type Suffix = FieldAccess | IndexAccess | MethodCall | Guard
+
+type Empty struct {}
+type Or struct { Terms []Expr }
+type And struct { Terms []Expr }
+type Not struct { X Expr }
+type Binary struct { Left Expr, Op Match, Right Expr }
+type Unary struct { Op Match, X Expr }
+type Access struct { Base Expr, Parts []Suffix }
+type Group struct { X Expr }
+type Variable struct { Name Name }
+type Number terminal
+type String terminal
+type Bool terminal
+type Null terminal
+type PlainName terminal
+type QuotedName terminal
+type ListLiteral struct { Values []Expr }
+type ObjectLiteral struct { Members []Member }
+type Member struct { Key String, Value Expr }
+type FieldAccess struct { Name Name }
+type IndexAccess struct { Index Expr }
+type MethodCall struct { Name Name, Args []Argument }
+type Guard struct {}
+type Callback struct { Params []Name, Body Expr }
+
+def main: Expr = present / empty
+def present: Expr = ws x:expression ws $$ -> $x
+def empty: Empty = ws $$ -> new Empty{}
+def expression: Expr = first:conjunction rest:(-ws -"|" -ws x:conjunction)*
+    -> new Or{Terms: concat(list($first), map($rest, (r) => $r.x))}
+def conjunction: Expr = first:predicate rest:(-space x:predicate)*
+    -> new And{Terms: concat(list($first), map($rest, (r) => $r.x))}
+def predicate: Expr = negation / comparison
+def negation: Not = "!" x:predicate -> new Not{X: $x}
+// Comparison is deliberately non-associative.
+def comparison: Expr = compare / arithmetic
+def compare: Binary = lhs:arithmetic op:compareop rhs:arithmetic
+    -> new Binary{Left: $lhs, Op: $op, Right: $rhs}
+def compareop = "!~" / "!=" / "<=" / ">=" / equalop / "~" / "<" / ">"
+def equalop = op:"=" !">" -> $op
+def arithmetic: Expr = pratt {
+    operand access
+    level { infix left "+" / "-" -> new Binary{Left: $lhs, Op: $op, Right: $rhs} }
+    level { infix left "*" / "/" / "%" -> new Binary{Left: $lhs, Op: $op, Right: $rhs} }
+    level { prefix "-" -> new Unary{Op: $op, X: $rhs} }
+}
+def access: Expr = base:primary parts:suffix* -> new Access{Base: $base, Parts: $parts}
+def suffix: Suffix = fieldaccess / indexaccess / methodcall / guard
+def fieldaccess: FieldAccess = "." n:name -> new FieldAccess{Name: $n}
+def indexaccess: IndexAccess = "[" ws x:expression ws "]" -> new IndexAccess{Index: $x}
+def methodcall: MethodCall = ":" n:name "(" ws args:arguments? ws ")" -> new MethodCall{Name: $n, Args: concat($args)}
+def guard: Guard = "!" !("=" / "~") -> new Guard{}
+def primary: Expr = group / object / array / string / number / bool / null / variable
+def group: Group = "(" ws x:expression ws ")" -> new Group{X: $x}
+def variable: Variable = n:name -> new Variable{Name: $n}
+def arguments = first:argument rest:(-ws -"," -ws x:argument)*
+    -> concat(list($first), map($rest, (r) => $r.x))
+def argument: Argument = callbackarg / expression
+def callbackarg: Callback = callback / groupedcallback
+def groupedcallback: Callback = "(" ws x:callbackarg ws ")" -> $x
+def callback: Callback = params:parameters ws "=>" ws body:expression
+    -> new Callback{Params: $params, Body: $body}
+def parameters = oneparam / manyparams
+def oneparam = n:name -> list($n)
+def manyparams = "(" ws ns:names? ws ")" -> concat($ns)
+def names = first:name rest:(-ws -"," -ws n:name)*
+    -> concat(list($first), map($rest, (r) => $r.n))
+def array: ListLiteral = "[" ws es:elements? ws "]" -> new ListLiteral{Values: concat($es)}
+def elements = first:expression rest:(-ws -"," -ws x:expression)*
+    -> concat(list($first), map($rest, (r) => $r.x))
+def object: ObjectLiteral = "{" ws ms:members? ws "}" -> new ObjectLiteral{Members: concat($ms)}
+def members = first:member rest:(-ws -"," -ws m:member)*
+    -> concat(list($first), map($rest, (r) => $r.m))
+def member: Member = k:string ws ":" ws x:expression -> new Member{Key: $k, Value: $x}
+def string: String = "\"" ((?^"\\\u{0}-\u{1f})+ / escape)* "\""
+def escape = "\\" ((?"\\/bfnrt) / "u" hex hex hex hex)
+def hex = (?0-9a-fA-F)
+def number: Number = integer fraction? exponent?
+def integer = "0" / (?1-9) (?0-9)*
+def fraction = "." (?0-9)+
+def exponent = (?eE) (?+\-)? (?0-9)+
+def bool: Bool = ("true" / "false") !identpart
+def null: Null = "null" !identpart
+def name: Name = quotedname / plainname
+def plainname: PlainName = !(("true" / "false" / "null") !identpart) (?a-zA-Z_) identpart*
+def identpart = (?a-zA-Z_0-9)
+def quotedname: QuotedName = "`" ((?^`\\)+ / "\\" (?`\\))* "`"
+def space = (? \t\r\n)+
+def ws = (? \t\r\n)*
