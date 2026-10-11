@@ -45,6 +45,18 @@ Run this benchmark alone with allocation reporting:
 go test ./backends/local -run '^$' -bench '^BenchmarkCollections$' -benchmem
 ```
 
+The PostgreSQL structured-build benchmark measures pure translation for
+composite, JSON, and JSONB bindings with scalar, `any()`, and `foldl()` queries.
+It reports Build time and allocations together with generated SQL bytes and
+parameter count; it excludes database planning and execution. The short local
+run is a baseline for these cases, not a performance guarantee or a basis for
+changing default limits. Compare results with the same Go version, hardware,
+and query shapes.
+
+```sh
+go test ./backends/sql -run '^$' -bench '^BenchmarkPostgreSQLStructuredBuild$' -benchmem
+```
+
 ## Fuzz local matching
 
 The local matcher fuzz target compiles a query, builds a filter, and generates
