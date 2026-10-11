@@ -68,6 +68,27 @@ func TestConstantPresenceDoesNotCreateProjectionColumns(t *testing.T) {
 	}
 }
 
+func TestScalarLiteralsRemainTypedParametersWithoutProjections(t *testing.T) {
+	query, err := hffsql.Build(context.Background(), compile(t, `age+1>18 name="O'Reilly" flag=true factor<1.5`), hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(query.Args(), []any{int64(1), int64(18), "O'Reilly", true, float64(1.5)}) {
+		t.Fatal("literal argument representations changed:", query.Args())
+	}
+	for _, reference := range []string{"$1::bigint", "$2::bigint", "$3::text", "$4::boolean", "$5::double precision"} {
+		if strings.Contains(query.Where(), "SELECT ("+reference+") AS v") {
+			t.Fatal("literal parameter retains a redundant projection subquery:", reference, query.Where())
+		}
+		if !strings.Contains(query.Where(), reference) {
+			t.Fatal("missing typed parameter reference:", reference, query.Where())
+		}
+	}
+	if strings.Contains(query.Where(), "O'Reilly") || !strings.Contains(query.Where(), "OFFSET 0") {
+		t.Fatal("parameter binding or computed projection barrier lost:", query.Where())
+	}
+}
+
 func TestSchemaProvenGuardsOmitRedundantNullChecks(t *testing.T) {
 	ctx := context.Background()
 	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Int("age"))), engine.WithCapabilities(capabilities.Standard()))
@@ -323,6 +344,7 @@ func TestArithmeticReferenceExpectations(t *testing.T) {
 func parityCases() []parityCase {
 	var cases []parityCase
 	queries := []string{
+		`age+1>18 name="O'Reilly" flag=true factor<1.5`,
 		`factor:tojson="1.25"`, `factor:tostring="-0.0"`, `factor:tojson="5e-324"`, `factor:tojson="1.7976931348623157e+308"`,
 		`name:tojson="\"Alice\""`, `name:tostring="Alice"`, `age:tojson="18"`, `flag:tojson="true"`,
 		`name!:tojson="null"`, `!name!:tostring="null"`, `name:[int]:tojson:exists`,

@@ -146,6 +146,10 @@ PostgreSQL is the only currently supported SQL dialect.
 The builder uses relational subqueries for chained operations to keep generated
 SQL growth linear. This may make the predicate shape more involved; callers
 should treat it as opaque and rely on the bound parameters, not its exact text.
+Literal nodes can refer directly to their typed bound parameters without an
+extra one-row projection. Values remain in `Args()` rather than interpolated
+into SQL text; computed expressions and guards retain their `OFFSET 0`
+projection barriers.
 When a step's presence is statically known to be true, the translator can retain
 that constant instead of projecting a separate presence column. Presence that
 depends on null or type guards remains explicit, as do value projections, so

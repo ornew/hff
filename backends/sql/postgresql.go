@@ -92,6 +92,12 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 	if err != nil {
 		return expression{}, err
 	}
+	// A typed parameter reference is already an immutable SQL value. Keep it
+	// bound directly; projecting it adds a relation without preventing any
+	// duplicated computation. Computed expressions still need their barriers.
+	if n.Kind() == hff.LiteralNode {
+		return value, nil
+	}
 	// Give each value and any dynamic no-value flag a relational name. Parent
 	// nodes reference these names rather than expanding child SQL repeatedly.
 	// Preserve constant presence so it simplifies surrounding conditions.
