@@ -12,21 +12,38 @@ import (
 )
 
 type jsonReader struct {
-	e        *evaluation
-	text     string
-	pos      int
-	bad      bool
-	maxDepth int
+	e         *evaluation
+	text      string
+	pos       int
+	bad       bool
+	maxDepth  int
+	err       error
+	nextCheck int
+}
+
+// checkpoint checks long scans without charging the already counted input bytes again.
+func (r *jsonReader) checkpoint() bool {
+	if r.err != nil {
+		return false
+	}
+	if r.pos >= r.nextCheck {
+		r.err = cancelled(r.e.ctx)
+		r.nextCheck = r.pos + 4096
+	}
+	return r.err == nil
 }
 
 func (r *jsonReader) whitespace() {
 	for r.pos < len(r.text) && strings.ContainsRune(" \t\r\n", rune(r.text[r.pos])) {
+		if !r.checkpoint() {
+			return
+		}
 		r.pos++
 	}
 }
 func (r *jsonReader) consume(ch byte) bool {
 	r.whitespace()
-	if r.pos < len(r.text) && r.text[r.pos] == ch {
+	if r.err == nil && r.pos < len(r.text) && r.text[r.pos] == ch {
 		r.pos++
 		return true
 	}
@@ -40,6 +57,9 @@ func (r *jsonReader) quoted() string {
 	}
 	r.pos++
 	for r.pos < len(r.text) {
+		if !r.checkpoint() {
+			return ""
+		}
 		ch := r.text[r.pos]
 		r.pos++
 		if ch == '\\' {
@@ -48,6 +68,7 @@ func (r *jsonReader) quoted() string {
 		}
 		if ch == '"' {
 			value, err := core.DecodeJSONString(r.text[start:r.pos])
+			r.err = cancelled(r.e.ctx)
 			r.bad = r.bad || err != nil
 			return value
 		}
@@ -66,13 +87,20 @@ func (r *jsonReader) value(depth int) (core.Value, error) {
 		return core.Value{}, err
 	}
 	r.whitespace()
+	if r.err != nil {
+		return core.Value{}, r.err
+	}
 	if r.pos >= len(r.text) {
 		r.bad = true
 		return core.Null(), nil
 	}
 	switch r.text[r.pos] {
 	case '"':
-		return core.String(r.quoted()), nil
+		text := r.quoted()
+		if r.err != nil {
+			return core.Value{}, r.err
+		}
+		return core.String(text), nil
 	case '[':
 		r.pos++
 		values := []core.Value{}
@@ -102,6 +130,9 @@ func (r *jsonReader) value(depth int) (core.Value, error) {
 		for {
 			r.whitespace()
 			key := r.quoted()
+			if r.err != nil {
+				return core.Value{}, r.err
+			}
 			if _, exists := values[key]; exists {
 				r.bad = true
 			}
@@ -125,6 +156,9 @@ func (r *jsonReader) value(depth int) (core.Value, error) {
 	}
 	start := r.pos
 	for r.pos < len(r.text) && !strings.ContainsRune(" \t\r\n,]}", rune(r.text[r.pos])) {
+		if !r.checkpoint() {
+			return core.Value{}, r.err
+		}
 		r.pos++
 	}
 	token := r.text[start:r.pos]
@@ -147,7 +181,11 @@ func (e *evaluation) decodeJSON(text string, maxDepth int) (result, error) {
 	if err := e.charge(len(text)); err != nil {
 		return result{}, err
 	}
-	if !utf8.ValidString(text) {
+	valid := utf8.ValidString(text)
+	if err := cancelled(e.ctx); err != nil {
+		return result{}, err
+	}
+	if !valid {
 		return null(), nil
 	}
 	r := jsonReader{e: e, text: text, maxDepth: maxDepth}
@@ -155,7 +193,16 @@ func (e *evaluation) decodeJSON(text string, maxDepth int) (result, error) {
 	if err != nil {
 		return result{}, err
 	}
+	if r.err != nil {
+		return result{}, r.err
+	}
 	r.whitespace()
+	if r.err != nil {
+		return result{}, r.err
+	}
+	if err := cancelled(e.ctx); err != nil {
+		return result{}, err
+	}
 	if r.bad || r.pos != len(text) {
 		return null(), nil
 	}

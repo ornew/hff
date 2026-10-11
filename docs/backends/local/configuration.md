@@ -147,6 +147,17 @@ input. Map keys are still visited in byte-lexical order, matching Go's
 merging runs, and comparing long common prefixes. Cancellation returns no
 partially ordered key list.
 
+Local JSON parsing also checks context while scanning whitespace, quoted
+strings and object keys, and unquoted tokens, with context checks at
+approximately 4 KiB intervals. Scanning a two-byte JSON escape may cross a
+checkpoint by one byte. The original JSON input bytes are charged once;
+checkpoints do not charge them again. Cancellation returns an error with the
+context cause preserved and no partial value. The initial whole-input UTF-8
+validity check and the standard-library JSON string decoder are single calls
+that cannot be interrupted internally; HFF checks context after they return.
+This is cooperative cancellation, not immediate preemption during every
+decoding step.
+
 ## Handle errors
 
 ```go

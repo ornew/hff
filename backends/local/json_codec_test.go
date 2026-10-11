@@ -3,7 +3,9 @@ package local
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -131,4 +133,73 @@ func FuzzJSONRoundTrip(f *testing.F) {
 			t.Fatalf("round-trip value changed: %q %q %v", text, output, err)
 		}
 	})
+}
+
+// Cancel during a scan, rather than before the decoder begins.
+type jsonScanContext struct {
+	context.Context
+	calls  int
+	cancel context.CancelCauseFunc
+	cause  error
+}
+
+func (c *jsonScanContext) Err() error {
+	c.calls++
+	if c.calls == 5 {
+		c.cancel(c.cause)
+	}
+	return c.Context.Err()
+}
+
+func TestJSONCancellationDuringTokenScans(t *testing.T) {
+	long := strings.Repeat("a", 32768)
+	for _, tc := range []struct{ name, text string }{
+		{"leading whitespace", strings.Repeat(" ", 32768) + "null"},
+		{"trailing whitespace", "null" + strings.Repeat(" ", 32768)},
+		{"string", `"` + long + `"`},
+		{"object key", `{"` + long + `":true}`},
+		{"number", strings.Repeat("1", 32768)},
+		{"escaped string", `"` + strings.Repeat(`\n`, 16384) + `"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cause := errors.New("request stopped during JSON scan")
+			ctx, cancel := context.WithCancelCause(context.Background())
+			defer cancel(nil)
+			probe := &jsonScanContext{Context: ctx, cancel: cancel, cause: cause}
+			e := evaluation{ctx: probe, limits: core.DefaultLimits()}
+			got, err := e.decodeJSON(tc.text, 64)
+			if !errors.Is(err, context.Canceled) || !errors.Is(err, cause) {
+				t.Fatalf("cancellation lost: %v", err)
+			}
+			if got.present || got.value.Kind() != core.InvalidKind {
+				t.Fatalf("partial value returned: %#v", got)
+			}
+		})
+	}
+}
+
+func TestJSONScannerStopsBeforeTokenEnd(t *testing.T) {
+	for _, kind := range []string{"whitespace", "string", "number"} {
+		t.Run(kind, func(t *testing.T) {
+			ctx, cancel := context.WithCancelCause(context.Background())
+			defer cancel(nil)
+			probe := &jsonScanContext{Context: ctx, cancel: cancel, cause: errors.New("scan stopped")}
+			e := evaluation{ctx: probe, limits: core.DefaultLimits()}
+			r := jsonReader{e: &e, maxDepth: 64}
+			switch kind {
+			case "whitespace":
+				r.text = strings.Repeat(" ", 32768)
+				r.whitespace()
+			case "string":
+				r.text = `"` + strings.Repeat("a", 32768) + `"`
+				r.quoted()
+			case "number":
+				r.text = strings.Repeat("1", 32768)
+				_, r.err = r.value(1)
+			}
+			if !errors.Is(r.err, context.Canceled) || r.pos < 4096 || r.pos >= len(r.text) {
+				t.Fatalf("scanner did not stop within token: pos=%d length=%d error=%v", r.pos, len(r.text), r.err)
+			}
+		})
+	}
 }
