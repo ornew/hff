@@ -1,6 +1,7 @@
 package local
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"math"
 	"strconv"
@@ -60,6 +61,27 @@ func scalarMethod(id string, receiver core.Value, args []core.Value) (core.Value
 			return core.Null(), true
 		}
 		return core.Int(int64(len(b))), true
+	case "bytes.tobase64":
+		data, ok := receiver.BytesView()
+		if !ok {
+			return core.Null(), true
+		}
+		return core.String(base64.StdEncoding.EncodeToString(data)), true
+	case "string.frombase64":
+		text, ok := receiver.AsString()
+		if !ok {
+			return core.Null(), true
+		}
+		// Go's decoder deliberately ignores CR/LF; HFF accepts only the canonical
+		// standard alphabet and padding, including canonical zero padding bits.
+		if strings.ContainsAny(text, "\r\n") {
+			return core.Null(), true
+		}
+		data, err := base64.StdEncoding.Strict().DecodeString(text)
+		if err != nil {
+			return core.Null(), true
+		}
+		return core.Bytes(data), true
 	case "string.len":
 		s, ok := receiver.AsString()
 		if !ok {

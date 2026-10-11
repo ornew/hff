@@ -97,7 +97,9 @@ conversions yield null. HFF's regex reference syntax follows RE2 except the
 byte escape `\C`, which is excluded and therefore invalid. A backend may
 support a smaller regex subset only when its support matrix or compatibility
 profile documents the restriction. Base64 uses the standard alphabet and
-required padding; URL-safe and unpadded alternatives are not accepted.
+required padding; URL-safe and unpadded alternatives are not accepted. Decoding
+also rejects embedded CR/LF and non-canonical pad bits. Invalid base64 returns
+null, and null propagates through both conversion methods.
 
 `bool()` accepts exactly `true` or `false`. `number()` accepts JSON numeric
 spelling and follows literal subtype selection. Neither trims surrounding

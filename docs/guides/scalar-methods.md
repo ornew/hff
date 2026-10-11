@@ -14,11 +14,11 @@ The local scalar/string set is:
 | Any | `type()`, `exists()`, `in(any...)` |
 | Bool | `and(bool)`, `or(bool)`, `not()` |
 | Number | `round()`, `ceil()`, `floor()` |
-| String | `len()`, `contains(string...)`, `matches(string)`, `startswith(string)`, `endswith(string)`, `lower()`, `upper()`, `bool()`, `number()`, `concat(string)` |
-| Bytes | `len()` |
+| String | `len()`, `contains(string...)`, `matches(string)`, `startswith(string)`, `endswith(string)`, `lower()`, `upper()`, `bool()`, `number()`, `concat(string)`, `frombase64()` |
+| Bytes | `len()`, `tobase64()` |
 
 This set excludes `any:tostring()` and `any:tojson()`, temporal conversions,
-JSON parsing, and base64 conversions. List/object methods are covered in the
+and JSON parsing. List/object methods are covered in the
 [collections guide](collections.md), and callback methods in the
 [callback guide](callbacks.md). A query can compile successfully while still
 failing local `Build` with `hff.BackendError` for an unsupported method.
@@ -45,6 +45,38 @@ becomes `-3`. `round()`, `ceil()`, and `floor()` preserve the input numeric
 subtype. `string:bool()` accepts exactly `true` or `false`, and `string:number()`
 accepts JSON number spelling; neither trims whitespace. Invalid patterns or
 conversions yield null.
+
+## Base64 and byte values
+
+`string:frombase64()` decodes standard padded base64 into an immutable bytes
+value. `bytes:tobase64()` encodes bytes with the standard alphabet and required
+padding. URL-safe and unpadded forms, embedded CR/LF, and non-canonical pad bits
+are rejected; an invalid decode returns null. Null inputs propagate as null.
+
+Assuming `encoded` is a string field, these predicates check the decoded byte
+length and a decode/encode round trip:
+
+```hff
+encoded:frombase64:len=4
+encoded:frombase64:tobase64=encoded
+```
+
+The methods charge their input byte length to the local per-match `MaxSteps`
+budget. Run the complete example from the repository root:
+
+```sh
+go run ./examples/base64
+```
+
+It prints:
+
+```text
+"AQIDBA==" -> true
+"AQIDBA" -> false
+"AQIDBA==\n" -> false
+```
+
+See the [configuration guide](configuration.md) for limit behavior.
 
 ## Generic value methods
 

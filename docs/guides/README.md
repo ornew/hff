@@ -18,8 +18,8 @@ compilation and backend lifecycle.
 The current implementation provides values, schemas, feature selection, engine
 configuration, validated input, an internal syntax-only parser, public common
 query compilation, core local matching, scalar/string and list/object methods,
-and collection callbacks. Additional temporal/JSON/base64 methods, SQL
-translation, and extension implementation registration remain unavailable.
+base64 conversions, and collection callbacks. Additional temporal/JSON methods,
+SQL translation, and extension implementation registration remain unavailable.
 Parser generation and the internal syntax parser are documented in the
 [Development section](../development/README.md), separately from integration
 guides.

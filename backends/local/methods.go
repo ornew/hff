@@ -16,6 +16,8 @@ func supportedMethod(id string) bool {
 		return true
 	case "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr":
 		return true
+	case "string.frombase64", "bytes.tobase64":
+		return true
 	}
 	return false
 }
@@ -143,6 +145,10 @@ func (e *evaluation) call(n plan.Node) (result, error) {
 	return ordinary(value), nil
 }
 func (e *evaluation) scalarCost(id string, receiver core.Value, args []core.Value) error {
+	if id == "bytes.tobase64" {
+		data, _ := receiver.BytesView()
+		return e.charge(len(data))
+	}
 	if !strings.HasPrefix(id, "string.") {
 		return nil
 	}
