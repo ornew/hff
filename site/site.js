@@ -79,19 +79,72 @@
       seen.add(page); return true;
     }).slice(0, 8);
   }
+  function searchRanges(text, terms) {
+    var folded = text.toLowerCase();
+    var starts = [], ends = [];
+    // Map the case-folded UTF-16 offsets back to original text offsets so that
+    // rendering keeps the source spelling and never needs HTML interpolation.
+    for (var offset = 0; offset < text.length;) {
+      var point = text.codePointAt(offset);
+      var original = String.fromCodePoint(point);
+      var lowered = original.toLowerCase();
+      for (var i = 0; i < lowered.length; i++) {
+        starts.push(offset);
+        ends.push(offset + original.length);
+      }
+      offset += original.length;
+    }
+    if (starts.length !== folded.length) return [];
+
+    var ranges = [];
+    terms.forEach(function (term) {
+      if (!term) return;
+      var needle = term.toLowerCase(), from = 0, at;
+      while ((at = folded.indexOf(needle, from)) !== -1) {
+        ranges.push({ start: starts[at], end: ends[at + needle.length - 1] });
+        from = at + Math.max(needle.length, 1);
+      }
+    });
+    ranges.sort(function (a, b) { return a.start - b.start || a.end - b.end; });
+    return ranges.reduce(function (merged, range) {
+      var last = merged[merged.length - 1];
+      if (last && range.start <= last.end) last.end = Math.max(last.end, range.end);
+      else merged.push({ start: range.start, end: range.end });
+      return merged;
+    }, []);
+  }
+  function appendHighlighted(parent, text, terms) {
+    var ranges = searchRanges(text, terms), offset = 0;
+    ranges.forEach(function (range) {
+      if (range.start > offset) parent.appendChild(document.createTextNode(text.slice(offset, range.start)));
+      var mark = document.createElement('mark');
+      mark.className = 'search-highlight';
+      mark.textContent = text.slice(range.start, range.end);
+      parent.appendChild(mark);
+      offset = range.end;
+    });
+    if (offset < text.length || !ranges.length) {
+      parent.appendChild(document.createTextNode(text.slice(offset)));
+    }
+  }
   function renderResults() {
     results.replaceChildren();
-    var query = input.value.trim(), hits = rank(query);
+    var query = input.value.trim(), terms = query.toLowerCase().split(/\s+/).filter(Boolean), hits = rank(query);
     status.textContent = query ? (hits.length ? hits.length + ' matching pages' : 'No matches. Try another word.') : 'Search the language specification and guides.';
     hits.forEach(function (hit) {
       var a = document.createElement('a');
       a.className = 'search-result';
       a.href = new URL(hit.entry.url, siteRoot).href;
-      var title = document.createElement('strong'); title.textContent = hit.entry.title;
+      var title = document.createElement('strong');
+      appendHighlighted(title, hit.entry.title, terms);
       var snippet = document.createElement('span');
-      var at = hit.entry.text.toLowerCase().indexOf(query.toLowerCase().split(/\s+/)[0]);
+      var ranges = searchRanges(hit.entry.text, terms);
+      var at = ranges.length ? ranges[0].start : 0;
       var start = Math.max(0, at - 45);
-      snippet.textContent = (start ? '…' : '') + hit.entry.text.slice(start, start + 160) + '…';
+      var excerpt = hit.entry.text.slice(start, start + 160);
+      if (start) snippet.appendChild(document.createTextNode('…'));
+      appendHighlighted(snippet, excerpt, terms);
+      snippet.appendChild(document.createTextNode('…'));
       a.append(title, snippet);
       a.addEventListener('click', function () { closeDialog(search); });
       results.append(a);
