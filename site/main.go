@@ -49,18 +49,20 @@ type navSection struct {
 }
 
 func navigation(pages []*page, current *page) []navSection {
-	sections := []navSection{{Name: "Overview"}, {Name: "Language"}, {Name: "Guides"}, {Name: "Design Records", Collapsible: true}, {Name: "Development", Collapsible: true}}
+	sections := []navSection{{Name: "Overview"}, {Name: "Language"}, {Name: "Tutorials"}, {Name: "Guides"}, {Name: "Design Records", Collapsible: true}, {Name: "Development", Collapsible: true}}
 	for _, p := range pages {
-		i := 2
+		i := 3
 		switch {
 		case p.Source == "README.md":
 			i = 0
 		case strings.HasPrefix(p.Source, "spec/"):
 			i = 1
+		case strings.HasPrefix(p.Source, "docs/tutorials/"):
+			i = 2
 		case strings.HasPrefix(p.Source, "docs/design/"):
-			i = 3
-		case p.Source == "docs/commit-messages.md" || strings.HasPrefix(p.Source, "docs/development/"):
 			i = 4
+		case p.Source == "docs/commit-messages.md" || strings.HasPrefix(p.Source, "docs/development/"):
+			i = 5
 		}
 		sections[i].Pages = append(sections[i].Pages, p)
 		if p == current {

@@ -5,6 +5,10 @@ Go 1.27.1. The [language specification](../../spec/README.md) describes query
 semantics; the [Go API record](../design/004-go-api.md) describes the complete
 compilation and backend lifecycle.
 
+For a staged introduction that builds and runs a complete local filter, start
+with the [tutorials](../tutorials/README.md). These guides provide focused API
+reference and operational detail.
+
 - [Inspect the compiled program](program-ir.md)
 - [Configure an engine and validate records](getting-started.md)
 - [Compile a query](compiling.md)
