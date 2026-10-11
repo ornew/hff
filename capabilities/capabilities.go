@@ -116,13 +116,21 @@ func (s Set) IDs() []ID {
 }
 
 // Check validates IDs and dependencies, without implicitly enabling permissions.
-func (s Set) Check() error {
+func (s Set) Check() error { return s.CheckWithMethods() }
+
+// CheckWithMethods recognizes explicitly declared extension IDs without adding
+// permissions. Unknown IDs remain configuration errors.
+func (s Set) CheckWithMethods(methodIDs ...string) error {
+	extensions := make(map[ID]bool, len(methodIDs))
+	for _, id := range methodIDs {
+		extensions[Method(id)] = true
+	}
 	if !s.specified {
 		return fmt.Errorf("capabilities must be explicitly selected")
 	}
 	for _, id := range s.IDs() {
 		dependencies, known := builtins[id]
-		if !known {
+		if !known && !extensions[id] {
 			return fmt.Errorf("unknown capability %q", id)
 		}
 		for _, dependency := range dependencies {

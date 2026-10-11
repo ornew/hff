@@ -53,6 +53,9 @@ func (e *evaluation) call(n plan.Node) (result, error) {
 	if err != nil {
 		return result{}, err
 	}
+	if _, extension := method.SignaturesView()[0].Declaration(); extension {
+		return e.extension(n, method, receiver)
+	}
 	if !receiver.present {
 		if name == "exists" {
 			return ordinary(core.Bool(false)), nil

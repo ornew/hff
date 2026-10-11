@@ -15,6 +15,7 @@ type Config struct {
 	Limits          hff.Limits
 	UnlimitedLimits bool
 	TimeZones       *TimeZoneProfile
+	Methods         []MethodImplementation
 }
 type Option struct{ apply func(*Config) error }
 
@@ -42,6 +43,7 @@ type Filter struct {
 	program   plan.Program
 	config    Config
 	timeZones zoneSnapshot
+	methods   map[string]MethodImplementation
 }
 
 // Build validates local support without evaluating a record.
@@ -80,18 +82,31 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Filter
 	}
 	// Evaluation keeps only privately parsed locations, not caller-owned data.
 	c.TimeZones = nil
-	if err := checkSupported(ctx, p.Root()); err != nil {
+	methods, err := snapshotMethods(c.Methods)
+	if err != nil {
 		return nil, err
 	}
-	return &Filter{program: p, config: c, timeZones: zones}, nil
+	c.Methods = nil
+	if err := checkSupported(ctx, p.Root(), methods); err != nil {
+		return nil, err
+	}
+	return &Filter{program: p, config: c, timeZones: zones, methods: methods}, nil
 }
-func checkSupported(ctx context.Context, n plan.Node) error {
+func checkSupported(ctx context.Context, n plan.Node, methods map[string]MethodImplementation) error {
 	if err := cancelled(ctx); err != nil {
 		return err
 	}
 	if n.Kind() == plan.CallNode {
 		method, _ := n.Method()
 		for _, signature := range method.Signatures() {
+			if declaration, extension := signature.Declaration(); extension {
+				implementation, ok := methods[signature.ID()]
+				if !ok || !core.MethodDeclaration(implementation.declaration).Equal(declaration) {
+					span := n.Span()
+					return &hff.Error{Code: hff.BackendError, Message: "missing or incompatible implementation for " + signature.ID(), Span: &span}
+				}
+				continue
+			}
 			if !supportedMethod(signature.ID()) {
 				return &hff.Error{Code: hff.BackendError, Message: fmt.Sprintf("local backend does not support %s", signature.ID())}
 			}
@@ -99,7 +114,7 @@ func checkSupported(ctx context.Context, n plan.Node) error {
 	}
 	for i := 0; i < n.ChildCount(); i++ {
 		child, _ := n.Child(i)
-		if err := checkSupported(ctx, child); err != nil {
+		if err := checkSupported(ctx, child, methods); err != nil {
 			return err
 		}
 	}
@@ -142,7 +157,7 @@ func (f *Filter) MatchInput(ctx context.Context, input hff.Input) (bool, error) 
 	return f.match(ctx, core.Value(input.Value()))
 }
 func (f *Filter) match(ctx context.Context, record core.Value) (bool, error) {
-	state := evaluation{ctx: ctx, record: record, limits: f.config.Limits, timeZones: f.timeZones}
+	state := evaluation{ctx: ctx, record: record, limits: f.config.Limits, timeZones: f.timeZones, methods: f.methods}
 	value, err := state.eval(f.program.Root())
 	if err != nil {
 		return false, err

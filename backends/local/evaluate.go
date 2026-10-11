@@ -22,6 +22,7 @@ type evaluation struct {
 	locals           map[plan.BindingID]core.Value
 	limits           core.Limits
 	timeZones        zoneSnapshot
+	methods          map[string]MethodImplementation
 	steps, generated int
 }
 

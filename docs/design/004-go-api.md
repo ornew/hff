@@ -17,10 +17,10 @@ The [language specification](../../spec/README.md) defines their semantic contra
 
 The common compiler and local backend's core operators, values, indexing,
 guards, short-circuit behavior, per-match budgets, scalar/string method
-families, list/object methods, collection callbacks, base64 conversions, and
-temporal methods are implemented. The SQL package builds parameterized
-PostgreSQL predicates for a scalar subset. JSON/stringification, broader SQL
-semantics, and extension registration remain in progress.
+families, list/object methods, collection callbacks, base64 and JSON conversions,
+temporal methods, and local extension evaluators are implemented. The SQL
+package builds parameterized PostgreSQL predicates for a scalar subset; SQL
+extension translators and broader SQL semantics remain in progress.
 
 ## Motivation
 
@@ -321,38 +321,46 @@ feature merely because it belongs to the engine's enabled set.
 
 ### Extension declarations and implementations
 
-A declaration belongs to the common engine configuration. It provides a stable
-method ID, the receiver-call name, receiver and parameter types, arity, result
-type, null behavior, and resource-cost contract. Declarations are immutable after
-New. They are independent of Go evaluation functions and backend translators.
-Built-in names cannot be replaced, and duplicate IDs or ambiguous overloads are
-configuration errors. Declared null behavior must comply with the language's
-extension contract rather than introduce arbitrary null/no-value semantics.
+A declaration belongs to the common engine configuration and describes one
+receiver signature, its receiver-call name, parameter types and arity, result
+type, null behavior, and resource-cost contract. Each signature has its own
+stable method ID. Non-overlapping signatures may share a call name; duplicate
+IDs, attempts to replace built-ins, and ambiguous overloads are configuration
+errors. Declarations are immutable after New and independent of Go evaluation
+functions and backend translators.
 
 The registration entry points use functional options:
 
 ```go
+customMethod, err := hff.NewMethodDeclaration(hff.MethodConfig{
+    ID:         "service.string.hasprefix",
+    Name:       "hasprefix",
+    Receiver:   schema.StringType,
+    Parameters: []hff.Type{schema.StringType},
+    Result:     schema.BoolType,
+    BaseCost:   1,
+})
+if err != nil {
+    return err
+}
+
 e, err := engine.New(
     engine.WithSchema(serviceSchema),
-    engine.WithCapabilities(features.Allow(customMethod.ID())),
+    engine.WithCapabilities(features.Allow(capabilities.Method(customMethod.ID()))),
     engine.WithMethods(customMethod),
 )
 
 filter, err := local.Build(ctx, program,
-    local.WithMethods(customEvaluator),
-)
-query, err := hffsql.Build(ctx, program,
-    hffsql.WithDialect(hffsql.PostgreSQL),
-    hffsql.WithBindings(bindings...),
-    hffsql.WithMethods(customTranslator),
+    local.WithMethods(local.Implement(customMethod, evaluator)),
 )
 ```
 
 Implementations identify the declared method ID and compatible signature.
 Builders resolve each used extension against their own implementation registry.
 A missing or incompatible implementation is a Build error. Implementations of
-unused methods are not required. SQL-only construction does not require a local
-Go evaluator, and neither builder falls back to another backend.
+unused methods are not required. The current SQL backend has no extension
+translator registration and rejects programs that use custom methods; it never
+falls back to a local evaluator.
 
 The local function signature is:
 
@@ -361,11 +369,16 @@ type MethodFunc func(call *Call, receiver hff.Value, args []hff.Value) (hff.Valu
 ```
 
 Call exposes context cancellation and additional resource charging. HFF handles
-argument/result validation, language null propagation, and the declaration's
-base cost before invoking a function. Ordinary conversion failures return Null()
-without an error. Cancellation, limit exhaustion, and implementation-contract
-failures return errors. Callback argument storage cannot mutate program or input
-storage. Implementations must not retain the call-local meter after returning.
+argument/result validation, default null propagation, and the declaration's
+fixed base cost (at least one unit) before invoking a function. A declaration
+may explicitly opt into invocation with null when its receiver/argument types
+allow null; no-value always propagates without invoking the extension. Ordinary
+conversion failures return Null() without an error. Cancellation, limit
+exhaustion, and implementation-contract failures return errors. The local
+implementation may charge additional steps and generated values through Call;
+the base cost is not a dynamic cost callback. Callback argument storage cannot
+mutate program or input storage. Implementations must not retain the call-local
+meter after returning.
 
 Local implementations operate on HFF values under a call-local context and
 resource meter. They must be pure, obey their type and cost contracts, and support
@@ -530,29 +543,22 @@ responsibilities to a filter language.
 
 ## Testing
 
-The API contract should be exercised through runnable local and SQL examples,
-including configuration rejection, invalid schemas, backend rejection, input
-mismatch, empty filters, explicit null tests, no-value, and budget exhaustion.
-Parallel evaluations and builds must not share mutable request state. A SQL-only
-path must not construct the local evaluator. SQL parameter tests should cover
-quotes, null semantics, identifier quoting, and binding order.
+The local extension tests cover invalid/ambiguous declarations, capability
+selection, overload dispatch, null/no-value behavior, implementation matching,
+result validation, charging, cancellation, panic recovery, and concurrent
+calls. SQL parameter and backend tests cover the SQL-specific contracts; SQL
+extension translators remain future work.
 
-These are acceptance criteria for implementation, not completed Go API tests.
+## Remaining implementation scope
 
-## Limitations and Open Questions
-
-The lifecycle, validated-input reuse, immutable IR access model, explicit
-capability selection, extension registration boundaries, and initial SQL dialect
-are defined in this record. Implementing the interfaces still requires a
-complete schema/value constructor reference, the NodeKind and payload catalog,
-feature/dependency IDs, extension callback signatures, default resource limits,
-and the PostgreSQL support matrix and driver encodings. These detailed contracts
-must accompany implementation rather than be inferred from examples.
+The common engine lifecycle, validated-input reuse, immutable IR access model,
+explicit capability selection, and local extension declarations/evaluators are
+implemented. SQL extension translators, additional dialects, and their
+parameter-encoding support matrices remain future backend work.
 
 The record specifies behavior and public API direction; acceptance does not
 claim that every package or method family has been implemented. Common
-compilation and the core, scalar/string, list/object, and callback local
-evaluation paths, base64 conversions, and temporal methods are available. A
-PostgreSQL scalar predicate subset is implemented; broader SQL operation and
-dialect support remain incomplete. JSON and stringification methods and
-extension implementations also remain incomplete.
+compilation and the core, scalar/string, list/object, callback, JSON, and local
+extension evaluation paths, as well as base64 and temporal conversions, are
+available. A PostgreSQL scalar predicate subset is implemented; broader SQL
+operation, extension translator, and dialect support remain incomplete.

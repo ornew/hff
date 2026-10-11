@@ -155,12 +155,26 @@ constraints require separate tests for the guarantees each engine advertises.
 
 ## Extension contract
 
-Extension methods use the existing receiver-call syntax and declare their
-receiver type, parameter types and arity, result type, and resource accounting.
-They MUST be pure, respect null/no-value rules, and participate in capability and
-backend checks. They MUST NOT replace a built-in method name. Adding an extension
-does not introduce tokens, operators, statements, or a service-specific grammar.
-An extension requiring unavailable processing-system behavior is rejected.
+Extension methods use the existing receiver-call syntax. Each immutable
+declaration describes one stable signature ID, receiver type, required and
+optional parameter types, an optional variadic type, result type, null policy,
+and fixed base cost. `engine.WithMethods` configures declarations;
+`capabilities.Method(declaration.ID())` separately grants permission. A local
+evaluator is registered with `local.WithMethods(local.Implement(...))`. Required
+parameters precede optional positions and the variadic tail; optional positions
+cannot be skipped to supply a variadic argument. Non-overlapping signatures may
+share a call name; duplicate IDs, built-in collisions, and ambiguous signatures
+are rejected.
+
+Extensions MUST be pure, respect null/no-value rules, and participate in
+capability and backend checks. The local evaluator has a fixed base cost of at
+least one unit and can charge additional steps and generated values through its
+call meter. Null propagates without invocation by default; explicit null
+invocation requires nullable declared types. No-value always propagates and is
+never exposed as an HFF value. Implementations MUST NOT replace a built-in method
+name. Adding an extension does not introduce tokens, operators, statements, or
+a service-specific grammar. The current SQL backend does not provide extension
+translators and rejects programs using custom methods.
 
 Engines identify their Unicode case-data, regex compatibility, and time zone
 data versions. HFF's regex reference follows RE2 except for the excluded `\C`

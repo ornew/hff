@@ -132,3 +132,9 @@ func (p Program) Schema() Type                   { return Type(plan.Program(p).S
 func (p Program) Capabilities() capabilities.Set { return plan.Program(p).Capabilities() }
 func (p Program) Limits() Limits                 { return plan.Program(p).Limits() }
 func (p Program) UnlimitedLimits() bool          { return plan.Program(p).UnlimitedLimits() }
+
+// Declaration returns the extension contract, or false for a built-in signature.
+func (s Signature) Declaration() (MethodDeclaration, bool) {
+	d, ok := plan.Signature(s).Declaration()
+	return MethodDeclaration(d), ok
+}

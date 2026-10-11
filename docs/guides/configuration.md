@@ -66,8 +66,10 @@ features := capabilities.None().Allow(
 The list methods any, all, map, flatmap, foldl, and foldr require Callbacks.
 Missing dependencies are errors, not implicitly enabled features. The Regex
 group adds or removes both regex operators and string.matches. Unknown IDs are
-rejected. Custom method declaration/implementation registration is not yet
-implemented, so custom IDs are not accepted by the current engine.
+rejected. A declared extension uses `capabilities.Method(declaration.ID())` and
+must also be included in `engine.WithMethods`. The engine checks that every
+capability ID is built in or belongs to a configured declaration. See the
+[extension guide](extensions.md) for the complete flow.
 
 Structural equality permissions are checked during compilation for `=`/`!=`,
 `in()`, `list:contains()`, and `list:unique()`. Scalar comparisons and explicit

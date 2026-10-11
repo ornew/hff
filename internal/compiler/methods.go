@@ -1,7 +1,6 @@
 package compiler
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/ornew/hff/capabilities"
@@ -14,7 +13,7 @@ func (c *compiler) call(receiver plan.Node, n *syntax.MethodCall, span core.Span
 	name := syntax.DecodeName(n.Name)
 	declarations := builtins(name)
 	if len(declarations) == 0 {
-		return plan.Node{}, c.failure(core.TypeError, n, fmt.Sprintf("unknown method %q", name))
+		return c.extensionCall(receiver, n, span)
 	}
 	var compatible []declaration
 	for _, d := range declarations {

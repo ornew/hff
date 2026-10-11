@@ -400,3 +400,23 @@ func TestScalarQueriesBuildAndLocalReference(t *testing.T) {
 		}
 	}
 }
+
+func TestDeclaredMethodRequiresSQLImplementation(t *testing.T) {
+	d, err := hff.NewMethodDeclaration(hff.MethodConfig{ID: "service.custom.v1", Name: "custom", Receiver: schema.StringType, Result: schema.BoolType, BaseCost: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.String("name"))), engine.WithMethods(d), engine.WithCapabilities(capabilities.Standard().Allow(capabilities.Method(d.ID()))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := e.Compile(context.Background(), `name:custom`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.Bind(hff.Path{"name"}, hffsql.Column("records", "name"))))
+	detail := requireCode(t, err, hff.BackendError)
+	if detail.Span == nil {
+		t.Fatal("missing custom method source span")
+	}
+}

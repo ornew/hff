@@ -35,6 +35,37 @@ func (e *evaluation) matchesType(v core.Value, t core.Type) (bool, error) {
 			}
 		}
 		return true, nil
+	case core.StructType:
+		values, ok := v.ObjectView()
+		if !ok {
+			return false, nil
+		}
+		fields := t.Fields()
+		known := make(map[string]bool, len(fields))
+		for _, field := range fields {
+			known[field.Name] = true
+			value, present := values[field.Name]
+			if !present {
+				if field.Optional || typeAdmitsNull(field.Type) {
+					continue
+				}
+				return false, nil
+			}
+			yes, err := e.matchesType(value, field.Type)
+			if err != nil || !yes {
+				return false, err
+			}
+		}
+		keys, err := e.objectKeys(values)
+		if err != nil {
+			return false, err
+		}
+		for _, key := range keys {
+			if !known[key] {
+				return false, nil
+			}
+		}
+		return true, nil
 	case core.MapType:
 		xs, ok := v.ObjectView()
 		if !ok {
@@ -88,4 +119,18 @@ var primitiveKinds = [...]core.Kind{
 	core.IntType: core.IntKind, core.FloatType: core.FloatKind,
 	core.StringType: core.StringKind, core.BytesType: core.BytesKind,
 	core.TimestampType: core.TimestampKind, core.DurationType: core.DurationKind,
+}
+
+func typeAdmitsNull(t core.Type) bool {
+	if t.Kind() == core.NullType {
+		return true
+	}
+	if t.Kind() == core.UnionType {
+		for _, m := range t.Members() {
+			if typeAdmitsNull(m) {
+				return true
+			}
+		}
+	}
+	return false
 }

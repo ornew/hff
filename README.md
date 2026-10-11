@@ -82,9 +82,10 @@ parser generator, not a requirement to compile grammars at runtime.
 This repository provides immutable values, schemas, capabilities, validated
 input, common query compilation, core local evaluation, scalar/string methods,
 and list/object methods and collection callbacks. Base64 and JSON conversion
-methods are also available locally. The SQL backend builds parameterized
-PostgreSQL predicates for a documented scalar subset; broader SQL operations
-and dialects remain in progress. Extension registration is not yet available.
+methods and local extension evaluators are also available. The SQL backend
+builds parameterized PostgreSQL predicates for a documented scalar subset;
+broader SQL operations, extension translators, and additional dialects remain
+in progress.
 Start with the
 [tutorials](docs/tutorials/README.md) for a staged local-service example, then
 use the [Go guides](docs/guides/README.md), including the
@@ -93,7 +94,8 @@ use the [Go guides](docs/guides/README.md), including the
 [JSON guide](docs/guides/json.md),
 [collections guide](docs/guides/collections.md),
 [PostgreSQL predicate guide](docs/guides/sql.md),
-[callback guide](docs/guides/callbacks.md).
+[callback guide](docs/guides/callbacks.md), and the
+[extension-method guide](docs/guides/extensions.md).
 
 Read the [language specification](spec/README.md), beginning with
 [syntax](spec/syntax.md), [types and schemas](spec/types.md), and

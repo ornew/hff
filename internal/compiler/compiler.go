@@ -20,6 +20,7 @@ type Config struct {
 	Capabilities capabilities.Set
 	Limits       core.Limits
 	Unlimited    bool
+	Methods      []core.MethodDeclaration
 }
 type compiler struct {
 	ctx           context.Context

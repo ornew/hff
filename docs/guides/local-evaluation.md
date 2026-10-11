@@ -117,8 +117,9 @@ postfix guards and explicit type guards, indexing, collection literals, and
 logical short-circuiting. It supports the scalar and string methods in the
 [scalar/string guide](scalar-methods.md) and list/object methods in the
 [collections guide](collections.md) and [callback guide](callbacks.md).
-JSON conversions are covered in the [JSON guide](json.md). Custom extension
-implementations are not yet supported. Base64 conversions are covered in the
+JSON conversions are covered in the [JSON guide](json.md). Local custom methods
+are supported; see the [extension guide](extensions.md) for declaration,
+capability, evaluator, and metering requirements. Base64 conversions are covered in the
 [scalar/string guide](scalar-methods.md). A program containing a method or
 operation not supported by the local backend fails during `Build` with
 `hff.BackendError`. Build never silently drops an operation. Use the

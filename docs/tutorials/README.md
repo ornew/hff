@@ -8,12 +8,15 @@ time. They use Go 1.27.1 and only APIs available in this repository.
 2. [Use a filter in a service](02-service-integration.md): compile and build
    once, validate records at ingestion, reuse validated inputs, and handle
    rejected queries as configuration errors.
+3. [Add a service-specific method](03-extension-methods.md): declare a typed
+   signature, select its capability, and register a local evaluator.
 
 Run each complete example from the repository root:
 
 ```sh
 go run ./examples/tutorial-first-filter
 go run ./examples/tutorial-service
+go run ./examples/extensions
 ```
 
 For API details, continue with the [Go guides](../guides/README.md); for

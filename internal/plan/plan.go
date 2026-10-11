@@ -78,10 +78,11 @@ type Signature struct {
 	parameters []core.Type
 	result     core.Type
 	variadic   bool
+	extension  core.MethodDeclaration
 }
 
 func NewSignature(id string, receiver core.Type, parameters []core.Type, result core.Type, variadic bool) Signature {
-	return Signature{id, receiver, append([]core.Type(nil), parameters...), result, variadic}
+	return Signature{id: id, receiver: receiver, parameters: append([]core.Type(nil), parameters...), result: result, variadic: variadic}
 }
 func (s Signature) ID() string              { return s.id }
 func (s Signature) Receiver() core.Type     { return s.receiver }
@@ -291,3 +292,15 @@ func (p Program) Limits() core.Limits {
 	return p.data.limits
 }
 func (p Program) UnlimitedLimits() bool { return p.data != nil && p.data.unlimited }
+
+func NewExtensionSignature(d core.MethodDeclaration) Signature {
+	parameters := append(d.Parameters(), d.Optional()...)
+	variadic := d.Variadic().Kind() != core.InvalidType
+	if variadic {
+		parameters = append(parameters, d.Variadic())
+	}
+	return Signature{id: d.ID(), receiver: d.Receiver(), parameters: parameters, result: d.Result(), variadic: variadic, extension: d}
+}
+func (s Signature) Declaration() (core.MethodDeclaration, bool) {
+	return s.extension, s.extension.Valid()
+}
