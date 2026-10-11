@@ -268,16 +268,26 @@ rejection result measures this admission path, not general scanning
 throughput. This comparison isolates source density at one byte length; it
 does not establish a safe maximum query size for other schemas or services.
 
-## Remaining evidence gaps
+## Default review outcome
 
-Boundary correctness and selected depth-64 workload costs are now measured.
-The compile-step benchmark measures one repeated structural-check workload
-near the default `MaxCompileSteps`; existing compile benchmarks cover
-representative query shapes and sizes, not a broad range of schemas and
-service workloads near that ceiling.
-Runtime benchmarks include one successful
-nested-search shape and one near-limit generated collection, plus explicit
-abort cases; input-admission timing covers one flat list shape, and generated
-value timing covers one flatmap shape. These do not cover a broader set of
-query shapes or service workloads. A reasoned review of the default values
-remains necessary.
+Reviewed 2026-10-12: retain the current finite defaults for the shared HFF
+configuration. The intended baseline is a service evaluating human-authored
+filters against ordinary schemas. Existing boundary tests and selected workload
+measurements show that the configured limits accept and reject their specified
+cases; no representative service SLO or workload evidence supports changing
+the values. The measurements below are the reason to keep the current limits
+as a conservative common starting point, not proof of universal safety.
+
+| Limit group | Reason to retain the current default | Operating boundary |
+|:--|:--|:--|
+| `MaxQueryBytes` 65,536 and `MaxCompileSteps` 1,000,000 | 64 KiB leaves room for hand-authored filters, while semantic work has its own finite counter for dense expressions. The dense byte-ceiling sample completes, and the structural-check test accepts 998,002 compile steps but rejects 1,000,002. | Dense syntax can consume much more work and cumulative allocation than padded source of the same size. A service can set smaller limits for its query profile. |
+| `MaxSyntaxDepth`, `MaxCallbackDepth`, `MaxInputDepth`, and `MaxJSONDepth` 64 | A depth of 64 allows meaningful nested expressions, callbacks, records, and JSON while placing a fixed ceiling on recursive shapes. Exact 64/65 boundaries are tested; selected depth-64 work completes. | Syntax depth can reject a nested callback before the separate callback limit. The callback benchmark raises syntax depth only to isolate the callback counter. |
+| `MaxInputValues` 100,000 | The value count bounds records independently of what a query reads. The exact boundary and one flat-list admission workload are verified. | This is a logical-value limit, not a record-byte or retained-memory limit; services should lower it when input size or latency targets require that. |
+| `MaxSteps` 1,000,000 and `MaxGeneratedValues` 100,000 | Runtime work and collection fan-out have separate finite limits. Selected nested-search and near-limit collection workloads complete, while abort cases return typed limit errors. | Generated-value counts do not bound bytes or peak memory. The measured workloads do not establish a latency or memory guarantee at the ceiling. SQL execution is caller-managed and does not inherit local runtime budgets. |
+
+The benchmarks cover selected boundary shapes rather than a distribution of
+production filters, schemas, or records. They do not establish universal
+latency, peak-memory, or service-SLO guarantees. Applications should tune
+limits against their own input contracts and SLOs; future representative
+workload evidence may justify revisiting these defaults. No additional synthetic
+benchmark is required merely to retain the present shared defaults.
