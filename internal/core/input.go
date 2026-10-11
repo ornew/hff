@@ -104,7 +104,11 @@ func validateValue(ctx context.Context, v Value, path location, depth int, count
 	case InvalidKind:
 		return inputError(path, "invalid Value; use Null() for explicit null")
 	case StringKind:
-		if !utf8.ValidString(v.data.(string)) {
+		valid, err := inputUTF8(ctx, v.data.(string))
+		if err != nil {
+			return err
+		}
+		if !valid {
 			return inputError(path, "string is not valid UTF-8")
 		}
 	case FloatKind:
@@ -129,7 +133,11 @@ func validateValue(ctx context.Context, v Value, path location, depth int, count
 		}
 		m := v.data.(map[string]Value)
 		for _, key := range objectKeys(m) {
-			if !utf8.ValidString(key) {
+			valid, err := inputUTF8(ctx, key)
+			if err != nil {
+				return err
+			}
+			if !valid {
 				return inputError(appendPath(path, key), "key is not valid UTF-8")
 			}
 			if err := validateValue(ctx, m[key], appendPath(path, key), depth+1, count, limits); err != nil {
@@ -138,6 +146,32 @@ func validateValue(ctx context.Context, v Value, path location, depth int, count
 		}
 	}
 	return nil
+}
+
+// Keep individual UTF-8 scans bounded so cancellation can interrupt validation
+// of a large host string or key. Split only at rune boundaries; invalid runs of
+// continuation bytes remain invalid rather than being skipped or replaced.
+func inputUTF8(ctx context.Context, text string) (bool, error) {
+	const chunkBytes = 4096
+	for len(text) > 0 {
+		if err := cancelError(ctx); err != nil {
+			return false, err
+		}
+		end := min(len(text), chunkBytes)
+		if end < len(text) {
+			for end > 0 && !utf8.RuneStart(text[end]) {
+				end--
+			}
+			if end == 0 {
+				return false, nil
+			}
+		}
+		if !utf8.ValidString(text[:end]) {
+			return false, nil
+		}
+		text = text[end:]
+	}
+	return true, nil
 }
 func admitsNull(t Type) bool {
 	if t.Kind() == NullType {

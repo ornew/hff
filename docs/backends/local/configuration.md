@@ -137,7 +137,12 @@ extension, or backend's performance.
 
 These are configurable starting ceilings, not performance guarantees or limits
 on the storage already allocated by the caller. Validation checks context and
-counts all nested values, including Any contents.
+counts all nested values, including Any contents. It checks UTF-8 in host
+strings and object keys in chunks of at most 4,096 bytes, adjusted to avoid
+splitting a rune, and checks context between chunks. Cancellation during a
+large scan returns a cancellation error with the context status and any
+host-supplied cause preserved; validation never returns a completed partial
+input.
 
 ## Handle errors
 

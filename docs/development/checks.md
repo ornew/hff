@@ -133,6 +133,17 @@ Run the target for 30 seconds with two workers:
 go test ./backends/local -run '^$' -fuzz '^FuzzLocalMatch$' -fuzztime=30s -parallel=2
 ```
 
+## Fuzz input UTF-8 validation
+
+This target compares HFF's chunked UTF-8 validation with Go's standard UTF-8
+validator across valid, malformed, and chunk-boundary inputs. Separate race
+tests cancel during a long scan of a host string or map key and verify that no
+partial input is returned and the cancellation cause is preserved.
+
+```sh
+go test ./internal/core -run '^$' -fuzz '^FuzzInputUTF8$' -fuzztime=30s -parallel=2
+```
+
 ## Run shared semantic conformance cases
 
 The shared fixture in [`cases.go`](https://github.com/ornew/hff/blob/main/internal/conformance/cases.go)
