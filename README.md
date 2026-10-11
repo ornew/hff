@@ -84,9 +84,10 @@ This repository provides immutable values, schemas, capabilities, validated
 input, common query compilation, core local evaluation, scalar/string methods,
 and list/object methods and collection callbacks. Base64 and JSON conversion
 methods and local extension evaluators are also available. The SQL backend
-builds parameterized PostgreSQL predicates for a documented scalar subset;
-broader SQL operations, extension translators, and additional dialects remain
-in progress.
+builds parameterized PostgreSQL predicates for documented scalar,
+schema-typed JSON/JSONB, and native composite profiles, and supports typed SQL
+method translators. Full JSONB type fidelity, broader structure and relation
+mapping, and additional dialects remain in progress.
 Start with the [tutorials](docs/tutorials/README.md) for a staged
 local-service example. Use the [guides](docs/guides/README.md) for feature
 behavior, the [cookbook](docs/cookbook/README.md) for practical filter recipes,
