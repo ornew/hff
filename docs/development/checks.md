@@ -31,3 +31,17 @@ go test -run '^$' -bench . -benchmem ./engine ./backends/local
 These measurements depend on the Go version, hardware, schema, and query shape.
 Treat short benchmark runs as comparisons for the measured cases, not as
 performance guarantees or evidence for changing default limits.
+
+## Fuzz local matching
+
+The local matcher fuzz target compiles a query, builds a filter, and generates
+records. It compares `Match` with `Validate` followed by `MatchInput`: completed
+results must agree, and when either path aborts, both paths must return an HFF
+error with the same error code. The retained seeds include base64 and temporal
+methods, Unicode regular expressions, and nested callbacks.
+
+Run the target for 30 seconds with two workers:
+
+```sh
+go test ./backends/local -run '^$' -fuzz '^FuzzLocalMatch$' -fuzztime=30s -parallel=2
+```

@@ -230,6 +230,18 @@ func FuzzLocalMatch(f *testing.F) {
 	for _, s := range []string{`x=y`, `x+1>0`, `x~y`, `x:[list[int]]=[1]`, `x!.a=null`, `x[0]=y`, `x:number()=y`, `x:[string]:contains(y)`, `x:matches(y)`, `x:in(y)`, `x:and(y)`, `x!:exists()`, `x:sort()`, `x:unique()`, `x:items()`, `x:contains(null,y)`, `x:concat([y])`, `x:map(v=>v+y)`, `x:flatmap(v=>v)`, `x:any(v=>v!)`, `x:foldr(0,(v,a)=>v-a)`, `x:map(v=>v:map(w=>w+1))`} {
 		f.Add(s, int64(42), []byte("abc"))
 	}
+	for _, seed := range []struct {
+		source, data string
+		selector     int64
+	}{
+		{`x:[string]:frombase64:len>0`, "AQIDBA==", 1},
+		{`x:[string]:duration:nanoseconds!=null`, "-1h30m.5s", 1},
+		{`x:[string]:timestamp:hours("+09:00")>=0`, "2026-10-11T09:30:00Z", 1},
+		{`x:[string]:matches("\\p{L}+")`, "Tokyo", 1},
+		{`x:[list]:any(v=>v:[string]:len>0)`, "東京", 2},
+	} {
+		f.Add(seed.source, seed.selector, []byte(seed.data))
+	}
 	f.Fuzz(func(t *testing.T, source string, number int64, data []byte) {
 		check := func(err error) bool {
 			if err == nil {
@@ -250,7 +262,7 @@ func FuzzLocalMatch(f *testing.F) {
 			return
 		}
 		var x hff.Value
-		switch len(data) % 4 {
+		switch uint64(number) % 4 {
 		case 0:
 			x = hff.Int(number)
 		case 1:
@@ -260,7 +272,29 @@ func FuzzLocalMatch(f *testing.F) {
 		case 3:
 			x = hff.Object(map[string]hff.Value{"value": hff.Bytes(data)})
 		}
-		_, err = filter.Match(context.Background(), record(x, hff.Float(float64(number))))
-		check(err)
+		dataRecord := record(x, hff.Float(float64(number)))
+		matched, matchErr := filter.Match(context.Background(), dataRecord)
+		check(matchErr)
+		input, validationErr := e.Validate(context.Background(), dataRecord)
+		if check(validationErr) {
+			if matchErr == nil {
+				t.Fatal("Match accepted an input rejected by validation")
+			}
+			return
+		}
+		// Reusing validation must preserve both predicate results and aborts.
+		reused, reusedErr := filter.MatchInput(context.Background(), input)
+		check(reusedErr)
+		if matched != reused || (matchErr == nil) != (reusedErr == nil) {
+			t.Fatalf("Match and MatchInput disagree: %v/%v, %v/%v", matched, matchErr, reused, reusedErr)
+		}
+		if matchErr != nil {
+			var original, reusedDetail *hff.Error
+			errors.As(matchErr, &original)
+			errors.As(reusedErr, &reusedDetail)
+			if original.Code != reusedDetail.Code {
+				t.Fatalf("abort codes disagree: %s / %s", original.Code, reusedDetail.Code)
+			}
+		}
 	})
 }
