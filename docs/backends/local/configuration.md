@@ -169,11 +169,13 @@ strings and object keys, and unquoted tokens, with context checks at
 approximately 4 KiB intervals. Scanning a two-byte JSON escape may cross a
 checkpoint by one byte. The original JSON input bytes are charged once;
 checkpoints do not charge them again. Cancellation returns an error with the
-context cause preserved and no partial value. The initial whole-input UTF-8
-validity check and the standard-library JSON string decoder are single calls
-that cannot be interrupted internally; HFF checks context after they return.
-This is cooperative cancellation, not immediate preemption during every
-decoding step.
+context cause preserved and no partial value. Before token scanning, JSON input
+UTF-8 validity uses the same chunked validator as host strings and object keys,
+so cancellation can interrupt that scan without copying the input or charging
+its bytes again. The standard-library JSON string decoder remains a single
+call that cannot be interrupted internally; HFF checks context after it
+returns. This is cooperative cancellation, not immediate preemption during
+every decoding step.
 
 When local JSON serialization scans a long string to calculate its escaped
 length or quote its output, it checks context at approximately 4 KiB intervals

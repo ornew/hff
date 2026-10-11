@@ -181,8 +181,8 @@ func (e *evaluation) decodeJSON(text string, maxDepth int) (result, error) {
 	if err := e.charge(len(text)); err != nil {
 		return result{}, err
 	}
-	valid := utf8.ValidString(text)
-	if err := cancelled(e.ctx); err != nil {
+	valid, err := core.ValidUTF8(e.ctx, text)
+	if err != nil {
 		return result{}, err
 	}
 	if !valid {

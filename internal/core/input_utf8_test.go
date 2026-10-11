@@ -16,7 +16,7 @@ func TestInputUTF8ChunkBoundaries(t *testing.T) {
 			strings.Repeat("\x80", 8192),
 		} {
 			text := strings.Repeat("a", prefix) + suffix
-			valid, err := inputUTF8(context.Background(), text)
+			valid, err := ValidUTF8(context.Background(), text)
 			if err != nil || valid != utf8.ValidString(text) {
 				t.Fatalf("prefix=%d suffix=%q: valid=%v err=%v", prefix, suffix, valid, err)
 			}
@@ -49,7 +49,7 @@ func TestInputUTF8CancellationDuringScan(t *testing.T) {
 	defer cancel(nil)
 	cause := errors.New("stop validating host input")
 	ctx := &utf8CancelContext{Context: base, cancel: cancel, cause: cause}
-	valid, err := inputUTF8(ctx, strings.Repeat("東京😀", 65536))
+	valid, err := ValidUTF8(ctx, strings.Repeat("東京😀", 65536))
 	var detail *Error
 	if valid || !errors.As(err, &detail) || detail.Code != CancelledError || !errors.Is(err, context.Canceled) || !errors.Is(err, cause) {
 		t.Fatalf("scan did not preserve cancellation and cause: valid=%v err=%v", valid, err)
@@ -98,7 +98,7 @@ func FuzzInputUTF8(f *testing.F) {
 		f.Add(text)
 	}
 	f.Fuzz(func(t *testing.T, text string) {
-		valid, err := inputUTF8(context.Background(), text)
+		valid, err := ValidUTF8(context.Background(), text)
 		if err != nil || valid != utf8.ValidString(text) {
 			t.Fatalf("UTF-8 validity changed: valid=%v err=%v", valid, err)
 		}

@@ -156,6 +156,22 @@ func (c *jsonScanContext) Err() error {
 	return c.Context.Err()
 }
 
+func TestJSONCancellationBeforeLateInvalidUTF8(t *testing.T) {
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
+	cause := errors.New("stop UTF-8 validation")
+	probe := &jsonScanContext{Context: ctx, cancel: cancel, cause: cause, at: 4}
+	e := evaluation{ctx: probe, limits: core.DefaultLimits()}
+	got, err := e.decodeJSON(`"`+strings.Repeat("東京😀", 32768)+"\xff\"", 64)
+	var detail *core.Error
+	if !errors.As(err, &detail) || detail.Code != core.CancelledError || !errors.Is(err, cause) || !errors.Is(err, context.Canceled) {
+		t.Fatalf("UTF-8 scan returned before observing cancellation: %v", err)
+	}
+	if got.present || got.value.Kind() != core.InvalidKind || e.generated != 0 {
+		t.Fatalf("UTF-8 admission produced a partial value: %#v", got)
+	}
+}
+
 func TestJSONCancellationDuringTokenScans(t *testing.T) {
 	long := strings.Repeat("a", 32768)
 	for _, tc := range []struct{ name, text string }{

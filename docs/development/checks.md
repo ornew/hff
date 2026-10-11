@@ -192,10 +192,19 @@ go test ./backends/local -run '^$' -fuzz '^FuzzLocalMatch$' -fuzztime=30s -paral
 This target compares HFF's chunked UTF-8 validation with Go's standard UTF-8
 validator across valid, malformed, and chunk-boundary inputs. Separate race
 tests cancel during a long scan of a host string or map key and verify that no
-partial input is returned and the cancellation cause is preserved.
+partial input is returned and the cancellation cause is preserved. The local
+JSON decoder uses the same chunked validator before token scanning, allowing
+cancellation before a late invalid UTF-8 suffix without double-charging input
+bytes; the standard-library JSON string decoder itself remains uninterruptible.
 
 ```sh
 go test ./internal/core -run '^$' -fuzz '^FuzzInputUTF8$' -fuzztime=30s -parallel=2
+```
+
+Check cancellation during JSON input UTF-8 admission with:
+
+```sh
+go test -race ./backends/local -run '^TestJSONCancellationBeforeLateInvalidUTF8$'
 ```
 
 The map-key ordering target compares HFF's context-aware merge order with Go's
