@@ -65,6 +65,9 @@ func (e *evaluation) eval(n plan.Node) (result, error) {
 		return ordinary(v), nil
 	case plan.VariableNode:
 		b, _ := n.Binding()
+		if err := e.charge(len(b.Name())); err != nil {
+			return result{}, err
+		}
 		v, exists := e.record.Lookup(b.Name())
 		if !exists {
 			v = core.Null()
@@ -83,6 +86,11 @@ func (e *evaluation) eval(n plan.Node) (result, error) {
 			return receiver, err
 		}
 		name, _ := n.Field()
+		if receiver.value.Kind() == core.ObjectKind {
+			if err := e.charge(len(name)); err != nil {
+				return result{}, err
+			}
+		}
 		v, exists := receiver.value.Lookup(name)
 		if !exists {
 			v = core.Null()
@@ -96,6 +104,13 @@ func (e *evaluation) eval(n plan.Node) (result, error) {
 		index, err := e.child(n, 1)
 		if err != nil || !index.present {
 			return index, err
+		}
+		if receiver.value.Kind() == core.ObjectKind {
+			if key, ok := index.value.AsString(); ok {
+				if err := e.charge(len(key)); err != nil {
+					return result{}, err
+				}
+			}
 		}
 		return ordinary(indexValue(receiver.value, index.value)), nil
 	case plan.GuardNode:

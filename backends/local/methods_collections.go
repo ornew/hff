@@ -24,6 +24,9 @@ func (e *evaluation) collectionMethod(id string, receiver core.Value, args []cor
 		return ordinary(core.Bool(offset >= 0 && offset < int64(len(xs)))), nil
 	case "object.has", "object.get":
 		key, _ := args[0].AsString()
+		if err := e.charge(len(key)); err != nil {
+			return result{}, err
+		}
 		value, exists := receiver.Lookup(key)
 		if id == "object.has" {
 			return ordinary(core.Bool(exists)), nil

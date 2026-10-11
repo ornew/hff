@@ -106,7 +106,7 @@ provides the same explicit choice when assembling configuration as data.
 | MaxSyntaxDepth | 64 | Syntax nesting per compilation |
 | MaxCallbackDepth | 64 | Nested callback depth per compilation; the outermost callback is depth 1 |
 | MaxCompileSteps | 1,000,000 | Semantic analysis visits per compilation, including repeated callback inference |
-| MaxSteps | 1,000,000 | Evaluated nodes, traversed data, and declared struct fields checked per local match |
+| MaxSteps | 1,000,000 | Evaluated nodes, traversed data, lookup-key bytes, and declared struct fields checked per local match |
 | MaxGeneratedValues | 100,000 | Generated collection containers and entries per local match |
 
 Compilation enforces query-byte, syntax-depth, callback-depth, and semantic-step
@@ -121,6 +121,13 @@ requested constraint that the selected backend cannot enforce must be rejected.
 DefaultLimits returns a value copy. Limits returns the engine's resolved
 configuration; zero ceilings in an explicitly unlimited engine indicate that
 opt-out.
+
+For local object lookups, `MaxSteps` also charges the UTF-8 byte length of each
+evaluated key immediately before lookup. This includes root variable names,
+field access, string-key indexing, and the key argument to object `has()` and
+`get()`. The charge applies whether the key is present or missing. A lookup
+skipped because its receiver propagates null or no-value, or because an earlier
+logical operand short-circuits evaluation, does not charge an unevaluated key.
 
 Local structural type checks charge one step for each declared struct field,
 including optional fields absent from the object, and check context while

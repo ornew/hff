@@ -112,6 +112,10 @@ collection containers and entries. Exhausting either budget returns a limit
 error; HFF does not return a partial match. Context cancellation is checked
 during evaluation. These budgets apply to each match call independently.
 
+Object lookup also charges the UTF-8 byte length of each evaluated key before
+checking it, whether the key is present or missing. Null/no-value propagation
+and logical short-circuiting do not charge lookups that are never evaluated.
+
 ## Supported operations
 
 The local evaluator supports core boolean and arithmetic operators, equality
