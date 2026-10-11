@@ -41,5 +41,19 @@ func CompositeCases() []Case {
 			row("last_integer", profile(hff.Null(), hff.List(hff.Null(), hff.Int(2))), true),
 			row("last_null", profile(hff.Null(), hff.List(hff.Int(2), hff.Null())), false),
 		}},
+		{Name: "typed_array_structural_equality", Source: `profile.scores=[null,2]`, Schema: shape, Capabilities: capabilities.Standard(), Records: []Record{
+			row("null_parent", hff.Null(), false),
+			row("null_array", profile(hff.Null(), hff.Null()), false),
+			row("empty_array", profile(hff.Null(), hff.List()), false),
+			row("last_integer", profile(hff.Null(), hff.List(hff.Null(), hff.Int(2))), true),
+			row("last_null", profile(hff.Null(), hff.List(hff.Int(2), hff.Null())), false),
+		}},
+		{Name: "typed_array_null_membership", Source: `profile.scores:contains(null,2)`, Schema: shape, Capabilities: capabilities.Standard(), Records: []Record{
+			row("null_parent", hff.Null(), false),
+			row("null_array", profile(hff.Null(), hff.Null()), false),
+			row("empty_array", profile(hff.Null(), hff.List()), false),
+			row("last_integer", profile(hff.Null(), hff.List(hff.Null(), hff.Int(2))), true),
+			row("last_null", profile(hff.Null(), hff.List(hff.Int(2), hff.Null())), true),
+		}},
 	}
 }

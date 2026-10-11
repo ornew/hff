@@ -18,6 +18,8 @@ func TestSharedConformanceJSONBuildContracts(t *testing.T) {
 	for _, name := range []string{"empty_filter", "and_before_or", "grouped_or", "implicit_truthiness", "fractional_integer_division", "overflow_is_null", "unicode_code_points", "invalid_host_input_is_rejected", "typed_composite_null_identity", "typed_composite_parent_guard", "typed_array_negative_index"} {
 		supported[name] = true
 	}
+	supported["typed_array_structural_equality"] = true
+	supported["typed_array_null_membership"] = true
 	rejected := map[string]bool{}
 	for _, name := range []string{
 		"json_preserves_float", "json_duplicate_keys_fail", "json_null_is_observable", "json_guard_stays_absent",
