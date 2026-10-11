@@ -2,6 +2,7 @@ package sql_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/ornew/hff"
@@ -33,6 +34,7 @@ func compositeQueries() []string {
 		`profile`, `profile=null`, `profile!=null`, `profile:exists`, `profile:type="object"`,
 		`profile!:exists`, `profile!.name=null`, `!profile!.name=null`,
 		`profile.name="Alice"`, `profile.age>=18`, `profile:size=7`, `profile:has("name")`,
+		`profile.age=null`, `profile.age:exists`, `profile.father.name=null`, `profile.father.name:exists`,
 		`profile:get("name")="Alice"`, `profile:has("service.name")`, "profile.`service.name`=\"auth\"",
 		`profile.father=null`, `profile.father:exists`, `profile.father:has("name")`,
 		`profile!.father!.name=null`, `!profile!.father!.name=null`,
@@ -51,6 +53,25 @@ func compositeQueries() []string {
 		`profile.people:map(x=>x!.name)=null`, `!profile.people:map(x=>x!.name)=null`,
 		`profile.people:tojson="[{\"name\":\"A\"},null,{\"name\":null}]"`,
 		`profile.people:contains({"name":null},null)`, `profile.people:unique`,
+	}
+}
+
+func TestCompositeFieldPathsConvertOnlySelectedAttributes(t *testing.T) {
+	e := compositeEngine(t)
+	for _, source := range []string{`profile.age>=18`, `profile.father.name="Alice"`} {
+		p, err := e.Compile(context.Background(), source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		query, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindComposite(hff.Path{"profile"}, hffsql.Column("records", "profile"))))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, unrelated := range []string{"json_build_object", "generate_subscripts", `"scores"`, `"people"`, `"factors"`} {
+			if strings.Contains(query.Where(), unrelated) {
+				t.Fatalf("%s converts unrelated composite attributes: %s", source, query.Where())
+			}
+		}
 	}
 }
 

@@ -103,6 +103,9 @@ func (b *builder) jsonPath(n hff.Node) (expression, bool, error) {
 			return v, true, err
 		}
 	}
+	if value, handled, err := b.compositePath(n); handled {
+		return value, true, err
+	}
 	if n.Kind() != hff.FieldNode || !b.hasJSONAncestor(n) {
 		return expression{}, false, nil
 	}

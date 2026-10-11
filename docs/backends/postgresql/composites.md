@@ -94,6 +94,17 @@ array element types and dimensions, nullability, and actual row values satisfy
 the schema. In particular, arrays must be one-dimensional. `Build` does not
 introspect PostgreSQL declarations or validate stored rows.
 
+## Selecting fields
+
+A plain field path such as `profile.age` or `profile.father.name` reads the
+corresponding native composite attributes directly. It does not construct JSON
+for unrelated attributes or arrays. SQL `NULL` at the composite parent and a
+null selected attribute retain their HFF null behavior. When a query needs the
+whole composite value, or uses a guarded, dynamic, or method-based access, the
+backend uses the general typed conversion path; that path converts the full
+schema-known value. These are SQL-shape choices only and do not promise a
+particular execution-time improvement.
+
 ## Execution and verification
 
 Composite translation is part of pure SQL construction. The returned predicate

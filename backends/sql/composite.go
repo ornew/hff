@@ -18,6 +18,45 @@ func BindComposite(path hff.Path, column ColumnRef) Binding {
 	return result
 }
 
+// Read a plain attribute path before converting its selected value to JSON.
+// PostgreSQL attribute access propagates a null parent without conflating it
+// with an existing all-null row. Guards and other value expressions continue
+// through the general lowering so their separate no-value state is preserved.
+func (b *builder) compositePath(n hff.Node) (expression, bool, error) {
+	root := n
+	for root.Kind() == hff.FieldNode {
+		root, _ = root.Child(0)
+	}
+	if root.Kind() != hff.VariableNode {
+		return expression{}, false, nil
+	}
+	path, ok := n.Path()
+	if !ok {
+		return expression{}, false, nil
+	}
+	for size := len(path) - 1; size > 0; size-- {
+		key := pathKey(path[:size])
+		if !b.compositeBindings[key] {
+			continue
+		}
+		column := b.bindings[key]
+		for _, field := range path[size:] {
+			identifier, err := quoteColumn(Column(field))
+			if err != nil {
+				return expression{}, true, err
+			}
+			column = "(" + column + ")." + identifier
+		}
+		code, err := b.compositeJSON(n, column, n.Type())
+		if err != nil {
+			return expression{}, true, err
+		}
+		value, err := b.jsonDecode(n, code, b.jsonBindings[key], n.Type(), "TRUE")
+		return value, true, err
+	}
+	return expression{}, false, nil
+}
+
 func (b *builder) compositeJSON(n hff.Node, column string, typ hff.Type) (string, error) {
 	if err := checkContext(b.ctx); err != nil {
 		return "", err
