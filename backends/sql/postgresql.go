@@ -23,6 +23,8 @@ type builder struct {
 	jsonBindings      map[string]JSONFormat
 	jsonValues        map[string]JSONFormat
 	parameters        map[hff.BindingID]jsonParameter
+	sharedPaths       map[string]expression
+	projectionDepth   int
 }
 
 // present tracks HFF's internal no-value separately from SQL NULL.
@@ -81,6 +83,12 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 	if err := checkContext(b.ctx); err != nil {
 		return expression{}, err
 	}
+	key, share := b.shareableJSONPath(n)
+	if share {
+		if value, exists := b.sharedPaths[key]; exists {
+			return value, nil
+		}
+	}
 	value, err := b.lower(n)
 	if err != nil {
 		return expression{}, err
@@ -89,6 +97,9 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 	// nodes reference these names rather than expanding child SQL repeatedly.
 	// Preserve constant presence so it simplifies surrounding conditions.
 	if value.kind == hff.NullType && value.present == "TRUE" {
+		if share {
+			b.rememberPath(key, value)
+		}
 		return value, nil
 	}
 	format, isJSON := b.jsonValues[value.code]
@@ -111,7 +122,44 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 	if isJSON {
 		b.jsonValues[value.code] = format
 	}
+	if share {
+		b.rememberPath(key, value)
+	}
 	return value, nil
+}
+
+// Share only schema-rooted, unguarded JSON paths in the outer projection scope.
+// Callback bindings and guards carry independent presence and scope information.
+func (b *builder) shareableJSONPath(n hff.Node) (string, bool) {
+	if b.projectionDepth != 0 {
+		return "", false
+	}
+	path, ok := n.Path()
+	if !ok {
+		return "", false
+	}
+	for parent := n; parent.Valid(); {
+		if parent.Kind() == hff.VariableNode {
+			break
+		}
+		if parent.Kind() != hff.FieldNode {
+			return "", false
+		}
+		parent, _ = parent.Child(0)
+	}
+	for size := len(path); size > 0; size-- {
+		if _, bound := b.jsonBindings[pathKey(path[:size])]; bound {
+			return pathKey(path), true
+		}
+	}
+	return "", false
+}
+
+func (b *builder) rememberPath(key string, value expression) {
+	if b.sharedPaths == nil {
+		b.sharedPaths = make(map[string]expression)
+	}
+	b.sharedPaths[key] = value
 }
 
 func (b *builder) lower(n hff.Node) (expression, error) {

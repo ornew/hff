@@ -151,6 +151,11 @@ that constant instead of projecting a separate presence column. Presence that
 depends on null or type guards remains explicit, as do value projections, so
 this simplification preserves null and no-value behavior. It is a conservative
 SQL-shape optimization; no performance improvement is claimed.
+For JSON, JSONB, and composite-backed values, repeated unguarded accesses to the
+same schema-known path can share extraction within an outer projection scope.
+Guarded, dynamic, and callback scopes remain separate so their aliases and
+presence behavior do not escape their scope. This also changes SQL shape only;
+it makes no measured performance claim.
 
 ## Add a PostgreSQL translator
 

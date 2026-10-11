@@ -92,6 +92,7 @@ func (b *builder) jsonFoldType(n hff.Node, typ hff.Type) (hff.Type, error) {
 func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accumulatorIndex int, previous, item string, accumulatorType hff.Type) (expression, []string, error) {
 	outer := b.steps
 	b.steps = nil
+	b.projectionDepth++
 	if b.parameters == nil {
 		b.parameters = make(map[hff.BindingID]jsonParameter)
 	}
@@ -108,6 +109,7 @@ func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accu
 	}
 	defer func() {
 		b.steps = outer
+		b.projectionDepth--
 		for i, binding := range parameters {
 			if existed[i] {
 				b.parameters[binding.ID()] = old[i]

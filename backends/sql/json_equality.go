@@ -98,7 +98,8 @@ func (b *builder) jsonEqual(n hff.Node, left string, lf JSONFormat, lt hff.Type,
 	}
 	outer := b.steps
 	b.steps = nil
-	defer func() { b.steps = outer }()
+	b.projectionDepth++
+	defer func() { b.steps = outer; b.projectionDepth-- }()
 	code, err = b.jsonEqualValue(n, left, lf, lt, right, rf, rt)
 	if err != nil {
 		return "", err

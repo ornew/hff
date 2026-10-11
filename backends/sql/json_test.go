@@ -3,6 +3,7 @@ package sql_test
 import (
 	"context"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
@@ -39,6 +40,14 @@ func jsonBindings(format hffsql.JSONFormat) []hffsql.Binding {
 
 func jsonQueries() []string {
 	return []string{
+		`profile.age>=18 profile.age<=100 profile.age:exists`,
+		`profile.name:exists | profile!.name=null`,
+		`profile.father.name=null | profile.father.name="Bob"`,
+		`scores:any(x=>profile.age>x) profile.age>=0`,
+		`profile.age>=0 scores:any(x=>profile.age>x)`,
+		`scores:map(x=>profile.age+x)[0]=profile.age+10`,
+		`scores:foldl(0,(acc,x)=>acc+profile.age)=profile.age*scores:size`,
+		`people:any(x=>x.name="Alice") people:any(x=>x.name="Bob")`,
 		`scores:map(x=>-0.0):tojson="[-0.0,-0.0,-0.0]"`,
 		`scores:map(x=>-0.0)[0]:tostring="-0.0"`,
 		`factors:map(x=>-0.0):tojson="[-0.0]"`,
@@ -121,6 +130,25 @@ func jsonQueries() []string {
 		`labels:keys[0]="app"`, `labels:values[-1]=null`, `labels:items[0]:size=2`, `labels:keys:size=2`, `labels:values:size=2`, `labels:items:size=2`,
 		`labels:size=2`, `labels:type="object"`, `labels`, `labels:[map[string|null]]:exists`,
 		`factors[0]>0`, `factors[0]:[int]:exists`, `factors[0]:[float]:exists`, `factors[0]=1.0`, `factors[0]:type="number"`, `factors:[list[float]]:exists`,
+	}
+}
+
+func TestRepeatedJSONPathsShareOuterExtraction(t *testing.T) {
+	p, err := jsonEngine(t).Compile(context.Background(), `profile.age>=18 profile.age<=100 profile.age:exists`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
+		q, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(jsonBindings(format)...))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Count(q.Where(), `"records"."profile"`) != 1 {
+			t.Fatal("root JSON document extracted repeatedly:", q.Where())
+		}
+		if !reflect.DeepEqual(q.Args(), []any{"age", int64(18), int64(100)}) {
+			t.Fatal("repeated field name bound more than once or value arguments changed:", q.Args())
+		}
 	}
 }
 
