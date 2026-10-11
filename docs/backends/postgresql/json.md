@@ -2,9 +2,9 @@
 
 The PostgreSQL backend can bind a schema-known HFF value to one native JSON or
 JSONB column. `Build` lowers field access, list indexing, selected collection
-inspection, predicates, and type guards into a parameterized predicate. It
-does not connect to PostgreSQL, inspect the table schema, or validate stored
-documents.
+inspection, structural equality, predicates, and type guards into a
+parameterized predicate. It does not connect to PostgreSQL, inspect the table
+schema, or validate stored documents.
 
 ## Bind one JSON document
 
@@ -99,13 +99,31 @@ are available when their types are known from the schema. The backend rejects
 an operation during `Build` when the JSON storage type cannot preserve the
 required HFF semantics.
 
+List equality compares elements in order and requires equal lengths. Object
+equality compares the actual key/value entries, including for structs and
+string-keyed maps; a missing field differs from a present field containing
+null. A stored null compares equal to null in the same position. Nested lists
+and schema-known heterogeneous JSON values are compared recursively, including
+known int64 and float64 values without converting int64 through float64.
+Structural comparisons require the matching `comparison:list-equality` or
+`comparison:object-equality` capability (or the combined
+`group:structural-equality`). Explicit null tests do not require either one.
+At the top-level predicate boundary, `=` and `!=` both return false when the
+comparison result is null or no-value, following HFF predicate conversion.
+
+For example, a schema-known list can be compared to a query-side list literal:
+
+```hff
+profile.roles=["admin","editor"]
+```
+
 The following operations remain unsupported for JSON-backed values and return
 a source-located `hff.BackendError` from `Build`:
 
-- Dynamic `Any` decoding and unions with multiple non-null families.
+- Dynamic `Any` decoding and unions with multiple non-null families when the
+  stored representation cannot determine the HFF type.
 - Transforming callbacks such as `map()`, `flatmap()`, `foldl()`, and `foldr()`;
-  structural equality, `contains()`, `unique()`, `sort()`, and other collection
-  transformations.
+  `contains()`, `unique()`, `sort()`, and other collection transformations.
 - JSON parsing/serialization methods, conversions to bytes/timestamps/durations,
   and operations requiring a runtime type not fixed by the schema.
 
@@ -124,11 +142,12 @@ without NUL; int64 values must be in range, and float64 values must be finite.
 schema-incompatible stored values can fail during database evaluation.
 
 JSONB normalizes some input spelling, including numeric exponent notation and
-the distinction between integer and floating spellings. This initial profile
-uses the explicit HFF schema to select the numeric type for supported typed
-access. It rejects dynamic `Any`, mixed non-null unions, and conversions or
-operations that would need to recover discarded JSON spelling or signed-zero
-details. Keep the application schema authoritative for the bound column.
+the distinction between integer and floating spellings. This profile uses the
+explicit HFF schema to select numeric types when the schema determines them;
+ambiguous nested int/float unions and dynamic `Any` remain unsupported without
+type metadata. Conversions or operations that need discarded JSON spelling or
+signed-zero details are rejected. Keep the application schema authoritative
+for the bound column.
 
 PostgreSQL is the only supported SQL dialect. JSON and JSONB use their native
 operators; this support does not promise stable generated SQL text or database
@@ -138,10 +157,11 @@ the service remains responsible for database timeouts and cancellation.
 ## Verification
 
 The repository's tagged integration suite compares JSON and JSONB bindings
-against local evaluation on PostgreSQL 18.6. The current verified matrix has
-1,320 query/record pairs and covers scalar and nested
-access, null and missing-key cases, list indexing, object/list inspection,
-type guards, and type/truthiness predicates. To run it against a PostgreSQL
+against local evaluation on PostgreSQL 18.6. The verified matrix covers 2,120
+JSON/JSONB query-record pairs for scalar and nested access, null and missing-key
+cases, list indexing, object/list inspection and equality, callbacks, type
+guards, and type/truthiness predicates.
+To run it against a PostgreSQL
 container with `psql` installed:
 
 ```sh

@@ -39,6 +39,16 @@ func jsonBindings(format hffsql.JSONFormat) []hffsql.Binding {
 
 func jsonQueries() []string {
 	return []string{
+		`scores=[10,20,null]`, `scores!=[10,20,null]`, `scores=[20,10,null]`, `scores=[10,20]`, `scores=[]`, `scores=[null]`,
+		`scores=[10.0,20.0,null]`, `scores=[9007199254740992.0]`, `scores=["10",20,null]`, `scores=scores`, `scores!=scores`,
+		`scores=[9007199254740993]`, `scores=[9223372036854775808.0]`, `scores=[-9223372036854775808.0]`, `scores!=[9007199254740992.0]`,
+		`groups=[[10,20],[],null,[null]]`, `groups=[[20,10],[],null,[null]]`, `groups=groups`,
+		`labels={"team":null,"app":"auth"}`, `labels={"app":"auth"}`, `labels={"team":null}`, `labels={}`, `labels=labels`,
+		`profile={"name":"Alice","age":18}`, `profile={"name":"Alice","age":18.0}`, `profile={"age":18,"name":"Alice","father":null}`,
+		`profile!.father!={"name":"Bob"}`, `!profile!.father!={"name":"Bob"}`, `profile=profile`, `people=[profile,null]`,
+		`factors=[1]`, `factors=[0.0]`, `labels:keys=["app","team"]`, `labels:values=["auth",null]`,
+		`labels:items=[["app","auth"],["team",null]]`, `people:any(x=>x={"name":"Alice","age":18})`,
+		`scores=[profile!.age]`, `!scores=[profile!.age]`, `labels={"app":profile!.name}`, `labels:items=labels:items`,
 		`people:any(x=>x.age>=18 x.name="Alice")`, `people:all(x=>x!.age>=0)`,
 		`people:any(x=>x.father!.name="Bob"|x.name="Alice")`, `people:any(x=>scores:any(y=>y<x.age))`,
 		`people:any(x=>people:any(x=>x.name="Alice"))`, `people:any(x=>!x!.age)`,
@@ -105,7 +115,7 @@ func TestJSONBindingRejectsConflictingPhysicalMappings(t *testing.T) {
 
 func TestJSONUnsupportedSemanticsAreExplicitBuildErrors(t *testing.T) {
 	ctx := context.Background()
-	for _, source := range []string{`scores=[10,20]`, `labels:tojson="{}"`, `scores:unique`, `scores:sort[0]=10`, `scores:contains(10)`} {
+	for _, source := range []string{`labels:tojson="{}"`, `scores:unique`, `scores:sort[0]=10`, `scores:contains(10)`, `scores=[10,20.0]`} {
 		p, err := jsonEngine(t).Compile(ctx, source)
 		if err != nil {
 			t.Fatal(source, err)

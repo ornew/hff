@@ -263,6 +263,8 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		return b.binary(n)
 	case hff.CallNode:
 		return b.call(n)
+	case hff.ListNode, hff.ObjectNode:
+		return b.jsonLiteral(n)
 	default:
 		return expression{}, b.failure(n, "PostgreSQL does not yet support "+n.Kind().String())
 	}
@@ -399,14 +401,14 @@ func (b *builder) binary(n hff.Node) (expression, error) {
 	if left.kind == hff.NullType || right.kind == hff.NullType {
 		return boolean("FALSE"), nil
 	}
+	if structuredKind(left.kind) && structuredKind(right.kind) {
+		return b.jsonComparison(n, l, r, left, right, op)
+	}
 	if left.kind != right.kind {
 		if (left.kind == hff.IntType && right.kind == hff.FloatType) || (left.kind == hff.FloatType && right.kind == hff.IntType) {
 			return b.mixedComparison(left, right, op), nil
 		}
 		return expression{}, b.failure(n, "mixed SQL scalar comparisons require exact numeric lowering")
-	}
-	if left.kind == hff.ListType || left.kind == hff.StructType || left.kind == hff.MapType {
-		return expression{}, b.failure(n, "JSON structural comparison requires schema-aware recursive equality")
 	}
 	leftCode, rightCode := left.code, right.code
 	if left.kind == hff.StringType {

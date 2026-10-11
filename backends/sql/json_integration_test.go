@@ -39,7 +39,7 @@ func TestPostgreSQLJSONParity(t *testing.T) {
 		{[]hff.Value{obj(map[string]hff.Value{"name": hff.Null(), "age": hff.Int(-1)}), hff.List(hff.Null()), obj(map[string]hff.Value{"app": hff.String("other")}), hff.List(hff.Float(-0.0))}, []string{`{"name":null,"age":-1}`, `[null]`, `{"app":"other"}`, `[-0.0]`}, false},
 	}
 	for _, n := range []int64{9007199254740991, 9007199254740992, 9007199254740993, math.MaxInt64, math.MinInt64} {
-		rows = append(rows, row{[]hff.Value{obj(map[string]hff.Value{"name": hff.String("Alice"), "age": hff.Int(n), "father": obj(map[string]hff.Value{"name": hff.String("Bob")})}), hff.List(), obj(map[string]hff.Value{}), hff.List(hff.Float(math.SmallestNonzeroFloat64), hff.Float(math.MaxFloat64))}, []string{`{"name":"Alice","age":` + strconv.FormatInt(n, 10) + `,"father":{"name":"Bob"}}`, `[]`, `{}`, `[5e-324,1.7976931348623157e308]`}, false})
+		rows = append(rows, row{[]hff.Value{obj(map[string]hff.Value{"name": hff.String("Alice"), "age": hff.Int(n), "father": obj(map[string]hff.Value{"name": hff.String("Bob")})}), hff.List(hff.Int(n)), obj(map[string]hff.Value{}), hff.List(hff.Float(math.SmallestNonzeroFloat64), hff.Float(math.MaxFloat64))}, []string{`{"name":"Alice","age":` + strconv.FormatInt(n, 10) + `,"father":{"name":"Bob"}}`, `[` + strconv.FormatInt(n, 10) + `]`, `{}`, `[5e-324,1.7976931348623157e308]`}, false})
 	}
 	for i := range rows {
 		value := hff.List(hff.List(hff.Int(10), hff.Int(20)), hff.List(), hff.Null(), hff.List(hff.Null()))

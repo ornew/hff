@@ -115,7 +115,8 @@ hffsql.BindJSON(
 ```
 
 See the [PostgreSQL JSON binding guide](../backends/postgresql/json.md) for the
-supported schema profile and storage requirements.
+supported schema profile, collection access and equality behavior, and storage
+requirements.
 
 ## Related lookup pages
 

@@ -113,8 +113,11 @@ operations, `Any` and non-null mixed unions, JSON and temporal conversions,
 float/float and mixed int/float arithmetic, and guarded access through nullable
 parents. JSON bindings support the schema-known access and inspection described
 in the [JSON guide](json.md); dynamic `Any`, mixed non-null unions, callbacks,
-structural equality, transformations, and JSON conversions remain unsupported
-there. Unsupported operations do not fall back to local evaluation.
+and representations whose runtime HFF type cannot be recovered remain
+unsupported there. JSON list/object structural equality is available for
+schema-known values when its capability is enabled; transforming callbacks,
+collection transformations, and JSON conversions remain unsupported.
+Unsupported operations do not fall back to local evaluation.
 PostgreSQL is the only currently supported SQL dialect.
 
 The builder uses relational subqueries for chained operations to keep generated
