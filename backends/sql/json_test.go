@@ -39,6 +39,14 @@ func jsonBindings(format hffsql.JSONFormat) []hffsql.Binding {
 
 func jsonQueries() []string {
 	return []string{
+		`scores:tojson="[10,20,null]"`, `scores:tostring="null"`, `scores!:tojson="null"`, `!scores!:tojson="null"`,
+		`labels:tojson="{\"app\":\"auth\",\"team\":null}"`, `labels:tostring="{}"`,
+		`profile:tojson="{\"age\":18,\"name\":\"Alice\"}"`, `people:tojson:contains("Alice")`,
+		`groups:tojson="[[10,20],[],null,[null]]"`, `scores:map(x=>x>10):tojson="[false,true,false]"`,
+		`scores:map(x=>[x,"a"]):tojson="[[10,\"a\"],[20,\"a\"],[null,\"a\"]]"`,
+		`profile.name:tostring="Alice"`, `profile.age:tostring="18"`, `profile.name:tojson="\"Alice\""`,
+		`scores:map(x=>{"n":x,"s":"a\nb\tc\\\"<>&/日本語"}):tojson:contains("日本語")`,
+		`labels:items:tojson="[[\"app\",\"auth\"],[\"team\",null]]"`,
 		`scores:foldl(0,(acc,x)=>acc+x)=30`, `scores:foldl(0,(acc,x)=>acc+x)=null`,
 		`scores:foldr(0,(x,acc)=>x-acc)=26`, `scores:foldl(0,(acc,x)=>acc-x)=-34`,
 		`scores:foldl(null,(acc,x)=>x)=null`, `scores:foldr(null,(x,acc)=>x)=null`,
@@ -156,7 +164,7 @@ func TestJSONBindingRejectsConflictingPhysicalMappings(t *testing.T) {
 
 func TestJSONUnsupportedSemanticsAreExplicitBuildErrors(t *testing.T) {
 	ctx := context.Background()
-	for _, source := range []string{`labels:tojson="{}"`, `scores=[10,20.0]`, `scores:foldl(0.0,(acc,x)=>x)>0`, `scores:foldl("",(acc,x)=>x):exists`} {
+	for _, source := range []string{`factors:tojson="[]"`, `factors[0]:tostring="1.0"`, `scores=[10,20.0]`, `scores:foldl(0.0,(acc,x)=>x)>0`, `scores:foldl("",(acc,x)=>x):exists`} {
 		p, err := jsonEngine(t).Compile(ctx, source)
 		if err != nil {
 			t.Fatal(source, err)

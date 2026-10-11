@@ -208,7 +208,7 @@ func TestDeferredSQLTypesAndMethodsRejectAtBuild(t *testing.T) {
 	}
 	for _, source := range []string{
 		`name:matches("A")`, `name!~"A"`, `name:number>0`, `name:bool`, `name:fromjson`,
-		`name:frombase64`, `name:timestamp`, `name:duration`, `name:tojson`, `name:tostring`,
+		`name:frombase64`, `name:timestamp`, `name:duration`, `factor:tojson`, `factor:tostring`,
 		`age:round=1`, `age:floor=1`, `factor:ceil=1`,
 	} {
 		_, err := hffsql.Build(ctx, compile(t, source), hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
@@ -275,6 +275,10 @@ func TestArithmeticReferenceExpectations(t *testing.T) {
 func parityCases() []parityCase {
 	var cases []parityCase
 	queries := []string{
+		`name:tojson="\"Alice\""`, `name:tostring="Alice"`, `age:tojson="18"`, `flag:tojson="true"`,
+		`name!:tojson="null"`, `!name!:tostring="null"`, `name:[int]:tojson:exists`,
+		`name:tojson="null"`, `age:tostring="-9223372036854775808"`, `flag:tostring="false"`,
+
 		`name:in("Alice","A",null)`, `age:in(18,9007199254740992.0,null)`, `flag:in(true,false)`,
 		`name:in("Alice",age)`, `age:in(18,factor!)`, `name:in(null,name!)`,
 		``, `age`, `name`, `flag`, `factor`,
@@ -340,6 +344,7 @@ func parityCases() []parityCase {
 			cases = append(cases, parityCase{source, row[0], row[1], row[2], row[3]})
 		}
 	}
+	cases = append(cases, serializationEscapes()...)
 	integers := []int64{math.MinInt64, math.MinInt64 + 1, -9007199254740993, -9007199254740992, -2, -1, 0, 1, 2, 9007199254740992, 9007199254740993, math.MaxInt64 - 1, math.MaxInt64}
 	floats := []float64{
 		-math.MaxFloat64, math.Nextafter(float64(math.MinInt64), math.Inf(-1)), float64(math.MinInt64), math.Nextafter(float64(math.MinInt64), 0),
@@ -420,5 +425,27 @@ func TestDeclaredMethodRequiresSQLImplementation(t *testing.T) {
 	detail := requireCode(t, err, hff.BackendError)
 	if detail.Span == nil {
 		t.Fatal("missing custom method source span")
+	}
+}
+
+func serializationEscapes() []parityCase {
+	return []parityCase{
+		parityCase{`name:tojson="\"a\\nb\\tc\\\\\\\"<>&/日本語\""`, hff.Null(), hff.String("a\nb\tc\\\"<>&/日本語"), hff.Null(), hff.Null()},
+		parityCase{`name:tojson="\"\\u0001\\u001f\""`, hff.Null(), hff.String("\x01\x1f"), hff.Null(), hff.Null()},
+		parityCase{`name:tojson="\"\u2028\u2029\""`, hff.Null(), hff.String("\u2028\u2029"), hff.Null(), hff.Null()},
+	}
+}
+
+func TestSerializationEscapingExamples(t *testing.T) {
+	for _, tc := range serializationEscapes() {
+		p := compile(t, tc.source)
+		filter, err := local.Build(context.Background(), p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		match, err := filter.Match(context.Background(), hff.Object(map[string]hff.Value{"age": tc.age, "name": tc.name, "flag": tc.flag, "factor": tc.factor}))
+		if err != nil || !match {
+			t.Fatalf("escape example %s: %v %v", tc.source, match, err)
+		}
 	}
 }

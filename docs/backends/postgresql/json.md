@@ -134,6 +134,24 @@ These are HFF result-order guarantees. SQL does not promise physical callback
 evaluation order or local `MaxSteps`/`MaxGeneratedValues` enforcement; unsupported
 explicit execution-budget requirements are rejected by `Build`.
 
+For schema-known scalar columns and JSON/JSONB values, `tojson()` and
+`tostring()` support null, bool, int64, and string values, including recursive
+lists, maps, and structs containing those types. `tojson()` emits compact JSON;
+`tostring()` leaves strings unquoted and uses compact JSON for collections.
+Object keys are sorted with PostgreSQL's `C` collation, arrays retain element
+order, and stored nulls remain JSON nulls. A null receiver returns the text
+`"null"`; no-value propagates. For example:
+
+```hff
+profile.scores:tojson="[80,90]"
+profile.name:tostring="Ada"
+```
+
+Float64 serialization remains unsupported: JSONB can lose numeric spelling or
+signed-zero information, and this profile does not guarantee an encoding that
+preserves those distinctions. Dynamic `Any`, ambiguous unions,
+bytes/timestamp/duration conversions, and `fromjson()` remain rejected.
+
 Nested callbacks can capture outer callback values and schema fields, with
 lexical shadowing:
 
@@ -193,8 +211,9 @@ a source-located `hff.BackendError` from `Build`:
 - Dynamic `Any` decoding and unions with multiple non-null families when the
   stored representation cannot determine the HFF type.
 - Other unsupported collection transformations.
-- JSON parsing/serialization methods, conversions to bytes/timestamps/durations,
-  and operations requiring a runtime type not fixed by the schema.
+- `fromjson()`, conversions to bytes/timestamps/durations, float64
+  serialization, and operations requiring a runtime type not fixed by the
+  schema.
 
 Unsupported behavior is rejected rather than delegated to local evaluation.
 The [method reference](../../reference/methods.md) lists built-in signatures;
@@ -226,10 +245,10 @@ the service remains responsible for database timeouts and cancellation.
 ## Verification
 
 The repository's tagged integration suite compares JSON and JSONB bindings
-against local evaluation on PostgreSQL 18.6. The verified matrix covers 4,554
+against local evaluation on PostgreSQL 18.6. The verified matrix covers 4,906
 JSON/JSONB query-record pairs for scalar and nested access, null and missing-key
-cases, list indexing, object/list inspection and equality, callbacks, type
-guards, and type/truthiness predicates.
+cases, list indexing, object/list inspection and equality, callbacks,
+serialization, type guards, and type/truthiness predicates.
 To run it against a PostgreSQL
 container with `psql` installed:
 
