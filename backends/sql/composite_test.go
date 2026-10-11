@@ -11,7 +11,7 @@ import (
 	"github.com/ornew/hff/schema"
 )
 
-func compositeEngine(t *testing.T) *engine.Engine {
+func compositeEngine(t testing.TB) *engine.Engine {
 	t.Helper()
 	profile := schema.Struct(
 		schema.Nullable(schema.String("name")), schema.Nullable(schema.Int("age")),

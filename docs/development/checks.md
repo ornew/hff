@@ -93,6 +93,18 @@ go test ./backends/local -run '^$' -bench JSON -benchmem
 
 ## Test PostgreSQL integration
 
+The SQL builder fuzz target repeatedly builds the same typed plan, including
+native composite and JSON/JSONB bindings. It checks deterministic SQL and
+arguments, typed Build errors with source spans, and absence of panics. It does
+not execute SQL or establish semantic parity; the tagged PostgreSQL integration
+suite below compares SQL results with local HFF evaluation.
+
+Run the builder target for 30 seconds with two workers:
+
+```sh
+go test ./backends/sql -run '^$' -fuzz '^FuzzPostgreSQLBuild$' -fuzztime=30s -parallel=2
+```
+
 The SQL backend's tagged integration test uses a running PostgreSQL container
 through `docker exec` and `psql`. It compares supported SQL predicate results
 with local evaluation for the same compiled inputs. Provide a container name or
