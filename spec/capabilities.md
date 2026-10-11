@@ -173,8 +173,12 @@ call meter. Null propagates without invocation by default; explicit null
 invocation requires nullable declared types. No-value always propagates and is
 never exposed as an HFF value. Implementations MUST NOT replace a built-in method
 name. Adding an extension does not introduce tokens, operators, statements, or
-a service-specific grammar. The current SQL backend does not provide extension
-translators and rejects programs using custom methods.
+a service-specific grammar. PostgreSQL extensions use separately registered
+dialect translators. Each used custom signature needs an exact PostgreSQL
+implementation; missing translators or unsupported SQL semantics reject Build
+with a backend error. Translators are limited to the backend's supported scalar
+expression types and do not extend its support to collections, JSON, or temporal
+values.
 
 Engines identify their Unicode case-data, regex compatibility, and time zone
 data versions. HFF's regex reference follows RE2 except for the excluded `\C`

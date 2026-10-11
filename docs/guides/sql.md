@@ -113,6 +113,80 @@ The builder uses relational subqueries for chained operations to keep generated
 SQL growth linear. This may make the predicate shape more involved; callers
 should treat it as opaque and rely on the bound parameters, not its exact text.
 
+## Add a PostgreSQL translator
+
+An extension declaration is shared with the engine, while a SQL translator is
+registered separately for a dialect. The following translator lowers a
+service-specific string method to PostgreSQL `lower`:
+
+```go
+declaration, err := hff.NewMethodDeclaration(hff.MethodConfig{
+    ID: "service.withsuffix.v1", Name: "withsuffix",
+    Receiver: schema.StringType, Result: schema.StringType, BaseCost: 1,
+})
+if err != nil { return err }
+
+e, err := engine.New(
+    engine.WithSchema(schema.Struct(schema.String("name"))),
+    engine.WithCapabilities(capabilities.Standard().Allow(capabilities.Method(declaration.ID()))),
+    engine.WithMethods(declaration),
+)
+if err != nil { return err }
+program, err := e.Compile(ctx, `name:withsuffix="Alice!"`)
+if err != nil { return err }
+
+translator := hffsql.Implement(declaration, hffsql.PostgreSQL,
+    func(call *hffsql.Call, receiver hffsql.Expression, args []hffsql.Expression) (hffsql.Expression, error) {
+    suffix, err := call.Parameter(hff.String("!"))
+    if err != nil { return hffsql.Expression{}, err }
+    return call.Expression(schema.StringType, "{} || {}", receiver, suffix)
+    },
+)
+query, err := hffsql.Build(ctx, program,
+    hffsql.WithDialect(hffsql.PostgreSQL),
+    hffsql.WithBindings(hffsql.Bind(hff.Path{"name"}, hffsql.Column("records", "name"))),
+    hffsql.WithMethods(translator),
+)
+if err != nil { return err }
+```
+
+`Call.Expression` accepts a trusted developer-authored template and replaces
+each `{}` with a scoped expression. `Call.Parameter(value)` creates a bound
+scalar parameter using the dialect's validated encoding. Never place query
+text, record values, or `$N` placeholders in a template; use `Parameter` for
+values. HFF checks that expressions belong to the current call and that the
+returned expression has the declared scalar type, but it does not validate the
+template's SQL semantics. Keep templates under developer control and preserve
+the declaration's behavior on its supported domain.
+
+HFF continues to own method signature selection, capability checks, null and
+no-value handling, and argument evaluation. A translator runs while `Build`
+constructs the query; it is not called for each record and must be safe for
+concurrent builds. It must return an error when it cannot faithfully translate
+the operation. SQL currently supports only the PostgreSQL dialect and scalar
+expressions; a registered translator does not make unsupported collection or
+composite types available.
+
+## Inspect and request SQL execution guarantees
+
+`ExecutionGuarantees(dialect)` and `Query.Guarantees()` report whether the
+selected backend can enforce HFF's per-record `MaxSteps` and
+`MaxGeneratedValues` budgets. PostgreSQL currently reports neither guarantee.
+An explicit positive request is rejected by `Build` with a backend error:
+
+```go
+query, err := hffsql.Build(ctx, program,
+    hffsql.WithDialect(hffsql.PostgreSQL),
+    hffsql.WithExecutionLimits(hffsql.ExecutionLimits{MaxSteps: 10_000}),
+)
+```
+
+Zero means no HFF execution-budget guarantee was requested; negative values are
+configuration errors. These settings are not database timeouts. Configure
+database timeouts and cancellation through the database API used by the
+service. Program-local `MaxSteps` and `MaxGeneratedValues` do not transfer to
+SQL execution.
+
 ## Execution and limits
 
 `Build` is a pure translation step. The SQL backend does not enforce local
@@ -133,6 +207,7 @@ The example only builds a predicate; it does not connect to PostgreSQL:
 
 ```sh
 go run ./examples/sql-predicate
+go run ./examples/sql-extensions
 ```
 
 Expected output:
@@ -141,6 +216,18 @@ Expected output:
 Predicate built: true
 Parameter count: 2
 ```
+
+The extension example adds a translator that appends a bound `!` suffix and
+prints:
+
+```text
+Predicate built: true
+Parameter count: 2
+PostgreSQL MaxSteps guarantee: false
+```
+
+For a step-by-step extension walkthrough, see the [PostgreSQL translator
+tutorial](../tutorials/04-postgresql-translator.md).
 
 ## Test against PostgreSQL
 

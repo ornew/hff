@@ -100,7 +100,8 @@ finite limits unless unlimited mode was explicitly selected.
 Compilation produces a typed plan only. The local backend checks support and
 requires implementations for used extension methods when building a filter; see
 the [local evaluation guide](local-evaluation.md) for supported operations and
-limits. SQL extension translators and additional dialects remain separate work.
+limits. SQL extensions require separate dialect-specific translators; see the
+[PostgreSQL guide](sql.md) for typed expressions and execution guarantees.
 
 Run the complete example from the repository root:
 

@@ -132,10 +132,11 @@ subexpression always propagates without invoking an extension; it cannot be
 constructed or returned as a public value. Top-level null and no-value both
 produce a false filter result after HFF's ordinary boolean conversion.
 
-The SQL backend does not yet support extension translators. A SQL `Build`
-therefore rejects a program that uses a custom method, even if a local
-implementation is registered. See the [SQL guide](sql.md) for its current
-support matrix.
+SQL extensions need a separate translator registration for the selected
+dialect; a local evaluator does not provide SQL support by itself. PostgreSQL
+translators can target the currently supported scalar expression profile. See
+the [SQL guide](sql.md) for registration, parameter helpers, and backend
+guarantees.
 
 ## Run the example
 

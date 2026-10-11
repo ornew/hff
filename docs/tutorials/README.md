@@ -10,6 +10,9 @@ time. They use Go 1.27.1 and only APIs available in this repository.
    rejected queries as configuration errors.
 3. [Add a service-specific method](03-extension-methods.md): declare a typed
    signature, select its capability, and register a local evaluator.
+4. [Translate a method to PostgreSQL](04-postgresql-translator.md): register a
+   typed backend translator, build a parameterized predicate, and inspect
+   execution guarantees without opening a database connection.
 
 Run each complete example from the repository root:
 
@@ -17,6 +20,7 @@ Run each complete example from the repository root:
 go run ./examples/tutorial-first-filter
 go run ./examples/tutorial-service
 go run ./examples/extensions
+go run ./examples/sql-extensions
 ```
 
 For API details, continue with the [Go guides](../guides/README.md); for

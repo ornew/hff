@@ -134,3 +134,83 @@ func sqlFixtureValue(t *testing.T, value hff.Value, typ string) string {
 	}
 	return "(" + literal + "::" + typ + ")"
 }
+
+func TestPostgreSQLExtensionParity(t *testing.T) {
+	container := os.Getenv("HFF_POSTGRES_CONTAINER")
+	if container == "" {
+		t.Fatal("integration tests require HFF_POSTGRES_CONTAINER")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	ds := extensionDeclarations(t)
+	e := extensionEngine(t, ds)
+	sources := []string{
+		`name:customprefix("Al")`, `name:customprefix("Al"):not`,
+		`!name!:customprefix("Al")`, `name!:customprefix("Al")=null`,
+		`name:customprefix(null)=null`, `name:nullseen`, `name!:nullseen`,
+		`name:[int]:nullseen`, `name:[string]:customprefix("Al")`,
+		`name:customprefix("O'Reilly")`, `name:customprefix("")`,
+		`name:customprefix("é")`, `name:customprefix("a%b")`,
+		`name:customprefix("Al")|name:nullseen`, `name:nullseen name:customprefix("Al")`,
+		`name:nullarg(null)`, `name:nullarg(name!)=null`,
+		`name:allpresent(null,name!)=null`, `name:allpresent("",name!)`,
+	}
+	rows := []hff.Value{hff.Null(), hff.String(""), hff.String("Alice"), hff.String("Al"), hff.String("Bob"), hff.String("O'Reilly"), hff.String("éclair"), hff.String("a%b suffix")}
+	var script strings.Builder
+	var expected []string
+	script.WriteString("SET standard_conforming_strings=on;\n")
+	for _, source := range sources {
+		p, err := e.Compile(ctx, source)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		q, err := hffsql.Build(ctx, p, extensionOptions(ds)...)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		f, err := local.Build(ctx, p, localExtensionOptions(ds)...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, row := range rows {
+			matched, err := f.Match(ctx, hff.Object(map[string]hff.Value{"name": row}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "f"
+			if matched {
+				want = "t"
+			}
+			expected = append(expected, want)
+			args := q.Args()
+			types := make([]string, len(args))
+			literals := make([]string, len(args))
+			for i, a := range args {
+				types[i], literals[i] = sqlFixtureParameter(t, a)
+			}
+			params, execution := "", ""
+			if len(args) > 0 {
+				params = "(" + strings.Join(types, ",") + ")"
+				execution = "(" + strings.Join(literals, ",") + ")"
+			}
+			name := fmt.Sprintf("extension_%d", len(expected))
+			fmt.Fprintf(&script, "PREPARE %s%s AS SELECT %s FROM (VALUES (%s)) AS records(name);\nEXECUTE %s%s;\nDEALLOCATE %s;\n", name, params, q.Where(), sqlFixtureValue(t, row, "text"), name, execution, name)
+		}
+	}
+	command := exec.CommandContext(ctx, "docker", "exec", "-i", container, "psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-U", "postgres")
+	command.Stdin = strings.NewReader(script.String())
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("extension parity failed: %v\n%s", err, output)
+	}
+	actual := strings.Fields(string(output))
+	if len(actual) != len(expected) {
+		t.Fatalf("got %d results; want %d: %s", len(actual), len(expected), output)
+	}
+	for i, want := range expected {
+		if actual[i] != want {
+			t.Errorf("%q row %v: PostgreSQL=%s local=%s", sources[i/len(rows)], rows[i%len(rows)], actual[i], want)
+		}
+	}
+	t.Logf("verified %d extension query/record pairs against PostgreSQL", len(expected))
+}

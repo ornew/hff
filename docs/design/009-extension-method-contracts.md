@@ -62,7 +62,9 @@ present in the selected capability set. The local backend registers evaluators
 with `local.WithMethods(local.Implement(declaration, function))`. Its builder
 requires an exact matching implementation for every used declaration; missing
 or incompatible implementations are source-located `hff.BackendError`s. SQL
-extension translators are not yet available.
+translators use a separate dialect-specific registration API; see
+[Design Record 010](010-sql-extension-translation.md) for the typed PostgreSQL
+contract and its current scalar support boundary.
 
 The default `hff.PropagateNull` policy propagates a null receiver or argument
 without invoking the extension. Once null leaves no viable signature, remaining
@@ -125,5 +127,6 @@ implementations, result validation, and concurrent reuse.
 
 ## Current backend boundary
 
-The local evaluator API is implemented as described above. Extension
-translation for SQL and additional SQL dialects remain separate backend work.
+The local evaluator API is implemented as described above. PostgreSQL
+translation is documented separately; additional dialects require their own
+semantic and parameter-encoding coverage.

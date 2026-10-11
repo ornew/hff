@@ -18,6 +18,7 @@ type builder struct {
 	steps    []string
 	reserved map[string]bool
 	alias    int
+	methods  map[string]MethodImplementation
 }
 
 // present tracks HFF's internal no-value separately from SQL NULL.
@@ -304,6 +305,10 @@ func truth(value expression) string {
 
 func (b *builder) literal(n hff.Node) (expression, error) {
 	value, _ := n.Literal()
+	return b.parameter(n, value)
+}
+
+func (b *builder) parameter(n hff.Node, value hff.Value) (expression, error) {
 	var arg any
 	var typ string
 	kind := hff.InvalidType
@@ -438,6 +443,11 @@ func (b *builder) mixedComparison(left, right expression, op hff.Operator) expre
 func (b *builder) call(n hff.Node) (expression, error) {
 	method, _ := n.Method()
 	name := method.Name()
+	if signatures := method.Signatures(); len(signatures) > 0 {
+		if _, custom := signatures[0].Declaration(); custom {
+			return b.extension(n, method)
+		}
+	}
 	switch name {
 	case "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or":
 	default:

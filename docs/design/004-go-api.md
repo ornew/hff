@@ -19,8 +19,9 @@ The common compiler and local backend's core operators, values, indexing,
 guards, short-circuit behavior, per-match budgets, scalar/string method
 families, list/object methods, collection callbacks, base64 and JSON conversions,
 temporal methods, and local extension evaluators are implemented. The SQL
-package builds parameterized PostgreSQL predicates for a scalar subset; SQL
-extension translators and broader SQL semantics remain in progress.
+package builds parameterized PostgreSQL predicates for a scalar subset and
+supports separately registered typed translators for supported scalar
+extensions; broader SQL semantics remain in progress.
 
 ## Motivation
 
@@ -546,19 +547,23 @@ responsibilities to a filter language.
 The local extension tests cover invalid/ambiguous declarations, capability
 selection, overload dispatch, null/no-value behavior, implementation matching,
 result validation, charging, cancellation, panic recovery, and concurrent
-calls. SQL parameter and backend tests cover the SQL-specific contracts; SQL
-extension translators remain future work.
+calls. SQL parameter and backend tests cover the SQL-specific contracts. The
+typed SQL extension contract and PostgreSQL execution guarantees are specified
+in [Design Record 010](010-sql-extension-translation.md); additional dialects
+remain conditional on semantics and parameter-encoding coverage.
 
 ## Remaining implementation scope
 
 The common engine lifecycle, validated-input reuse, immutable IR access model,
 explicit capability selection, and local extension declarations/evaluators are
-implemented. SQL extension translators, additional dialects, and their
-parameter-encoding support matrices remain future backend work.
+implemented. PostgreSQL extension translators support the documented scalar
+expression boundary. Additional dialects and their parameter-encoding support
+matrices remain future backend work.
 
 The record specifies behavior and public API direction; acceptance does not
 claim that every package or method family has been implemented. Common
 compilation and the core, scalar/string, list/object, callback, JSON, and local
 extension evaluation paths, as well as base64 and temporal conversions, are
-available. A PostgreSQL scalar predicate subset is implemented; broader SQL
-operation, extension translator, and dialect support remain incomplete.
+available. PostgreSQL supports its documented scalar predicate profile and
+registered extension translators for supported scalar expressions. Broader SQL
+operation and additional dialect support remain incomplete.

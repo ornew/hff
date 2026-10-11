@@ -28,8 +28,9 @@ configuration, validated input, an internal syntax-only parser, public common
 query compilation, core local matching, scalar/string and list/object methods,
 base64 and JSON conversions, temporal methods, collection callbacks, local
 extension declarations/evaluators, and a PostgreSQL scalar predicate backend.
-SQL extension translators, broader SQL semantics, and additional SQL dialects
-remain unavailable.
+PostgreSQL extension translators are available for registered methods that
+lower to the supported scalar expression profile. Broader SQL semantics and
+additional SQL dialects remain unavailable.
 Parser generation and the internal syntax parser are documented in the
 [Development section](../development/README.md), separately from integration
 guides.

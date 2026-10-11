@@ -55,8 +55,8 @@ indexing, guards, short-circuit logic, scalar/string methods, list/object
 methods, collection callbacks, and JSON/stringification methods are implemented.
 Base64 conversion methods are also available locally. A SQL package builds
 parameterized PostgreSQL predicates for its documented scalar subset and
-rejects JSON/stringification methods. Broader SQL semantics and additional
-dialects and SQL extension translators remain in progress. Typed extension
-declarations and local evaluators are supported. A backend rejects unsupported
-compiled operations explicitly; compile validity alone does not promise support
-from every backend.
+rejects JSON/stringification methods. PostgreSQL translators can extend the
+supported scalar profile for declared methods; broader SQL semantics and
+additional dialects remain in progress. Typed extension declarations and local
+evaluators are supported. A backend rejects unsupported compiled operations
+explicitly; compile validity alone does not promise support from every backend.

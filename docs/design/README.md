@@ -15,6 +15,7 @@ query language; records provide context for individual design choices.
 | [007: Structural equality capabilities](007-structural-equality-capabilities.md) | Select list and object content equality independently |
 | [008: Versioned time-zone profiles](008-versioned-time-zone-profiles.md) | Resolve named zones from caller-supplied TZif data |
 | [009: Extension method contracts](009-extension-method-contracts.md) | Declare signatures and meter local extension implementations |
+| [010: SQL extension translation](010-sql-extension-translation.md) | Build typed, parameterized backend expressions and request execution guarantees |
 
 Use [000: Design Record Template](000-template.md) for a new `NNN-topic.md`
 record. Proposed, Accepted, and Implemented distinguish a proposal, an approved

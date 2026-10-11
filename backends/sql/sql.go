@@ -32,8 +32,10 @@ func Bind(path hff.Path, column ColumnRef) Binding {
 }
 
 type Config struct {
-	Dialect  Dialect
-	Bindings []Binding
+	Dialect         Dialect
+	Bindings        []Binding
+	Methods         []MethodImplementation
+	ExecutionLimits ExecutionLimits
 }
 
 type Option struct{ apply func(*Config) error }
@@ -53,6 +55,7 @@ func WithConfig(config *Config) Option {
 		}
 		*c = *config
 		c.Bindings = append([]Binding(nil), config.Bindings...)
+		c.Methods = append([]MethodImplementation(nil), config.Methods...)
 		return nil
 	}}
 }
@@ -102,7 +105,17 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 	if config.Dialect != PostgreSQL {
 		return nil, configuration("explicit supported SQL dialect required")
 	}
-	b := builder{ctx: ctx, program: program, bindings: make(map[string]string), reserved: make(map[string]bool)}
+	if err := checkExecutionLimits(config.ExecutionLimits); err != nil {
+		return nil, err
+	}
+	methods, err := snapshotMethods(config.Methods, config.Dialect)
+	if err != nil {
+		return nil, err
+	}
+	b := builder{methods: methods, ctx: ctx, program: program, bindings: make(map[string]string), reserved: make(map[string]bool)}
+	if err := b.checkMethods(program.Root()); err != nil {
+		return nil, err
+	}
 	columnKinds := make(map[string]hff.TypeKind)
 	for _, binding := range config.Bindings {
 		if len(binding.path) == 0 {
