@@ -1,166 +1,83 @@
 package hff
 
-import (
-	"encoding/json"
-	"fmt"
-	"sort"
-	"unicode/utf8"
-)
+import "github.com/ornew/hff/internal/core"
 
-// TypeKind includes compiler types that are not host values.
-type TypeKind uint8
+// TypeKind includes compiler-only kinds, such as FunctionType and NeverType.
+type TypeKind = core.TypeKind
 
-const (
-	InvalidType TypeKind = iota
-	NullType
-	BoolType
-	IntType
-	FloatType
-	StringType
-	BytesType
-	ListType
-	StructType
-	MapType
-	TimestampType
-	DurationType
-	AnyType
-	NeverType
-	UnionType
-)
+// Type is an immutable type descriptor. Its zero value is invalid.
+type Type core.Type
 
-// Type is an opaque immutable schema descriptor. The zero value is invalid.
-type Type struct{ node *typeNode }
-type typeNode struct {
-	kind    TypeKind
-	element Type
-	fields  []Field
-	members []Type
-}
-
-// Field describes presence independently from the value's nullable type.
+// Field describes a struct field's type and whether absence is permitted.
 type Field struct {
 	Name     string
 	Type     Type
 	Optional bool
 }
 
-func PrimitiveType(k TypeKind) Type {
-	switch k {
-	case NullType, BoolType, IntType, FloatType, StringType, BytesType, TimestampType, DurationType, AnyType, NeverType:
-		return Type{&typeNode{kind: k}}
-	default:
-		return Type{}
-	}
-}
-func NewListType(element Type) Type { return Type{&typeNode{kind: ListType, element: element}} }
-func NewMapType(element Type) Type  { return Type{&typeNode{kind: MapType, element: element}} }
+const (
+	InvalidType   = core.InvalidType
+	NullType      = core.NullType
+	BoolType      = core.BoolType
+	IntType       = core.IntType
+	FloatType     = core.FloatType
+	StringType    = core.StringType
+	BytesType     = core.BytesType
+	ListType      = core.ListType
+	StructType    = core.StructType
+	MapType       = core.MapType
+	TimestampType = core.TimestampType
+	DurationType  = core.DurationType
+	AnyType       = core.AnyType
+	NeverType     = core.NeverType
+	UnionType     = core.UnionType
+	FunctionType  = core.FunctionType
+)
+
+func PrimitiveType(k TypeKind) Type { return Type(core.PrimitiveType(k)) }
+func NewListType(element Type) Type { return Type(core.NewListType(core.Type(element))) }
+func NewMapType(element Type) Type  { return Type(core.NewMapType(core.Type(element))) }
 func NewStructType(fields ...Field) Type {
-	fields = append([]Field(nil), fields...)
-	sort.SliceStable(fields, func(i, j int) bool { return fields[i].Name < fields[j].Name })
-	return Type{&typeNode{kind: StructType, fields: fields}}
+	out := make([]core.Field, len(fields))
+	for i, f := range fields {
+		out[i] = core.Field{Name: f.Name, Type: core.Type(f.Type), Optional: f.Optional}
+	}
+	return Type(core.NewStructType(out...))
 }
-func NewUnionType(members ...Type) Type {
-	var flat []Type
-	for _, m := range members {
-		if m.Kind() == UnionType {
-			flat = append(flat, m.node.members...)
-		} else {
-			flat = append(flat, m)
-		}
+func NewUnionType(members ...Type) Type { return Type(core.NewUnionType(internalTypes(members)...)) }
+func internalTypes(types []Type) []core.Type {
+	out := make([]core.Type, len(types))
+	for i, t := range types {
+		out[i] = core.Type(t)
 	}
-	sort.Slice(flat, func(i, j int) bool { return flat[i].Key() < flat[j].Key() })
-	unique := make([]Type, 0, len(flat))
-	for _, m := range flat {
-		if len(unique) == 0 || unique[len(unique)-1].Key() != m.Key() {
-			unique = append(unique, m)
-		}
-	}
-	if len(unique) == 0 {
-		return PrimitiveType(NeverType)
-	}
-	if len(unique) == 1 {
-		return unique[0]
-	}
-	return Type{&typeNode{kind: UnionType, members: unique}}
+	return out
 }
-func (t Type) Kind() TypeKind {
-	if t.node == nil {
-		return InvalidType
+func publicTypes(types []core.Type) []Type {
+	if types == nil {
+		return nil
 	}
-	return t.node.kind
-}
-func (t Type) Element() Type {
-	if t.node == nil {
-		return Type{}
+	out := make([]Type, len(types))
+	for i, t := range types {
+		out[i] = Type(t)
 	}
-	return t.node.element
+	return out
 }
+func (t Type) Kind() TypeKind { return core.Type(t).Kind() }
+func (t Type) Element() Type  { return Type(core.Type(t).Element()) }
 func (t Type) Fields() []Field {
-	if t.node == nil {
+	fields := core.Type(t).Fields()
+	if fields == nil {
 		return nil
 	}
-	return append([]Field(nil), t.node.fields...)
-}
-func (t Type) Members() []Type {
-	if t.node == nil {
-		return nil
+	out := make([]Field, len(fields))
+	for i, f := range fields {
+		out[i] = Field{Name: f.Name, Type: Type(f.Type), Optional: f.Optional}
 	}
-	return append([]Type(nil), t.node.members...)
+	return out
 }
-
-// Key is a canonical structural identity, not a hash or a display name.
-func (t Type) Key() string {
-	switch t.Kind() {
-	case ListType, MapType:
-		return fmt.Sprintf("%d[%s]", t.Kind(), t.Element().Key())
-	case StructType:
-		s := "struct["
-		for _, f := range t.node.fields {
-			name, _ := json.Marshal(f.Name)
-			s += fmt.Sprintf("%s:%t:%s;", name, f.Optional, f.Type.Key())
-		}
-		return s + "]"
-	case UnionType:
-		s := "union["
-		for _, m := range t.node.members {
-			s += m.Key() + ";"
-		}
-		return s + "]"
-	default:
-		return fmt.Sprintf("%d", t.Kind())
-	}
-}
-func (t Type) Equal(other Type) bool { return t.Key() == other.Key() }
-
-// Check rejects invalid descriptors and duplicate fields before engine construction.
-func (t Type) Check() error { return t.check(0) }
-func (t Type) check(depth int) error {
-	if depth > 64 {
-		return fmt.Errorf("schema nesting exceeds 64 levels")
-	}
-	switch t.Kind() {
-	case InvalidType:
-		return fmt.Errorf("invalid schema type")
-	case ListType, MapType:
-		return t.Element().check(depth + 1)
-	case StructType:
-		for i, f := range t.node.fields {
-			if !utf8.ValidString(f.Name) {
-				return fmt.Errorf("field name is not valid UTF-8")
-			}
-			if i > 0 && t.node.fields[i-1].Name == f.Name {
-				return fmt.Errorf("duplicate field %q", f.Name)
-			}
-			if err := f.Type.check(depth + 1); err != nil {
-				return fmt.Errorf("field %q: %w", f.Name, err)
-			}
-		}
-	case UnionType:
-		for _, m := range t.node.members {
-			if err := m.check(depth + 1); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
+func (t Type) Members() []Type       { return publicTypes(core.Type(t).Members()) }
+func (t Type) Parameters() []Type    { return publicTypes(core.Type(t).Parameters()) }
+func (t Type) Result() Type          { return Type(core.Type(t).Result()) }
+func (t Type) Key() string           { return core.Type(t).Key() }
+func (t Type) Equal(other Type) bool { return core.Type(t).Equal(core.Type(other)) }
+func (t Type) Check() error          { return core.Type(t).Check() }

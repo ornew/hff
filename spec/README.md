@@ -42,7 +42,7 @@ MAY expresses an allowed implementation choice. Proposals are labeled explicitly
 Examples containing literal receivers illustrate subexpression semantics; they
 do not override the requirement that a complete filter relate to service data.
 
-The grammar will be written in PEGO and used to generate a typed Go parser.
+The grammar is written in PEGO and generates an internal typed Go parser.
 The document structure and parser-generation approach are informed by the local
 PEGO [specification](https://github.com/ornew/pego/blob/main/spec/README.md) and
 [code generation guide](https://github.com/ornew/pego/blob/main/docs/guide/code-generation.md).

@@ -9,6 +9,8 @@
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Status: Language design](https://img.shields.io/badge/status-language_design-6b7280)](spec/README.md)
 [![Documentation](https://img.shields.io/badge/docs-hff.ornew.net-20734c)](https://hff.ornew.net/)
+[![Go Reference](https://pkg.go.dev/badge/github.com/ornew/hff.svg)](https://pkg.go.dev/github.com/ornew/hff)
+[![Go version](https://img.shields.io/badge/Go-1.27.1-00ADD8?logo=go&logoColor=white)](https://go.dev/doc/install)
 
 [Website](https://hff.ornew.net/) · [Specification](spec/README.md) ·
 [Syntax](spec/syntax.md) · [Methods](spec/methods.md) ·
@@ -69,16 +71,18 @@ alongside its own runtime.
 
 ## Syntax and parser
 
-HFF syntax will be defined in [PEGO](https://github.com/ornew/pego), with a typed
-Go parser generated from the grammar. The same grammar is used for every
-capability configuration. PEGO is a development-time parser generator, not a
-requirement to compile grammars at runtime.
+HFF syntax is defined in [PEGO](https://github.com/ornew/pego), with a typed Go
+parser generated from the grammar. The syntax-only parser is currently internal
+to this module; applications do not yet have a public parse-only API. The same
+grammar is used for every capability configuration. PEGO is a development-time
+parser generator, not a requirement to compile grammars at runtime.
 
 ## Specification
 
 This repository provides the language specification and the Go configuration
 foundation: immutable values, schemas, capabilities, and validated input.
-The parser, evaluator, and backend translators are not yet available.
+Public query compilation, local evaluation, and backend translators are not yet
+available.
 Start with the [Go guides](docs/guides/README.md) and
 [engine configuration tutorial](docs/guides/getting-started.md).
 

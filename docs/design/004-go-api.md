@@ -197,29 +197,49 @@ not expose mutable compiler storage.
 The inspection surface is:
 
 ```go
-func (p *Program) Root() Node
+func (p Program) Valid() bool
+func (p Program) Root() Node
+func (p Program) Source() string
+func (p Program) Schema() Type
+func (p Program) Capabilities() capabilities.Set
+func (p Program) Limits() Limits
+func (p Program) UnlimitedLimits() bool
+func (n Node) Valid() bool
 func (n Node) Kind() NodeKind
 func (n Node) Type() Type
 func (n Node) Span() Span
+func (n Node) MayNoValue() bool
 func (n Node) ChildCount() int
 func (n Node) Child(i int) (Node, bool)
 func (n Node) Literal() (Value, bool)
 func (n Node) Path() (Path, bool)
+func (n Node) Field() (string, bool)
+func (n Node) Operator() (Operator, bool)
 func (n Node) Method() (Method, bool)
+func (n Node) Binding() (Binding, bool)
+func (n Node) Parameters() ([]Binding, bool)
+func (n Node) Captures() ([]Binding, bool)
+func (n Node) Keys() ([]string, bool)
 ```
 
 These types belong to the root `hff` package. Payload accessors return false for
 an inapplicable node kind; Child returns false for an invalid index. Path returns
 a copy. Span describes the half-open UTF-8 byte range in the original source.
-Type and Method are immutable descriptors, with resolved overload identity and
-parameter/result types rather than unresolved method names.
+Type, Method, Operator, and Binding are immutable descriptors. A call's Method
+contains only signatures statically applicable to that call, not the entire
+method registry. An Any or union receiver can retain multiple family signatures
+for runtime dispatch. Each signature has a stable ID, receiver/parameter/result
+types, and variadic flag. Backends use those IDs without repeating common type
+resolution and preserve any required dynamic checks.
 
-NodeKind distinguishes literals, root and callback references, field/index
-access, guards, explicit null tests, comparisons, arithmetic, boolean conversion,
-short-circuit AND/OR, NOT, collections, calls, and callbacks. Kind-specific
-contracts define child ordering. Callback metadata exposes parameter bindings
-and captures with stable binding IDs, so shadowed names are unambiguous.
-The representation records nullable results and possible no-value separately;
+The public kinds are Invalid, MatchAll, Literal, Variable, Parameter, Field,
+Index, Guard, NullTest, Binary, Negate, Bool, And, Or, Not, List, Object, Call,
+and Callback. Their child order and payload mapping are documented in the
+[program IR guide](../guides/program-ir.md). Binding IDs are unique within one
+Program, including nested and shadowed callbacks; zero is invalid, and IDs from
+different programs have no shared identity. Callback metadata exposes parameter
+bindings in declaration order and captures by binding ID.
+The representation records nullable types and possible no-value separately;
 no-value is not a host-constructible literal or a schema type.
 
 IR inspection must retain explicit null tests, guards, and evaluation boundaries

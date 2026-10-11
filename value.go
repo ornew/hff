@@ -1,105 +1,83 @@
 // Package hff defines immutable values and shared contracts for Human-Friendly Filter.
 package hff
 
+import "github.com/ornew/hff/internal/core"
 import "time"
 
 // Kind identifies a value's exact representation. InvalidKind is not null.
-type Kind uint8
+type Kind = core.Kind
+
+// Value owns immutable data. The zero value is invalid; use Null for null.
+type Value core.Value
 
 const (
-	InvalidKind Kind = iota
-	NullKind
-	BoolKind
-	IntKind
-	FloatKind
-	StringKind
-	BytesKind
-	ListKind
-	ObjectKind
-	TimestampKind
-	DurationKind
+	InvalidKind   = core.InvalidKind
+	NullKind      = core.NullKind
+	BoolKind      = core.BoolKind
+	IntKind       = core.IntKind
+	FloatKind     = core.FloatKind
+	StringKind    = core.StringKind
+	BytesKind     = core.BytesKind
+	ListKind      = core.ListKind
+	ObjectKind    = core.ObjectKind
+	TimestampKind = core.TimestampKind
+	DurationKind  = core.DurationKind
 )
 
-func (k Kind) String() string {
-	names := [...]string{"invalid", "null", "bool", "int64", "float64", "string", "bytes", "list", "object", "timestamp", "duration"}
-	if int(k) >= len(names) {
-		return "invalid"
+func Null() Value           { return Value(core.Null()) }
+func Bool(v bool) Value     { return Value(core.Bool(v)) }
+func Int(v int64) Value     { return Value(core.Int(v)) }
+func Float(v float64) Value { return Value(core.Float(v)) }
+func String(v string) Value { return Value(core.String(v)) }
+func Bytes(v []byte) Value  { return Value(core.Bytes(v)) }
+func List(values ...Value) Value {
+	out := make([]core.Value, len(values))
+	for i, v := range values {
+		out[i] = core.Value(v)
 	}
-	return names[k]
+	return Value(core.OwnedList(out))
 }
+func Object(values map[string]Value) Value {
+	out := make(map[string]core.Value, len(values))
+	for k, v := range values {
+		out[k] = core.Value(v)
+	}
+	return Value(core.OwnedObject(out))
+}
+func Timestamp(v time.Time) Value    { return Value(core.Timestamp(v)) }
+func Duration(v time.Duration) Value { return Value(core.Duration(v)) }
 
-// Value owns immutable data. Its zero value is invalid; use Null for explicit null.
-// Constructors retain invalid scalar inputs so validation can report their paths.
-type Value struct {
-	kind Kind
-	data any
-}
-
-func Null() Value                    { return Value{kind: NullKind} }
-func Bool(v bool) Value              { return Value{BoolKind, v} }
-func Int(v int64) Value              { return Value{IntKind, v} }
-func Float(v float64) Value          { return Value{FloatKind, v} }
-func String(v string) Value          { return Value{StringKind, v} }
-func Bytes(v []byte) Value           { return Value{BytesKind, append([]byte(nil), v...)} }
-func Timestamp(v time.Time) Value    { return Value{TimestampKind, v.Round(0).UTC()} }
-func Duration(v time.Duration) Value { return Value{DurationKind, v} }
-func List(v ...Value) Value          { return Value{ListKind, append([]Value(nil), v...)} }
-func Object(v map[string]Value) Value {
-	copy := make(map[string]Value, len(v))
-	for k, x := range v {
-		copy[k] = x
-	}
-	return Value{ObjectKind, copy}
-}
-func (v Value) Kind() Kind           { return v.kind }
-func (v Value) AsBool() (bool, bool) { x, ok := v.data.(bool); return x, ok && v.kind == BoolKind }
-func (v Value) AsInt() (int64, bool) { x, ok := v.data.(int64); return x, ok && v.kind == IntKind }
-func (v Value) AsFloat() (float64, bool) {
-	x, ok := v.data.(float64)
-	return x, ok && v.kind == FloatKind
-}
-func (v Value) AsString() (string, bool) {
-	x, ok := v.data.(string)
-	return x, ok && v.kind == StringKind
-}
-func (v Value) AsTimestamp() (time.Time, bool) {
-	x, ok := v.data.(time.Time)
-	return x, ok && v.kind == TimestampKind
-}
-func (v Value) AsDuration() (time.Duration, bool) {
-	x, ok := v.data.(time.Duration)
-	return x, ok && v.kind == DurationKind
-}
-func (v Value) AsBytes() ([]byte, bool) {
-	x, ok := v.data.([]byte)
-	if !ok || v.kind != BytesKind {
-		return nil, false
-	}
-	return append([]byte(nil), x...), true
-}
+func (v Value) Kind() Kind                        { return core.Value(v).Kind() }
+func (v Value) AsBool() (bool, bool)              { return core.Value(v).AsBool() }
+func (v Value) AsInt() (int64, bool)              { return core.Value(v).AsInt() }
+func (v Value) AsFloat() (float64, bool)          { return core.Value(v).AsFloat() }
+func (v Value) AsString() (string, bool)          { return core.Value(v).AsString() }
+func (v Value) AsTimestamp() (time.Time, bool)    { return core.Value(v).AsTimestamp() }
+func (v Value) AsDuration() (time.Duration, bool) { return core.Value(v).AsDuration() }
+func (v Value) AsBytes() ([]byte, bool)           { return core.Value(v).AsBytes() }
 func (v Value) AsList() ([]Value, bool) {
-	x, ok := v.data.([]Value)
-	if !ok || v.kind != ListKind {
+	values, ok := core.Value(v).ListView()
+	if !ok {
 		return nil, false
 	}
-	return append([]Value(nil), x...), true
+	out := make([]Value, len(values))
+	for i, x := range values {
+		out[i] = Value(x)
+	}
+	return out, true
 }
 func (v Value) AsObject() (map[string]Value, bool) {
-	x, ok := v.data.(map[string]Value)
-	if !ok || v.kind != ObjectKind {
+	values, ok := core.Value(v).ObjectView()
+	if !ok {
 		return nil, false
 	}
-	out := make(map[string]Value, len(x))
-	for k, value := range x {
-		out[k] = value
+	out := make(map[string]Value, len(values))
+	for k, x := range values {
+		out[k] = Value(x)
 	}
 	return out, true
 }
 func (v Value) Lookup(key string) (Value, bool) {
-	x, ok := v.data.(map[string]Value)
-	if !ok || v.kind != ObjectKind {
-		return Value{}, false
-	}
-	value, exists := x[key]
-	return value, exists
+	value, ok := core.Value(v).Lookup(key)
+	return Value(value), ok
 }
