@@ -54,7 +54,7 @@ Null-safe access, ordinary receiver calls, and arithmetic propagate null:
 |:--|:--|
 | `null_obj.foo` | `null` when `null_obj` is null |
 | `labels.missing` | `null` when the map key is absent |
-| `null:size()` | `null` |
+| `null:size` | `null` |
 | `null+null` | `null` |
 
 A propagated null is indistinguishable from an explicit null value by ordinary
@@ -64,9 +64,9 @@ on a null receiver, each returns the string `"null"`. `exists()` returns false
 for null or the internal no-value state from a failed guard. Other methods
 propagate no-value, except predicate callback conversion in any/all.
 Ordinary methods propagate null
-arguments. Membership methods `in()` and `list:contains()` can inspect a null
+arguments. Membership methods `in(any...)` and `list:contains(any...)` can inspect a null
 search argument; their receiver still follows ordinary null propagation.
-`object:has()` checks key presence even when the stored value is null.
+`object:has(string)` checks key presence even when the stored value is null.
 
 ## Arithmetic and operator domains
 
@@ -173,7 +173,7 @@ n1!=null n1.n2!=null n1.n2.n3!=null n1.n2.n3.nullvalue=null
 ```
 
 ```hff
-n1!.n2!.n3!.nullvalue:exists()
+n1!.n2!.n3!.nullvalue:exists
 ```
 
 ```hff
@@ -190,11 +190,11 @@ boolean conversion maps no-value to false.
 
 A successful guard always returns the original value, in every expression
 context. `x!` therefore retains normal truthiness when used as a predicate:
-zero, false, and empty values remain falsy. Use `x:exists()` to ask whether a
+zero, false, and empty values remain falsy. Use `x:exists` to ask whether a
 value is present and non-null. This method returns false for null and no-value,
 and true for every other value, including zero, false, and empty collections.
 It is an explicit exception to ordinary no-value propagation. Thus
-`n1!.n2!.value:exists()` preserves the path's presence checks without giving
+`n1!.n2!.value:exists` preserves the path's presence checks without giving
 postfix `!` a context-dependent result.
 
 Prefix NOT applies after boolean conversion, just as for other values. Thus
@@ -256,7 +256,7 @@ result. Partial evaluation must not be presented as a completed filter result.
 AND and OR evaluate left-to-right and short-circuit once their boolean result
 is determined. Unevaluated branches consume no evaluation budget. Ordinary
 method calls evaluate their receiver and arguments left-to-right.
-`bool:and()` and `bool:or()` may skip an argument when the boolean receiver
+`bool:and(bool)` and `bool:or(bool)` may skip an argument when the boolean receiver
 already determines the result, preserving ordinary null-receiver propagation.
 Arithmetic operands, call arguments, and collection entries are evaluated
 left-to-right. Once propagation determines the result, remaining evaluations
@@ -283,10 +283,10 @@ must admit the stated inputs; required-input validation still applies.
 |:--|:--|:--|
 | `x` | `x=0` | false as a filter |
 | `x!` | `x=0` | false as a filter; the guarded value is still 0 |
-| `x:exists()` | `x=0` | true |
-| `x:exists()` | `x=false` | true |
-| `x:exists()` | `x=null` | false |
-| `parent!.value:exists()` | `parent=null` | false |
+| `x:exists` | `x=0` | true |
+| `x:exists` | `x=false` | true |
+| `x:exists` | `x=null` | false |
+| `parent!.value:exists` | `parent=null` | false |
 | `items:any(x=>x.active)` | `items=[]` | false |
 | `items:all(x=>x.active)` | `items=[]` | true |
 | `items:any(x=>x!.active)` | `items=[null,{"active":true}]` | true |

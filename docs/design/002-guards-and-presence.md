@@ -10,7 +10,7 @@ Postfix `!` guards a value and preserves it on success. `exists()` explicitly
 checks presence, independently of truthiness.
 
 ```hff
-parent!.value:exists()
+parent!.value:exists
 age!+1>10
 ```
 
@@ -31,7 +31,7 @@ for null and no-value. It is an explicit consumer of the internal state.
 
 ```hff
 parent!.value=null
-parent!.value:exists()
+parent!.value:exists
 ```
 
 The first can match a null field only if the parent exists; the second requires

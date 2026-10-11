@@ -85,7 +85,7 @@ permitted.
 
 ```text
 schema: x has type String | Int
-expression: x:len()
+expression: x:len
 meaning: if x is a string, return its length; otherwise, return null
 ```
 
@@ -99,7 +99,7 @@ but disabled method is also a compile-time error.
 
 Nullable types use their non-null members for domain checks; actual null values
 follow the null rules. An expression whose only possible value is null may
-participate in known built-in operations, including `null:size()` and
+participate in known built-in operations, including `null:size` and
 `null+null`. A known call still requires all statically applicable method
 capabilities to be enabled, then null propagates at runtime. For a receiver
 that is only known to be null, every known candidate family is applicable
@@ -125,7 +125,7 @@ string containment capability; if `value` has another runtime type, the guard
 produces no-value and the call does not run. Without the type guard, a call on a
 union or `Any` requires permission for every statically applicable signature.
 Type guards do not change the value or authorize a disabled method. For example,
-`value:[object|null]:size()` resolves the object family while retaining null in
+`value:[object|null]:size` resolves the object family while retaining null in
 the guarded result type; a null runtime value propagates null through the call.
 The existing `type()` method remains string-valued and has no special flow
 narrowing behavior. Only an explicit type guard narrows method candidates.

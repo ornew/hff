@@ -14,7 +14,12 @@ special flow-narrowing behavior.
 
 The catalog below records the supplied signatures. `any...` and `string...`
 denote variadic arguments; brackets in a signature denote an optional argument.
-`func(T) -> U` is explanatory callback notation, not HFF source syntax.
+In query source, parentheses may be omitted when a method call supplies no
+arguments, including when all declared arguments are optional. Required
+arguments still produce a compile-time error when omitted. Method names in
+prose and signatures in this catalog retain parentheses; sample query syntax
+may omit parentheses when no argument is supplied. `func(T) -> U` is
+explanatory callback notation, not HFF source syntax.
 Counts, timestamp components, and
 `duration:nanoseconds()` return int64. Other duration unit conversions return
 float64; `round()`, `ceil()`, and `floor()` preserve the input numeric subtype.

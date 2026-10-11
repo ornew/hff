@@ -11,6 +11,7 @@ query language; records provide context for individual design choices.
 | [003: Collection predicates](003-collection-predicates.md) | Short-circuiting any/all for common search intent |
 | [004: Go API](004-go-api.md) | Configuration, compilation, and backend construction |
 | [005: Explicit type guards](005-explicit-type-guards.md) | Narrow dynamic values without conversion and keep capability checks static |
+| [006: Method calls without empty parentheses](006-method-calls-without-empty-parentheses.md) | Omit parentheses when a method call supplies no arguments |
 
 Use [000: Design Record Template](000-template.md) for a new `NNN-topic.md`
 record. Proposed, Accepted, and Implemented distinguish a proposal, an approved

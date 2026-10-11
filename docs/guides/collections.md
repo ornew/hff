@@ -7,11 +7,11 @@ catalog](../../spec/methods.md); this guide focuses on useful query patterns.
 ## List queries
 
 ```hff
-tags:size()>=2
+tags:size>=2
 tags:has(-1)
 tags:contains("api", "production")
-tags:unique()
-tags:sort()=["api", "production"]
+tags:unique
+tags:sort=["api", "production"]
 tags:concat(["internal"]):contains("internal")
 ```
 
@@ -31,12 +31,12 @@ argument.
 ## Object queries
 
 ```hff
-labels:size()=2
+labels:size=2
 labels:has("team")
 labels:get("team")=null
-labels:keys()=["app", "team"]
-labels:values()=["auth", null]
-labels:items()=[["app", "auth"], ["team", null]]
+labels:keys=["app", "team"]
+labels:values=["auth", null]
+labels:items=[["app", "auth"], ["team", null]]
 ```
 
 `has(key)` checks whether the key exists, including when its value is null.
@@ -78,6 +78,6 @@ It prints:
 
 ```text
 tags:contains("api","production") labels:has("team") -> true
-tags:sort()=["api","production"] -> true
-labels:keys()=["app","team"] -> true
+tags:sort=["api","production"] -> true
+labels:keys=["app","team"] -> true
 ```

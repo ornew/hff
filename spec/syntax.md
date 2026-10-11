@@ -43,8 +43,8 @@ false
 null
 {"a": 10}
 [1, "a", true]
-{"a": "12h":duration()}
-[1:tostring()]
+{"a": "12h":duration}
+[1:tostring]
 ```
 
 The value families are number, string, bool, null, object, and list. Bytes,
@@ -58,7 +58,7 @@ collections are allowed. Duplicate object literal keys are compile-time errors.
 Comments and trailing commas are not supported.
 Integer spelling selects int64; a decimal point or exponent selects float64.
 Access punctuation, call punctuation, and prefix/postfix operators are compact:
-`a .b`, `a :len()`, and `! a` are not alternative spellings.
+`a .b`, `a :len`, and `! a` are not alternative spellings.
 
 ## Operators
 
@@ -174,13 +174,20 @@ same for every capability set.
 
 ```hff
 a:b(a1, a2, a3)
-name:lower():startswith("a")
+name:lower:startswith("a")
+name:len=name:len()
+created_at:year=created_at:year()
 ```
 
 The expression before `:` is the receiver. Arguments are comma-separated.
 Whether a method is available depends on the receiver's schema type, the
 configured capabilities, and the selected backend. See [methods](methods.md).
-Ordinary free-function calls are not part of the supplied design.
+When a call has no arguments, its parentheses may be omitted: `name:len` means
+the same call as `name:len()`. This also applies when a method has only optional
+arguments, so `created_at:year` uses the method's default time zone just like
+`created_at:year()`. Parentheses remain valid. Omitting required arguments is a
+compile-time error. Ordinary free-function calls are not part of the supplied
+design.
 
 Arguments, indices, collection values, grouped expressions, and callback bodies
 can contain logical expressions as well as arithmetic and comparisons. For
@@ -207,7 +214,7 @@ prefix logical NOT. It can guard successive receivers:
 
 ```hff
 n1!.n2!.n3!.nullvalue=null
-n1!.n2!.n3!.nullvalue:exists()
+n1!.n2!.n3!.nullvalue:exists
 ```
 
 Their required predicate expansions are given in

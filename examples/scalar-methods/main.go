@@ -37,7 +37,7 @@ func main() {
 		}
 		return yes
 	}
-	fmt.Println("Scalar predicate:", match(`name:lower()="alice" score:round()>=5`, rec))
+	fmt.Println("Scalar predicate:", match(`name:lower="alice" score:round>=5`, rec))
 	fmt.Println("Guarded string:", match(`label:[string]:contains("prod")`, rec))
 	rec = hff.Object(map[string]hff.Value{"name": hff.String("ALICE"), "score": hff.Float(4.5), "label": hff.List(hff.String("production"))})
 	fmt.Println("Guarded list:", match(`label:[string]:contains("prod")`, rec))

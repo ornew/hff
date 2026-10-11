@@ -61,7 +61,8 @@ def access: Expr = base:primary parts:suffix* -> new Access{Base: $base, Parts: 
 def suffix: Suffix = fieldaccess / indexaccess / typeguard / methodcall / guard
 def fieldaccess: FieldAccess = "." n:name -> new FieldAccess{Name: $n}
 def indexaccess: IndexAccess = "[" ws x:expression ws "]" -> new IndexAccess{Index: $x}
-def methodcall: MethodCall = ":" n:name "(" ws args:arguments? ws ")" -> new MethodCall{Name: $n, Args: concat($args)}
+def methodcall: MethodCall = ":" n:name args:callargs? -> new MethodCall{Name: $n, Args: concat($args)}
+def callargs = "(" ws args:arguments? ws ")" -> concat($args)
 def guard: Guard = "!" !("=" / "~") -> new Guard{}
 def typeguard: TypeGuard = ":" "[" ws t:typeref ws "]" -> new TypeGuard{Type: $t}
 def typeref: TypeExpr = first:typeatom rest:(-ws -"|" -ws t:typeatom)*

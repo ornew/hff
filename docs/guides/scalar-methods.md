@@ -26,10 +26,10 @@ failing local `Build` with `hff.BackendError` for an unsupported method.
 ## Use the methods in a filter
 
 ```hff
-name:lower():startswith("a")
+name:lower:startswith("a")
 name:contains("Ali", "lic")
 name:matches("^A.*e$")
-active:and(age:round()>=18)
+active:and(age:round>=18)
 ```
 
 `contains()` requires at least one argument and checks that every supplied
@@ -49,8 +49,8 @@ conversions yield null.
 ## Generic value methods
 
 ```hff
-payload:exists()
-payload:type()="string"
+payload:exists
+payload:type="string"
 payload:in("open", "pending")
 ```
 

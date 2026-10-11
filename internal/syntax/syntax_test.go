@@ -26,6 +26,8 @@ func TestGrammarConformance(t *testing.T) {
 		`name="\ud83d\ude00"`, `name="\\ud800"`, `age=1e-3`,
 		`x:[string]:contains("foo")`, `x:[list[string|null]]`,
 		`(x+1):[int]`, `x:[(string | list[map[int]])]`,
+		`name:lower:len>3`, `value:exists`, `x:type="string"`,
+		`x:keys[-1]`, `x:size!`, `x:len (y)`, `x:contains`,
 	}
 	for _, source := range valid {
 		t.Run(source, func(t *testing.T) {
@@ -43,6 +45,7 @@ func TestGrammarConformance(t *testing.T) {
 		"`a\\n`", "name=\"a\nb\"", "a=\xff", `a|`, `()`,
 		`x :[string]`, `x: [string]`, `x:[]`, `x:[list[]]`,
 		`x:[string|]`, `x:[list[int,]]`,
+		`x:len(`, `x:len(,)`, `x: len`, `x:len)`,
 	}
 	for _, source := range invalid {
 		t.Run(source, func(t *testing.T) {
