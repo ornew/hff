@@ -86,12 +86,15 @@ if err != nil {
 	return err
 }
 matched, err := filter.Match(ctx, record)
+if err != nil {
+	return err
+}
 fmt.Println(matched)
 ```
 
 The converter validates its result against the configured schema before it
 returns. `Match` validates again as part of its normal input contract; when a
-caller already has an `engine.Input`, use `MatchInput` to reuse that validated
+caller already has an `hff.Input`, use `MatchInput` to reuse that validated
 input.
 
 ## Mapping rules
@@ -201,8 +204,13 @@ name rules. If promotion or tags yield duplicate HFF names, inference fails
 rather than choosing one field. Unsupported or recursive Go types also fail
 when the binding is created.
 
-Pointers, maps, slices, and interfaces that are nil convert to HFF null;
-non-nil empty maps and slices remain empty objects and lists. Numeric kinds are
+For typed local filters, the inferred schema must have an object root: use a
+struct or string-keyed map. A pointer to either object type is also accepted as
+`T`, but the root record must be non-nil; converting a nil root returns an
+`InputError`. `NewBinding[T]` also supports non-object types for conversion-only
+use through `Binding.Convert`; `Build` cannot create a filter for those schemas.
+Nested nil pointers, maps, slices, and interfaces convert to HFF null. Non-nil
+empty maps and slices remain empty objects and lists. Numeric kinds are
 preserved without coercion, and `time.Time`, `time.Duration`, and `hff.Value`
 have their corresponding HFF representations. The binding snapshots the
 inferred schema and conversion plan. Do not mutate a source value while it is

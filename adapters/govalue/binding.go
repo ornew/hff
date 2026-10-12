@@ -11,8 +11,9 @@ import (
 	convert "github.com/ornew/hff/internal/govalue"
 )
 
-// Binding derives an immutable schema and conversion plan from T.
-// Source values must not be mutated during conversion or evaluation.
+// Binding derives an immutable HFF schema and conversion plan from static Go
+// type T. It can build typed local filters for repeated matching. Source values
+// must not be mutated during conversion or evaluation.
 type Binding[T any] struct {
 	schema    hff.Type
 	plans     convert.Plans
@@ -20,9 +21,17 @@ type Binding[T any] struct {
 	unlimited bool
 }
 
-// NewBinding derives the static Go type, rejecting recursive and unsupported
-// types. Converter limit options are accepted; explicit schema/mapping options
-// belong to New and cannot override an inferred contract.
+// NewBinding derives a schema from static Go type T. Engine use requires an object
+// root (struct or string-keyed map). Pointers to object roots and map roots
+// are inferred as nonnullable objects, so a nil object root is an InputError.
+// Other root types can be used for conversion without an engine and retain
+// their inferred nullability. Nil nested pointers,
+// maps, and slices remain explicit nulls. Struct field names use an hff tag,
+// then a json tag, then the Go name; omitempty makes a field optional and '-'
+// skips it. Anonymous structs are promoted, and ambiguous promoted names,
+// recursive types, unsupported fields, and unrecognized tag options are
+// ConfigurationErrors. Options may set input limits; explicit schema and
+// struct-mapping options are not accepted.
 func NewBinding[T any](options ...Option) (*Binding[T], error) {
 	var config Config
 	for _, option := range options {
@@ -48,12 +57,32 @@ func NewBinding[T any](options ...Option) (*Binding[T], error) {
 	if err != nil {
 		return nil, err
 	}
+	// Root records must be objects. Pointer/map nil values are rejected by
+	// validation rather than making the engine's entire root nullable.
+	if typ.Kind() == hff.UnionType {
+		var object hff.Type
+		candidates := 0
+		for _, member := range typ.Members() {
+			if member.Kind() == hff.NullType {
+				continue
+			}
+			candidates++
+			if member.Kind() == hff.StructType || member.Kind() == hff.MapType {
+				object = member
+			}
+		}
+		if candidates == 1 && object.Kind() != hff.InvalidType {
+			typ = object
+		}
+	}
 	if err := typ.Check(); err != nil {
 		return nil, configuration(err.Error())
 	}
 	return &Binding[T]{schema: typ, plans: i.plans, limits: limits, unlimited: config.UnlimitedLimits}, nil
 }
 
+// Schema returns the immutable inferred HFF schema, or an invalid Type for a
+// nil Binding.
 func (b *Binding[T]) Schema() hff.Type {
 	if b == nil {
 		return hff.Type{}
@@ -61,6 +90,9 @@ func (b *Binding[T]) Schema() hff.Type {
 	return b.schema
 }
 
+// Convert maps source to an immutable HFF Value and checks the inferred schema.
+// It returns no partial value on cancellation, input-limit, or validation
+// errors. Keep source unchanged for the duration of the call.
 func (b *Binding[T]) Convert(ctx context.Context, source T) (hff.Value, error) {
 	if b == nil || b.schema.Kind() == hff.InvalidType {
 		return hff.Value{}, configuration("invalid binding")
@@ -76,7 +108,9 @@ func (b *Binding[T]) Convert(ctx context.Context, source T) (hff.Value, error) {
 	return input.Value(), nil
 }
 
-// Build constructs a typed local filter only for the exact inferred schema.
+// Build constructs a typed local filter only when program carries the exact
+// inferred schema. The Program must still have an engine-compatible object
+// root. Options configure local evaluation; local Build errors are returned.
 func (b *Binding[T]) Build(ctx context.Context, program hff.Program, options ...local.Option) (*Filter[T], error) {
 	if b == nil || !program.Schema().Equal(b.schema) {
 		return nil, configuration("program schema differs from Go binding")
@@ -88,11 +122,17 @@ func (b *Binding[T]) Build(ctx context.Context, program hff.Program, options ...
 	return &Filter[T]{binding: b, filter: filter}, nil
 }
 
+// Filter evaluates a Program against Go values of T using its Binding's
+// conversion plan. It is immutable and safe for concurrent calls when records
+// are not mutated during matching.
 type Filter[T any] struct {
 	binding *Binding[T]
 	filter  *local.Filter
 }
 
+// Match converts and validates record before evaluating the local filter. A
+// completed false result is not an error; conversion, input, cancellation, and
+// evaluation-limit failures are returned as typed errors.
 func (f *Filter[T]) Match(ctx context.Context, record T) (bool, error) {
 	if f == nil {
 		return false, configuration("invalid typed filter")

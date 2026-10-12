@@ -170,3 +170,62 @@ func TestBindingPromotedTraversalRespectsLimits(t *testing.T) {
 		t.Fatal("zero binding accepted")
 	}
 }
+
+func TestPointerAndMapBindingsUseNonNullableRecordRoots(t *testing.T) {
+	type record struct {
+		Name string  `json:"name"`
+		Note *string `json:"note"`
+	}
+	pointer, err := NewBinding[*record]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pointer.Schema().Kind() != hff.StructType {
+		t.Fatal("pointer root remains nullable")
+	}
+	e, err := engine.New(engine.WithSchema(pointer.Schema()), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	program, err := e.Compile(context.Background(), `name="Alice" note=null`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	filter, err := pointer.Build(context.Background(), program)
+	if err != nil {
+		t.Fatal(err)
+	}
+	matched, err := filter.Match(context.Background(), &record{Name: "Alice"})
+	if err != nil || !matched {
+		t.Fatalf("match %v %v", matched, err)
+	}
+	if _, err := filter.Match(context.Background(), nil); err == nil {
+		t.Fatal("nil pointer record accepted")
+	}
+	mapping, err := NewBinding[map[string]int]()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mapping.Schema().Kind() != hff.MapType {
+		t.Fatal("map root remains nullable")
+	}
+	me, err := engine.New(engine.WithSchema(mapping.Schema()), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mp, err := me.Compile(context.Background(), `score>=10`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mf, err := mapping.Build(context.Background(), mp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	matched, err = mf.Match(context.Background(), map[string]int{"score": 12})
+	if err != nil || !matched {
+		t.Fatalf("map match %v %v", matched, err)
+	}
+	if _, err := mf.Match(context.Background(), nil); err == nil {
+		t.Fatal("nil map record accepted")
+	}
+}
