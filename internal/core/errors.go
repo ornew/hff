@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 )
 
 // ErrorCode identifies a host-level failure, never a completed false match.
@@ -43,6 +45,96 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("hff %s: %s", e.Code, e.Message)
 }
 func (e *Error) Unwrap() error { return e.Cause }
+
+// Diagnostics groups independent failures. Unwrap preserves errors.As for each
+// typed Error and errors.Is for causes. It never represents a usable program.
+type Diagnostics struct{ items []error }
+
+func (d *Diagnostics) Errors() []error {
+	if d == nil {
+		return nil
+	}
+	return append([]error(nil), d.items...)
+}
+func (d *Diagnostics) Unwrap() []error { return d.Errors() }
+func (d *Diagnostics) Error() string {
+	if d == nil {
+		return ""
+	}
+	messages := make([]string, len(d.items))
+	for i, err := range d.items {
+		messages[i] = err.Error()
+	}
+	return strings.Join(messages, "\n")
+}
+
+// CombineErrors retains a single failure's existing API and flattens groups
+// when recovery has found more than one independent diagnostic.
+func CombineErrors(errs ...error) error {
+	var items []error
+	for _, err := range errs {
+		if err == nil {
+			continue
+		}
+		if group, ok := err.(*Diagnostics); ok {
+			items = append(items, group.items...)
+		} else {
+			items = append(items, err)
+		}
+	}
+	if len(items) == 0 {
+		return nil
+	}
+	if len(items) == 1 {
+		return items[0]
+	}
+	return &Diagnostics{items: items}
+}
+
+// LocateSourceErrors fills source positions in one UTF-8 scan. Collecting many
+// diagnostics must not repeatedly scan the entire prefix for every error.
+func LocateSourceErrors(ctx context.Context, source string, err error) error {
+	if err == nil {
+		return nil
+	}
+	items := []error{err}
+	if group, ok := err.(*Diagnostics); ok {
+		items = group.Errors()
+	}
+	var locations []*Error
+	for _, item := range items {
+		var detail *Error
+		if errors.As(item, &detail) && detail.Span != nil && detail.Line == 0 {
+			locations = append(locations, detail)
+		}
+	}
+	sort.SliceStable(locations, func(i, j int) bool { return locations[i].Span.Start < locations[j].Span.Start })
+	line, column, next, nextCheck := 1, 1, 0, 0
+	for pos, r := range source {
+		if pos >= nextCheck {
+			if contextErr := CheckContext(ctx); contextErr != nil {
+				return contextErr
+			}
+			nextCheck = pos + 1024
+		}
+		for next < len(locations) && locations[next].Span.Start <= pos {
+			locations[next].Line, locations[next].Column = line, column
+			next++
+		}
+		if next == len(locations) {
+			return err
+		}
+		if r == '\n' {
+			line, column = line+1, 1
+		} else {
+			column++
+		}
+	}
+	for ; next < len(locations); next++ {
+		locations[next].Line, locations[next].Column = line, column
+	}
+	return err
+}
 
 // CheckContext preserves both the standard cancellation status and an optional
 // host-supplied cause. Callers validate a non-nil context before reaching here.

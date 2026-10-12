@@ -3,6 +3,7 @@ package compiler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -45,22 +46,17 @@ func Compile(ctx context.Context, source string, config Config) (plan.Program, e
 		return plan.Program{}, err
 	}
 	c := compiler{ctx: ctx, source: source, config: config, roots: make(map[string]plan.Binding)}
-	if err := c.checkFilter(tree); err != nil {
-		return plan.Program{}, err
-	}
+	filterErr := c.checkFilter(tree)
 	root, err := c.expression(tree)
-	if err != nil {
-		return plan.Program{}, err
+	if combined := compileErrors(filterErr, err); combined != nil {
+		return plan.Program{}, core.LocateSourceErrors(ctx, source, combined)
 	}
 	root = c.boolean(root, syntax.ExprSpan(tree))
 	return plan.NewProgram(source, root, config.Schema, config.Capabilities, config.Limits, config.Unlimited), nil
 }
 func (c *compiler) failure(code core.ErrorCode, node any, message string) error {
 	span := syntax.ExprSpan(node)
-	start := span.Start
-	line := strings.Count(c.source[:start], "\n") + 1
-	lineStart := strings.LastIndexByte(c.source[:start], '\n') + 1
-	return &core.Error{Code: code, Span: &span, Line: line, Column: len([]rune(c.source[lineStart:start])) + 1, Message: message}
+	return &core.Error{Code: code, Span: &span, Message: message}
 }
 func (c *compiler) allow(id capabilities.ID, node any) error {
 	if !c.config.Capabilities.Has(id) {
@@ -115,19 +111,17 @@ func (c *compiler) checkFilter(expr syntax.Expr) error {
 	case *syntax.Empty:
 		return nil
 	case *syntax.Or:
+		var failures []error
 		for _, x := range n.Terms {
-			if err := c.checkFilter(x); err != nil {
-				return err
-			}
+			failures = append(failures, c.checkFilter(x))
 		}
-		return nil
+		return compileErrors(failures...)
 	case *syntax.And:
+		var failures []error
 		for _, x := range n.Terms {
-			if err := c.checkFilter(x); err != nil {
-				return err
-			}
+			failures = append(failures, c.checkFilter(x))
 		}
-		return nil
+		return compileErrors(failures...)
 	case *syntax.Not:
 		return c.checkFilter(n.X)
 	case *syntax.Binary:
@@ -323,13 +317,21 @@ func (c *compiler) expression(expr syntax.Expr) (plan.Node, error) {
 		}
 		var children []plan.Node
 		var types []core.Type
+		var failures []error
 		for _, x := range n.Values {
 			child, err := c.expression(x)
 			if err != nil {
-				return plan.Node{}, err
+				if fatalCompile(err) {
+					return plan.Node{}, err
+				}
+				failures = append(failures, err)
+				continue
 			}
 			children = append(children, child)
 			types = append(types, child.Type())
+		}
+		if err := compileErrors(failures...); err != nil {
+			return plan.Node{}, err
 		}
 		return c.node(plan.ListNode, core.NewListType(union(types...)), n, children...), nil
 	case *syntax.ObjectLiteral:
@@ -340,19 +342,27 @@ func (c *compiler) expression(expr syntax.Expr) (plan.Node, error) {
 		var fields []core.Field
 		var keys []string
 		seen := map[string]bool{}
+		var failures []error
 		for _, m := range n.Members {
 			key, _ := syntax.DecodeString(m.Key.Text)
 			if seen[key] {
-				return plan.Node{}, c.failure(core.TypeError, &m.Key, "duplicate object key")
+				failures = append(failures, c.failure(core.TypeError, m.Key, "duplicate object key"))
 			}
 			seen[key] = true
 			child, err := c.expression(m.Value)
 			if err != nil {
-				return plan.Node{}, err
+				if fatalCompile(err) {
+					return plan.Node{}, err
+				}
+				failures = append(failures, err)
+				continue
 			}
 			children = append(children, child)
 			fields = append(fields, core.Field{Name: key, Type: child.Type()})
 			keys = append(keys, key)
+		}
+		if err := compileErrors(failures...); err != nil {
+			return plan.Node{}, err
 		}
 		may := false
 		for _, child := range children {
@@ -401,18 +411,69 @@ func (c *compiler) logical(kind plan.NodeKind, source any, terms []syntax.Expr) 
 	if len(terms) == 1 {
 		return c.expression(terms[0])
 	}
-	if err := c.allow(capabilities.Logical, source); err != nil {
-		return plan.Node{}, err
-	}
+	failures := []error{c.allow(capabilities.Logical, source)}
 	var children []plan.Node
 	for _, x := range terms {
 		child, err := c.expression(x)
 		if err != nil {
-			return plan.Node{}, err
+			if fatalCompile(err) {
+				return plan.Node{}, err
+			}
+			failures = append(failures, err)
+			continue
 		}
 		children = append(children, c.boolean(child, syntax.ExprSpan(x)))
 	}
+	if err := compileErrors(failures...); err != nil {
+		return plan.Node{}, err
+	}
 	return c.node(kind, primitive(core.BoolType), source, children...), nil
+}
+
+func fatalCompile(err error) bool {
+	var detail *core.Error
+	return errors.As(err, &detail) && (detail.Code == core.CancelledError || detail.Code == core.LimitError)
+}
+
+// Keep independently checkable failures in source order. Cancellation or an
+// exhausted compile budget ends the operation rather than producing a partial
+// diagnostic batch or spending more work on additional branches.
+func compileErrors(errs ...error) error {
+	err := core.CombineErrors(errs...)
+	if err == nil {
+		return nil
+	}
+	group, multiple := err.(*core.Diagnostics)
+	if !multiple {
+		return err
+	}
+	items := group.Errors()
+	for _, item := range items {
+		if fatalCompile(item) {
+			return item
+		}
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		var a, b *core.Error
+		if errors.As(items[i], &a) && errors.As(items[j], &b) && a.Span != nil && b.Span != nil {
+			return a.Span.Start < b.Span.Start
+		}
+		return false
+	})
+	var unique []error
+	seen := map[string]bool{}
+	for _, item := range items {
+		key := item.Error()
+		var detail *core.Error
+		if errors.As(item, &detail) && detail.Span != nil {
+			key = fmt.Sprintf("%s:%d:%d:%s", detail.Code, detail.Span.Start, detail.Span.End, detail.Message)
+		}
+		if !seen[key] {
+			seen[key] = true
+			unique = append(unique, item)
+		}
+	}
+	return core.CombineErrors(unique...)
 }
 func sortedCaptures(s *scope) []plan.Binding {
 	values := make([]plan.Binding, 0, len(s.captures))

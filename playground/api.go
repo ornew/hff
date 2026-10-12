@@ -37,13 +37,22 @@ type request struct {
 	Without []capabilities.ID `json:"without,omitempty"`
 }
 type failure struct {
-	Stage   string        `json:"stage"`
+	Stage       string        `json:"stage"`
+	Code        hff.ErrorCode `json:"code"`
+	Message     string        `json:"message"`
+	Line        int           `json:"line,omitempty"`
+	Column      int           `json:"column,omitempty"`
+	Path        hff.Path      `json:"path,omitempty"`
+	Record      int           `json:"record,omitempty"`
+	Span        *hff.Span     `json:"span,omitempty"`
+	Diagnostics []diagnostic  `json:"diagnostics,omitempty"`
+}
+type diagnostic struct {
 	Code    hff.ErrorCode `json:"code"`
 	Message string        `json:"message"`
 	Line    int           `json:"line,omitempty"`
 	Column  int           `json:"column,omitempty"`
-	Path    hff.Path      `json:"path,omitempty"`
-	Record  int           `json:"record,omitempty"`
+	Span    *hff.Span     `json:"span,omitempty"`
 }
 type timings struct {
 	Compile  float64 `json:"compile_ms"`
@@ -75,6 +84,22 @@ func failed(stage string, err error) response {
 		f.Line = detail.Line
 		f.Column = detail.Column
 		f.Path = detail.Path
+		f.Span = detail.Span
+		if stage == "compile" {
+			// Location and code are separate fields; do not repeat them inside
+			// the browser's human-readable diagnostic message.
+			f.Message = detail.Message
+		}
+	}
+	var group *hff.Diagnostics
+	if errors.As(err, &group) {
+		for _, item := range group.Errors() {
+			var detail *hff.Error
+			if errors.As(item, &detail) {
+				f.Diagnostics = append(f.Diagnostics, diagnostic{Code: detail.Code, Message: detail.Message,
+					Line: detail.Line, Column: detail.Column, Span: detail.Span})
+			}
+		}
 	}
 	return response{Error: f}
 }

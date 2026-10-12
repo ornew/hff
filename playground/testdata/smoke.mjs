@@ -20,6 +20,7 @@ const cases = [
   [String.raw`{"schema":[{"name":"n","type":"float"}],"query":"n:tostring=\"-0.0\"","record":{"n":-0.0}}`, true],
   ['{"schema":[{"name":"items","type":"list[int]"}],"query":"items:any(x=>x>10)","record":{"items":[1,11]}}', true],
   ['{"schema":[{"name":"age","type":"int"}],"query":"age>","record":{"age":20}}', "compile"],
+  [JSON.stringify({ schema: [{ name: "name", type: "string" }, { name: "age", type: "int" }], query: 'name="東京😀" age> other>', records: [] }), "compile"],
   ['{"schema":[{"name":"age","type":"int"}],"query":"age","record":{"age":"20"}}', "match"],
   ['{"schema":[{"name":"age","type":"int"}],"query":"age>18","record":{"age":20},"without":["operator:comparison"]}', "compile"],
   ['{"schema":[],"query":"","record":{"x":"\\ud800"}}', "request"],
@@ -35,6 +36,12 @@ for (const [raw, expected] of cases) {
   if (typeof expected === "boolean") { assert.equal(actual.ok, true, raw + JSON.stringify(actual)); assert.equal(actual.matched, expected, raw); }
   else { assert.equal(actual.ok, false); assert.equal(actual.error.stage, expected); assert.equal(actual.matched, undefined); }
 }
+const diagnosticResponse = JSON.parse(hffPlayground.match(JSON.stringify({
+  schema: [{ name: "name", type: "string" }, { name: "age", type: "int" }],
+  query: 'name="東京😀" age> other>', records: [],
+})));
+assert.equal(diagnosticResponse.error.diagnostics.length, 2);
+assert.ok(diagnosticResponse.error.diagnostics.every(item => Number.isInteger(item.span.Start) && item.span.End >= item.span.Start));
 const batchRaw = '{"schema":[{"name":"n","type":"int|float"}],"query":"n:[float]:exists | n=9007199254740993","records":[{"n":12},{"n":9007199254740993},{"n":1.0},{"n":-0.0}]}';
 const batchNative = spawnSync(cli, [], { input: batchRaw, encoding: "utf8", timeout: 10000 });
 assert.equal(batchNative.status, 0, batchNative.stderr);

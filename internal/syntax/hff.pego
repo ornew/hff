@@ -43,12 +43,23 @@ def expression: Expr = first:conjunction rest:(-ws -"|" -ws x:conjunction)*
     -> new Or{Terms: concat(list($first), map($rest, (r) => $r.x))}
 def conjunction: Expr = first:predicate rest:(-space x:predicate)*
     -> new And{Terms: concat(list($first), map($rest, (r) => $r.x))}
-def predicate: Expr = negation / comparison
+// Require the whole compact predicate before accepting it. Recovery preserves
+// outer separators, quoted text, and balanced delimiters to find the next leaf.
+def predicate: Expr = x:completepredicate
+    #recover(skip=recoverpredicate) -> $x
+def completepredicate: Expr = x:(negation / comparison) predicateend -> $x
+def predicateend = (&(space / "|" / "," / ")" / "]" / "}" / $$))
+    #error(message="expected a predicate separator; operators and accesses must touch their operands, and comparisons cannot be chained")
 def negation: Not = "!" x:predicate -> new Not{X: $x}
 // Comparison is deliberately non-associative.
 def comparison: Expr = compare / arithmetic
-def compare: Binary = lhs:arithmetic op:compareop rhs:arithmetic
+def compare: Binary = lhs:arithmetic op:compareop rhs:comparisonvalue
     -> new Binary{Left: $lhs, Op: $op, Right: $rhs}
+def comparisonvalue: Expr = arithmetic / missingcomparisonvalue
+// This always-failing fallback labels a missing operand at its start, without
+// replacing a more specific error deeper inside a quoted or grouped value.
+def missingcomparisonvalue: Empty = (!. .)
+    #error(message="expected a value after the comparison operator (without intervening whitespace)") -> new Empty{}
 def compareop = "!~" / "!=" / "<=" / ">=" / equalop / "~" / "<" / ">"
 def equalop = op:"=" !">" -> $op
 def arithmetic: Expr = pratt {
@@ -59,12 +70,17 @@ def arithmetic: Expr = pratt {
 }
 def access: Expr = base:primary parts:suffix* -> new Access{Base: $base, Parts: $parts}
 def suffix: Suffix = fieldaccess / indexaccess / typeguard / methodcall / guard
-def fieldaccess: FieldAccess = "." n:name -> new FieldAccess{Name: $n}
-def indexaccess: IndexAccess = "[" ws x:expression ws "]" -> new IndexAccess{Index: $x}
-def methodcall: MethodCall = ":" n:name args:callargs? -> new MethodCall{Name: $n, Args: concat($args)}
-def callargs = "(" ws args:arguments? ws ")" -> concat($args)
+def fieldaccess: FieldAccess = "." n:fieldname -> new FieldAccess{Name: $n}
+def fieldname: Name = name / missingfieldname
+def missingfieldname: PlainName = (!. .)
+    #error(message="expected a field name after '.'; quote unusual or reserved names with backticks")
+def indexaccess: IndexAccess = "[" ws x:expression ws closebracket -> new IndexAccess{Index: $x}
+def methodcall: MethodCall = ":" n:methodname args:callargs? -> new MethodCall{Name: $n, Args: concat($args)}
+def methodname: Name = name / missingmethodname
+def missingmethodname: PlainName = (!. .) #error(message="expected a method name after ':'")
+def callargs = "(" ws args:arguments? ws closeparen -> concat($args)
 def guard: Guard = "!" !("=" / "~") -> new Guard{}
-def typeguard: TypeGuard = ":" "[" ws t:typeref ws "]" -> new TypeGuard{Type: $t}
+def typeguard: TypeGuard = ":" "[" ws t:typeref ws closebracket -> new TypeGuard{Type: $t}
 def typeref: TypeExpr = first:typeatom rest:(-ws -"|" -ws t:typeatom)*
     -> new TypeUnion{Types: concat(list($first), map($rest, (r) => $r.t))}
 def typeatom: TypeExpr = typegroup / typenamed
@@ -74,8 +90,10 @@ def typename: TypeName = (?a-zA-Z_) identpart*
 def typeparameters = "[" ws ts:typelist ws "]" -> $ts
 def typelist = first:typeref rest:(-ws -"," -ws t:typeref)*
     -> concat(list($first), map($rest, (r) => $r.t))
-def primary: Expr = group / object / array / string / number / bool / null / variable
-def group: Group = "(" ws x:expression ws ")" -> new Group{X: $x}
+def primary: Expr = group / object / array / string / number / bool / null / variable / missingprimary
+def missingprimary: Empty = (!. .)
+    #error(message="expected a value, field name, or parenthesized expression") -> new Empty{}
+def group: Group = "(" ws x:expression ws closeparen -> new Group{X: $x}
 def variable: Variable = n:name -> new Variable{Name: $n}
 def arguments = first:argument rest:(-ws -"," -ws x:argument)*
     -> concat(list($first), map($rest, (r) => $r.x))
@@ -89,14 +107,15 @@ def oneparam = n:name -> list($n)
 def manyparams = "(" ws ns:names? ws ")" -> concat($ns)
 def names = first:name rest:(-ws -"," -ws n:name)*
     -> concat(list($first), map($rest, (r) => $r.n))
-def array: ListLiteral = "[" ws es:elements? ws "]" -> new ListLiteral{Values: concat($es)}
+def array: ListLiteral = "[" ws es:elements? ws closebracket -> new ListLiteral{Values: concat($es)}
 def elements = first:expression rest:(-ws -"," -ws x:expression)*
     -> concat(list($first), map($rest, (r) => $r.x))
-def object: ObjectLiteral = "{" ws ms:members? ws "}" -> new ObjectLiteral{Members: concat($ms)}
+def object: ObjectLiteral = "{" ws ms:members? ws closebrace -> new ObjectLiteral{Members: concat($ms)}
 def members = first:member rest:(-ws -"," -ws m:member)*
     -> concat(list($first), map($rest, (r) => $r.m))
 def member: Member = k:string ws ":" ws x:expression -> new Member{Key: $k, Value: $x}
-def string: String = "\"" ((?^"\\\u{0}-\u{1f})+ / escape)* "\""
+def string: String = "\"" ((?^"\\\u{0}-\u{1f})+ / escape)* stringend
+def stringend = "\"" #error(message="expected a closing double quote or a valid JSON escape")
 def escape = "\\" ((?"\\/bfnrt) / "u" hex hex hex hex)
 def hex = (?0-9a-fA-F)
 def number: Number = integer fraction? exponent?
@@ -108,6 +127,18 @@ def null: Null = "null" !identpart
 def name: Name = quotedname / plainname
 def plainname: PlainName = !(("true" / "false" / "null") !identpart) (?a-zA-Z_) identpart*
 def identpart = (?a-zA-Z_0-9)
-def quotedname: QuotedName = "`" ((?^`\\)+ / "\\" (?`\\))* "`"
+def quotedname: QuotedName = "`" ((?^`\\)+ / "\\" (?`\\))* quotednameend
+def quotednameend = "`" #error(message="expected a closing backtick or a backslash escape for a backtick or backslash")
+def closeparen = ")" #error(message="expected ')' to close the group or method arguments")
+def closebracket = "]" #error(message="expected ']' to close the list, index, or type guard")
+def closebrace = "}" #error(message="expected '}' to close the object")
+// Skip complete quoted regions and balanced containers, rather than treating
+// their internal spaces/commas as independent predicates after an error.
+def recoverpredicate = (recoverstring / recovername / recoverparen / recoverlist / recoverobject / (?^ \t\r\n|,\u{28}\u{29}\u{5b}\u{5d}{}"`))+
+def recoverstring = "\"" ("\\" . / (?^"\\))* "\""?
+def recovername = "`" ("\\" . / (?^`\\))* "`"?
+def recoverparen = "(" (recoverstring / recovername / recoverparen / recoverlist / recoverobject / (?^\u{28}\u{29}\u{5b}\u{5d}{}"`))* ")"?
+def recoverlist = "[" (recoverstring / recovername / recoverparen / recoverlist / recoverobject / (?^\u{28}\u{29}\u{5b}\u{5d}{}"`))* "]"?
+def recoverobject = "{" (recoverstring / recovername / recoverparen / recoverlist / recoverobject / (?^\u{28}\u{29}\u{5b}\u{5d}{}"`))* "}"?
 def space = (? \t\r\n)+
 def ws = (? \t\r\n)*

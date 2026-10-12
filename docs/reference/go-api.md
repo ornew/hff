@@ -43,8 +43,21 @@ if err != nil {
 
 `engine.Engine` is safe for concurrent validation and compilation. A
 `hff.Program` is immutable and can be passed to supported backend builders.
-Compilation returns typed `*hff.Error` diagnostics; inspect its `Code` and
-source `Span` rather than branching on message text.
+Compilation returns typed errors with source spans; inspect stable error codes
+rather than branching on message text.
+
+## Errors and diagnostics
+
+`hff.Error` contains `Code`, `Message`, optional `Path` and `Span`, and
+one-based `Line` and Unicode-code-point `Column` when a query source location is
+available. `Span` is a half-open byte range in the original UTF-8 source. A
+single failure remains a `*hff.Error`. Multiple independent parse or compile
+failures are returned as `*hff.Diagnostics`, which exposes `Errors() []error`
+and implements `Unwrap() []error`. Thus `errors.As` can find either the group
+or each member's `*hff.Error`, and `errors.Is` can inspect wrapped causes. The
+group's error slice is copied. Diagnostics are source ordered; cancellation
+and limit failures stop collection instead of being combined with ordinary
+diagnostics. A recovered parse tree is never returned as a usable program.
 
 ## Construct values and validate input
 
@@ -184,6 +197,16 @@ profile does not claim that PostgreSQL enforces local evaluation budgets or
 HFF evaluation order. `Build` remains authoritative for a specific program,
 binding, and configuration, and database execution behavior remains under the
 service's control.
+
+Applications that define their own backend profile can construct one with
+`hff.NewProfile(hff.ProfileConfig{...})`. The constructor copies slice and
+limit-pointer inputs, validates the declarations, and returns a configuration
+error for invalid or duplicate entries. Set a stage's `*Limits` pointer only
+when that profile knows the effective limits; a nil pointer means unknown or
+outside the backend's responsibility. `GuaranteeID` entries are affirmative
+claims, not a list of missing or unsupported guarantees. `Details` are
+backend-specific descriptive name/value pairs and do not alter capabilities
+or enforcement.
 
 Run the [profile example](https://github.com/ornew/hff/blob/main/examples/profiles/main.go)
 from the repository root with `go run ./examples/profiles` to inspect both a

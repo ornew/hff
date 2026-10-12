@@ -1,6 +1,8 @@
 package compiler
 
 import (
+	"fmt"
+
 	"github.com/ornew/hff/capabilities"
 	"github.com/ornew/hff/internal/core"
 	"github.com/ornew/hff/internal/plan"
@@ -20,17 +22,20 @@ func (c *compiler) binary(n *syntax.Binary) (plan.Node, error) {
 	if err := c.allow(feature, n); err != nil {
 		return plan.Node{}, err
 	}
-	left, err := c.expression(n.Left)
-	if err != nil {
-		return plan.Node{}, err
+	left, leftErr := c.expression(n.Left)
+	if fatalCompile(leftErr) {
+		return plan.Node{}, leftErr
 	}
 	if !arithmetic && (op == plan.Equal || op == plan.NotEqual) {
 		if _, ok := strip(n.Right).(*syntax.Null); ok {
+			if leftErr != nil {
+				return plan.Node{}, leftErr
+			}
 			return plan.NewNode(plan.Spec{Kind: plan.NullTestNode, Type: primitive(core.BoolType), Operator: op, Span: syntax.ExprSpan(n), Children: []plan.Node{left}}), nil
 		}
 	}
-	right, err := c.expression(n.Right)
-	if err != nil {
+	right, rightErr := c.expression(n.Right)
+	if err := compileErrors(leftErr, rightErr); err != nil {
 		return plan.Node{}, err
 	}
 	valid := bottom(left.Type()) || bottom(right.Type())
@@ -66,7 +71,7 @@ func (c *compiler) binary(n *syntax.Binary) (plan.Node, error) {
 		}
 	}
 	if !valid {
-		return plan.Node{}, c.failure(core.TypeError, n, "operator has no applicable operand types")
+		return plan.Node{}, c.failure(core.TypeError, n, fmt.Sprintf("operator %q cannot compare or combine %s and %s", n.Op.Text, describeType(left.Type()), describeType(right.Type())))
 	}
 	if op == plan.Equal || op == plan.NotEqual {
 		if err := c.equalityCapabilities(left.Type(), right.Type(), n); err != nil {
@@ -99,7 +104,7 @@ func (c *compiler) access(n *syntax.Access) (plan.Node, error) {
 			name := syntax.DecodeName(p.Name)
 			typ, ok := fieldType(node.Type(), name)
 			if !ok {
-				return plan.Node{}, c.failure(core.TypeError, p, "field is not declared on any receiver type")
+				return plan.Node{}, c.failure(core.TypeError, p, fmt.Sprintf("field %q is not declared on %s", name, describeType(node.Type())))
 			}
 			path, static := schemaPath(node)
 			if static {

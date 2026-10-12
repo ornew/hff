@@ -42,12 +42,33 @@ phase-by-phase checks.
 
 ## Handle diagnostics
 
-Compilation failures are returned as `*hff.Error`. Use `errors.As` to inspect
-the error code and source location without depending on diagnostic text:
+A single failure is returned as `*hff.Error`. When parsing or compilation can
+identify multiple independent failures, it returns `*hff.Diagnostics` instead.
+The group exposes a copied slice through `Errors()` and implements
+`Unwrap() []error`, so `errors.As` and `errors.Is` still inspect its members.
+Each member is a source-located `*hff.Error`; multiple diagnostics are ordered
+by source position. Dependent expressions stop after the first error to avoid
+cascading reports. A recovered syntax tree never becomes a usable
+`hff.Program`.
+
+Use `errors.As` for both the aggregate and its typed members, without depending
+on diagnostic wording:
 
 ```go
 program, err := e.Compile(ctx, source)
 if err != nil {
+    var group *hff.Diagnostics
+    if errors.As(err, &group) {
+        for _, item := range group.Errors() {
+            var detail *hff.Error
+            if errors.As(item, &detail) {
+                fmt.Printf("query error at %d:%d: %s\n",
+                    detail.Line, detail.Column, detail.Message)
+            }
+        }
+        return err
+    }
+
     var detail *hff.Error
     if errors.As(err, &detail) {
         switch detail.Code {
@@ -74,7 +95,9 @@ if err != nil {
 
 `Span` is a half-open UTF-8 byte range in the original query. `Line` and
 `Column` provide a human-readable location. Error wording may evolve; branch on
-the stable error code instead.
+the stable error code instead. Cancellation and exhausted compilation limits
+stop collection and remain their own authoritative errors rather than being
+wrapped as ordinary diagnostics.
 
 ## Dynamic values and capabilities
 

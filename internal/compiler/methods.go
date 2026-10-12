@@ -1,7 +1,9 @@
 package compiler
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/ornew/hff/capabilities"
 	"github.com/ornew/hff/internal/core"
@@ -28,7 +30,7 @@ func (c *compiler) call(receiver plan.Node, n *syntax.MethodCall, span core.Span
 		}
 	}
 	if len(compatible) == 0 {
-		return plan.Node{}, c.failure(core.TypeError, n, "method has no applicable receiver/argument count")
+		return plan.Node{}, c.failure(core.TypeError, n, fmt.Sprintf("method %q cannot be called on %s with %d arguments", name, describeType(receiver.Type()), len(n.Args)))
 	}
 	higher := name == "map" || name == "flatmap" || name == "any" || name == "all" || name == "foldl" || name == "foldr"
 	var args []plan.Node
@@ -40,16 +42,25 @@ func (c *compiler) call(receiver plan.Node, n *syntax.MethodCall, span core.Span
 			return plan.Node{}, err
 		}
 	} else {
+		var failures []error
 		for _, arg := range n.Args {
 			expr, ok := arg.(syntax.Expr)
 			if !ok {
-				return plan.Node{}, c.failure(core.TypeError, n, "callback is only valid in a higher-order method argument")
+				failures = append(failures, c.failure(core.TypeError, arg, "callback is only valid in a higher-order method argument"))
+				continue
 			}
 			value, err := c.expression(expr)
 			if err != nil {
-				return plan.Node{}, err
+				if fatalCompile(err) {
+					return plan.Node{}, err
+				}
+				failures = append(failures, err)
+				continue
 			}
 			args = append(args, value)
+		}
+		if err := compileErrors(failures...); err != nil {
+			return plan.Node{}, err
 		}
 	}
 	var signatures []plan.Signature
@@ -117,7 +128,11 @@ func (c *compiler) call(receiver plan.Node, n *syntax.MethodCall, span core.Span
 		results = append(results, result)
 	}
 	if len(signatures) == 0 {
-		return plan.Node{}, c.failure(core.TypeError, n, "method has no applicable argument types")
+		var types []string
+		for _, arg := range args {
+			types = append(types, describeType(arg.Type()))
+		}
+		return plan.Node{}, c.failure(core.TypeError, n, fmt.Sprintf("method %q on %s does not accept argument types (%s)", name, describeType(receiver.Type()), strings.Join(types, ", ")))
 	}
 	sort.Slice(signatures, func(i, j int) bool { return signatures[i].ID() < signatures[j].ID() })
 	result := union(results...)

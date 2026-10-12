@@ -106,3 +106,27 @@ Syntax diagnostics report a UTF-8 byte span and a one-based line and Unicode
 code-point column. Invalid UTF-8, malformed strings (including unpaired
 surrogate escapes), and malformed syntax are rejected. A completed syntax parse
 only confirms that the source follows the grammar.
+
+## Recovery and aggregated diagnostics
+
+The grammar uses PEGO's `#error` labels for expected tokens and values, and
+`#recover` only at a whole compact-predicate boundary. This lets the parser
+report independent syntax mistakes, such as an unclosed callback, without
+turning its recovered AST into an executable tree. For example,
+`items:any(item=>item.price>100 item.active` reports the missing `)` at the
+recovery boundary. The result remains an error; only a complete valid parse
+returns a syntax tree.
+
+Common compilation also collects independent semantic errors from separate
+AND/OR operands, list/object entries, and method arguments. It stops along a
+dependent expression chain after its first failure to avoid cascades. Errors
+are ordered by source position and retain byte spans and line/column locations.
+Cancellation or a resource limit ends the operation immediately rather than
+returning a partial diagnostic group. See the [compiler guide](../guides/compiling.md)
+for the public `hff.Diagnostics` handling contract.
+
+Run focused recovery and aggregation tests with:
+
+```sh
+go test ./internal/syntax ./engine -run 'TestRecoveryReportsIndependentSyntaxErrors|TestCompileAggregatesIndependentFailures|TestCompileDiagnosticsDoNotHideBudgetAbort'
+```

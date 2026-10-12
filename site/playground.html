@@ -7,7 +7,7 @@
   <div class="playground-workspace">
     <div class="playground-filter">
       <div class="playground-panel-header"><label for="playground-query">Filter</label><div class="playground-actions"><button id="playground-stop" type="button" hidden>Stop</button></div></div>
-      <textarea id="playground-query" class="query-editor" rows="2" spellcheck="false"></textarea>
+      <div class="query-editor-shell"><pre id="playground-query-highlights" class="query-highlights" aria-hidden="true"></pre><textarea id="playground-query" class="query-editor" rows="2" spellcheck="false"></textarea></div>
       <dl class="playground-timings" aria-label="Run timings"><div><dt>Compile</dt><dd id="playground-compile-time">—</dd></div><div><dt>Build</dt><dd id="playground-build-time">—</dd></div><div title="Time for matching all records, including schema validation"><dt>Evaluate</dt><dd id="playground-evaluate-time">—</dd></div></dl>
       <div class="playground-result-header"><h2>Results</h2><span id="playground-status" role="status" aria-live="polite">Loading…</span></div>
       <pre id="playground-result" data-state="empty" aria-label="Filtered records, JSONL" tabindex="0">Loading the local engine…</pre>

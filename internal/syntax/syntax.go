@@ -6,6 +6,7 @@ package syntax
 import (
 	"context"
 	"errors"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -64,6 +65,15 @@ func ParseQuery(ctx context.Context, source string, config Config) (Expr, error)
 		return nil, contextErr
 	}
 	if err != nil {
+		var recovered SyntaxErrors
+		if errors.As(err, &recovered) {
+			var diagnostics []error
+			for _, syntaxErr := range recovered {
+				diagnostics = append(diagnostics, deferredSourceError(hff.SyntaxError, source, syntaxErr.Pos, syntaxErr.Message()))
+			}
+			// A recovered AST contains placeholders, not an executable program.
+			return nil, core.LocateSourceErrors(ctx, source, core.CombineErrors(diagnostics...))
+		}
 		var syntaxErr *SyntaxError
 		if errors.As(err, &syntaxErr) {
 			return nil, sourceError(hff.SyntaxError, source, syntaxErr.Pos, syntaxErr.Message())
@@ -82,6 +92,9 @@ func checkContext(ctx context.Context) error {
 	return core.CheckContext(ctx)
 }
 func sourceError(code hff.ErrorCode, source string, pos int, message string) error {
+	return core.LocateSourceErrors(context.Background(), source, deferredSourceError(code, source, pos, message))
+}
+func deferredSourceError(code hff.ErrorCode, source string, pos int, message string) error {
 	if pos < 0 {
 		pos = 0
 	}
@@ -93,10 +106,7 @@ func sourceError(code hff.ErrorCode, source string, pos int, message string) err
 		_, width := utf8.DecodeRuneInString(source[pos:])
 		end += width
 	}
-	line := strings.Count(source[:pos], "\n") + 1
-	start := strings.LastIndexByte(source[:pos], '\n') + 1
-	column := utf8.RuneCountInString(source[start:pos]) + 1
-	return &hff.Error{Code: code, Span: &hff.Span{Start: pos, End: end}, Line: line, Column: column, Message: message}
+	return &hff.Error{Code: code, Span: &hff.Span{Start: pos, End: end}, Message: message}
 }
 
 // preflight bounds recursive delimiters and consecutive guards/unary operators
@@ -170,6 +180,7 @@ func checkTree(ctx context.Context, source string, tree Expr, limit int) error {
 		depth int
 	}
 	stack := []entry{{tree, 0}}
+	var failures []error
 	for len(stack) > 0 {
 		if err := checkContext(ctx); err != nil {
 			return err
@@ -226,10 +237,8 @@ func checkTree(ctx context.Context, source string, tree Expr, limit int) error {
 		case *ObjectLiteral:
 			for i := len(n.Members) - 1; i >= 0; i-- {
 				member := n.Members[i]
-				if _, err := DecodeString(member.Key.Text); err != nil {
-					return sourceError(hff.SyntaxError, source, member.Key.Start, err.Error())
-				}
 				push(member.Value, childDepth)
+				push(member.Key, childDepth)
 			}
 		case *Callback:
 			push(n.Body, childDepth)
@@ -248,9 +257,14 @@ func checkTree(ctx context.Context, source string, tree Expr, limit int) error {
 			push(n.X, childDepth)
 		case *String:
 			if _, err := DecodeString(n.Text); err != nil {
-				return sourceError(hff.SyntaxError, source, n.Start, err.Error())
+				failures = append(failures, deferredSourceError(hff.SyntaxError, source, n.Start, err.Error()))
 			}
+		case *Error:
+			failures = append(failures, deferredSourceError(hff.SyntaxError, source, n.Start, "query contains a recovered syntax error"))
 		}
 	}
-	return nil
+	sort.SliceStable(failures, func(i, j int) bool {
+		return failures[i].(*hff.Error).Span.Start < failures[j].(*hff.Error).Span.Start
+	})
+	return core.LocateSourceErrors(ctx, source, core.CombineErrors(failures...))
 }

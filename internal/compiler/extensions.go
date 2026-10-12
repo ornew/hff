@@ -46,16 +46,25 @@ func (c *compiler) extensionCall(receiver plan.Node, n *syntax.MethodCall, span 
 		return plan.Node{}, c.failure(core.TypeError, n, fmt.Sprintf("unknown or inapplicable method %q", name))
 	}
 	args := make([]plan.Node, len(n.Args))
+	var failures []error
 	for i, arg := range n.Args {
 		expr, ok := arg.(syntax.Expr)
 		if !ok {
-			return plan.Node{}, c.failure(core.TypeError, n, "extension arguments must be values")
+			failures = append(failures, c.failure(core.TypeError, arg, "extension arguments must be values"))
+			continue
 		}
 		value, err := c.expression(expr)
 		if err != nil {
-			return plan.Node{}, err
+			if fatalCompile(err) {
+				return plan.Node{}, err
+			}
+			failures = append(failures, err)
+			continue
 		}
 		args[i] = value
+	}
+	if err := compileErrors(failures...); err != nil {
+		return plan.Node{}, err
 	}
 	var signatures []plan.Signature
 	var results []core.Type

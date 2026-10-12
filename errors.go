@@ -5,6 +5,7 @@ import "github.com/ornew/hff/internal/core"
 type ErrorCode = core.ErrorCode
 type Path = core.Path
 type Error = core.Error
+type Diagnostics = core.Diagnostics
 
 const (
 	ConfigurationError = core.ConfigurationError

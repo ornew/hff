@@ -42,6 +42,14 @@ batch, and an `error` with a stage, HFF error code, message, and 1-based record
 index. Source line/column and input path are included when available. A
 single-record `record` request remains available to native bridge tests.
 
+When compilation finds independent syntax or semantic errors, the failure also
+includes a source-ordered `diagnostics` array. Each entry carries its HFF error
+code, message, line/column, and half-open UTF-8 byte span. The top-level error
+fields remain available for compatibility, while the diagnostics array exposes
+all independent query locations. The site marks each reported range and can
+show an insertion marker at end-of-input; it never rewrites the query. A
+cancellation or limit failure stops collection and returns no partial batch.
+
 Schema `type` strings use HFF's existing type-guard type-expression grammar;
 they are not Go type names or arbitrary source fragments. Use `type: "struct"`
 with nested `fields` for a struct. The bridge compiles a type descriptor and

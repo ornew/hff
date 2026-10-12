@@ -31,6 +31,7 @@ const examples = {
   },
 };
 const query = document.querySelector("#playground-query");
+const highlights = document.querySelector("#playground-query-highlights");
 const schema = document.querySelector("#playground-schema");
 const record = document.querySelector("#playground-record");
 const select = document.querySelector("#playground-example");
@@ -40,9 +41,66 @@ const result = document.querySelector("#playground-result");
 const times = ["compile", "build", "evaluate"].map(name => document.querySelector(`#playground-${name}-time`));
 let worker, timer, debounceTimer, sequence = 0, active = 0, ready = false, runAfterReady = false;
 function resetOutput(message = "Selected records appear here.") {
+  clearHighlights();
   result.textContent = message; result.dataset.state = "empty";
   times.forEach(element => { element.textContent = "—"; });
 }
+function syncHighlights() {
+  // Match the textarea's usable box, including when it is resized or scrolled.
+  highlights.style.width = `${query.clientWidth + 2}px`;
+  highlights.style.height = `${query.clientHeight + 2}px`;
+  highlights.scrollTop = query.scrollTop;
+  highlights.scrollLeft = query.scrollLeft;
+}
+function clearHighlights() {
+  highlights.replaceChildren();
+  query.removeAttribute("aria-invalid");
+  query.removeAttribute("aria-errormessage");
+}
+function showHighlights(error) {
+  if (error.stage !== "compile") return;
+  const diagnostics = error.diagnostics?.length ? error.diagnostics : [error];
+  const spans = diagnostics.filter(item => item.span).map(item => item.span);
+  if (!spans.length) return;
+  // Go spans use UTF-8 byte offsets; browser text uses UTF-16 code units.
+  // Map all requested edges in one pass so many errors remain inexpensive.
+  const edges = [...new Set(spans.flatMap(span => [span.Start, span.End]))].sort((a, b) => a - b);
+  const positions = new Map();
+  let edge = 0, bytes = 0, units = 0;
+  for (const character of query.value) {
+    const point = character.codePointAt(0);
+    const width = point <= 0x7f ? 1 : point <= 0x7ff ? 2 : point <= 0xffff ? 3 : 4;
+    while (edge < edges.length && edges[edge] < bytes + width) positions.set(edges[edge++], units);
+    bytes += width; units += character.length;
+  }
+  while (edge < edges.length) positions.set(edges[edge++], units);
+  const ranges = spans.map(span => ({ start: positions.get(span.Start), end: positions.get(span.End) }))
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+  const merged = [];
+  for (const range of ranges) {
+    const previous = merged[merged.length - 1];
+    if (previous && range.start <= previous.end) previous.end = Math.max(previous.end, range.end);
+    else merged.push({ ...range });
+  }
+  const fragment = document.createDocumentFragment();
+  let offset = 0;
+  for (const range of merged) {
+    fragment.append(document.createTextNode(query.value.slice(offset, range.start)));
+    const mark = document.createElement("mark");
+    mark.className = range.start === range.end ? "diagnostic-caret" : "diagnostic-range";
+    mark.dataset.start = range.start; mark.dataset.end = range.end;
+    mark.textContent = query.value.slice(range.start, range.end);
+    fragment.append(mark);
+    offset = range.end;
+  }
+  fragment.append(document.createTextNode(query.value.slice(offset) + "\n"));
+  highlights.replaceChildren(fragment);
+  query.setAttribute("aria-invalid", "true");
+  query.setAttribute("aria-errormessage", "playground-result");
+  syncHighlights();
+}
+query.addEventListener("scroll", syncHighlights);
+new ResizeObserver(syncHighlights).observe(query);
 function displayExample() {
   const example = examples[select.value];
   query.value = example.query;
@@ -73,8 +131,11 @@ function boot(thenRun = false) {
         status.textContent = "Could not filter records";
         const error = response.error;
         const location = error.record ? `Record ${error.record}: ` : error.line ? `Line ${error.line}, column ${error.column}: ` : "";
-        result.textContent = location + error.message;
+        result.textContent = error.diagnostics?.length
+          ? error.diagnostics.map(item => `Line ${item.line}, column ${item.column}: ${item.message}`).join("\n")
+          : location + error.message;
         result.dataset.state = "error";
+        showHighlights(error);
         return;
       }
       const batch = response.batch;

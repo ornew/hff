@@ -49,6 +49,35 @@ func TestBridgeMatch(t *testing.T) {
 	}
 }
 
+func TestBridgeReturnsAllCompileDiagnosticSpans(t *testing.T) {
+	for _, query := range []string{`name="東京😀" age> other>`, `missing=1 other=2`} {
+		raw, err := json.Marshal(map[string]any{"query": query,
+			"schema":  []map[string]string{{"name": "name", "type": "string"}, {"name": "age", "type": "int"}},
+			"records": []any{}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var r response
+		if err := json.Unmarshal(handle(context.Background(), raw), &r); err != nil {
+			t.Fatal(err)
+		}
+		if r.OK || r.Batch != nil || r.Error == nil || r.Error.Stage != "compile" || len(r.Error.Diagnostics) != 2 {
+			t.Fatalf("expected two compile diagnostics, got %+v", r)
+		}
+		last := -1
+		for _, diagnostic := range r.Error.Diagnostics {
+			if diagnostic.Span == nil || diagnostic.Span.Start < last || diagnostic.Span.End > len(query) || diagnostic.Line < 1 || diagnostic.Column < 1 {
+				t.Fatalf("invalid diagnostic location: %+v", diagnostic)
+			}
+			last = diagnostic.Span.Start
+		}
+	}
+	r := run(context.Background(), []byte(`{"query":"age>","schema":[{"name":"age","type":"int"}],"records":[]}`))
+	if r.Error == nil || r.Error.Span == nil || r.Error.Span.Start != 4 || r.Error.Span.End != 4 {
+		t.Fatalf("missing operand must retain its EOF insertion position: %+v", r.Error)
+	}
+}
+
 func TestJSONInputFidelity(t *testing.T) {
 	v, err := decode(context.Background(), []byte(`[9007199254740993,1.0,-0.0]`))
 	if err != nil {
