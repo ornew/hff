@@ -2,15 +2,18 @@ package sql
 
 import "github.com/ornew/hff"
 
-// Compare one dynamic JSON value with a statically represented scalar. A
+// Route dynamic comparisons to scalar or recursive-document lowering. A
 // mismatched non-null runtime type yields ordinary null, not Boolean false;
 // null operands and no-value operands consume their state as false instead.
 func (b *builder) dynamicJSONComparison(n hff.Node, left, right expression, op hff.Operator) (expression, error) {
+	if structuredKind(left.kind) || structuredKind(right.kind) {
+		return b.dynamicJSONPair(n, left, right, op)
+	}
 	dynamic, scalar := left, right
 	reversed := false
 	if right.kind == hff.AnyType {
 		if left.kind == hff.AnyType {
-			return expression{}, b.failure(n, "comparison between two dynamic JSON values is not yet supported")
+			return b.dynamicJSONPair(n, left, right, op)
 		}
 		dynamic, scalar, reversed = right, left, true
 	}

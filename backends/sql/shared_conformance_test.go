@@ -41,12 +41,15 @@ func TestSharedConformanceJSONBuildContracts(t *testing.T) {
 	supported["negative_index"] = true
 	supported["nested_callback_captures"] = true
 	supported["object_dynamic_key_lookup"] = true
+	supported["two_null_values_are_not_equal"] = true
+	supported["not_of_null_comparison"] = true
+	supported["exact_mixed_number_comparison"] = true
+	supported["structural_equality_ignores_key_order"] = true
 	rejected := map[string]bool{}
 	for _, name := range []string{
 		"json_preserves_float", "json_duplicate_keys_fail", "json_null_is_observable", "json_guard_stays_absent",
-		"two_null_values_are_not_equal", "not_of_null_comparison",
-		"exact_mixed_number_comparison", "contains_requires_all_arguments",
-		"structural_equality_ignores_key_order", "unique_is_a_predicate",
+		"contains_requires_all_arguments",
+		"unique_is_a_predicate",
 		"fold_argument_order", "regex_partial_match", "invalid_regex_does_not_match_negation",
 		"strict_base64", "duration_compound_fraction", "timestamp_utc_components", "epoch_is_truthy",
 		"zero_duration_is_falsy",

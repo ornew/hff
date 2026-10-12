@@ -7,5 +7,7 @@ step-by-step [tutorials](../tutorials/README.md) and semantic
 
 - [Filter service records](filtering-service-records.md): combine status,
   optional nested values, metadata, and collection predicates.
+- [Compare expected and actual JSON](compare-dynamic-json-values.md): compare
+  dynamic JSON fields, including nested structures and exact large integers.
 
 For exact operator and method contracts, see the [reference](../reference/README.md).

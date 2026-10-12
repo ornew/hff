@@ -140,6 +140,10 @@ func TestPostgreSQLDynamicJSONGuards(t *testing.T) {
 	supported["negative_index"] = true
 	supported["nested_callback_captures"] = true
 	supported["object_dynamic_key_lookup"] = true
+	supported["two_null_values_are_not_equal"] = true
+	supported["not_of_null_comparison"] = true
+	supported["exact_mixed_number_comparison"] = true
+	supported["structural_equality_ignores_key_order"] = true
 	var script strings.Builder
 	var expected []string
 	for _, tc := range conformance.Cases() {

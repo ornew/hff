@@ -227,8 +227,9 @@ integer or float. A schema that permits only one numeric kind, such as
 `Int|String` or `Float|String`, also makes JSONB comparisons unambiguous and
 does not require numeric metadata. If the schema permits both integer and float
 values, such as `Any` or `Int|Float`, JSONB needs type metadata to recover
-which kind was stored. Comparing two dynamic values, or using an unsupported
-scalar counterpart, is rejected by `Build`.
+which kind was stored. If the SQL backend cannot faithfully lower the declared
+scalar comparison, `Build` returns a source-located `hff.BackendError`;
+statically incompatible query types are rejected by compilation.
 
 For example, with `data` declared as `Any` and bound to a JSON document:
 
@@ -246,9 +247,11 @@ even when JSON spells that value as `1.0` or `1e0`. The caller must ensure it
 is integral and within the int64 range. JSONB can use this path without subtype
 metadata when the schema leaves only the integer candidate. If both integer
 and float candidates remain possible, JSONB still needs metadata. The caller
-must also provide metadata when JSONB has lost part of the numeric value, such
-as the sign of zero. A non-null value with an incompatible runtime type yields
-ordinary HFF null. You can inspect that result with `type()`:
+must provide metadata when an operation observes representation details that
+JSONB loses, such as the sign of zero during serialization. Ordinary numeric
+comparisons treat positive and negative zero as equal. A non-null value with
+an incompatible runtime type yields ordinary HFF null. You can inspect that
+result with `type()`:
 
 ```hff
 (data="Alice"):type="null"
@@ -263,9 +266,34 @@ comparison. Consequently, when `data` itself is null, this predicate is true:
 ```
 
 These rules distinguish a type mismatch from a null operand while keeping the
-usual HFF predicate conversion. They do not enable comparisons between two
-dynamic values. Method calls on an `Any` or union receiver are supported only
-when the schema and available representation resolve the operation's behavior.
+usual HFF predicate conversion. Two JSON-backed dynamic values can also be
+compared when both representations are recoverable. Scalar values use the
+ordinary HFF comparison rules. Lists and objects use recursive structural
+equality for `=` and `!=`: lists compare length and position, objects compare
+their actual keys and values, and numeric values compare without rounding an
+int64 through float64. JSONB needs numeric metadata wherever normalization
+would lose a value or its HFF numeric kind; schema-known numeric candidates can
+remove that need when they determine the kind. The sign of zero does not alter
+ordinary numeric comparison results; its metadata text matters to operations
+that observe the exact representation, such as serialization.
+
+An incompatible runtime family at the comparison root produces ordinary HFF
+null, which matches no row as a predicate. A runtime-null or no-value operand
+compares false. Within a list or object comparison, a mismatch between nested
+value families makes the structures unequal; a stored null equals a stored
+null at the same location, while a missing object key differs from a present
+null key. This preserves the distinction between a top-level dynamic type
+mismatch and a recursive structural mismatch.
+
+Dynamic-to-dynamic ordering is available for compatible strings and numbers;
+booleans support equality and inequality, while lists and objects support
+structural equality and inequality. The same lowering can compare a dynamic
+JSON value with a statically represented JSON collection or literal. For
+JSONB, numeric values in either operand must be recoverable from the declared
+schema or numeric metadata. Method calls on an `Any` or union receiver remain
+available only when the schema and stored representation resolve that
+operation's behavior. Comparing a dynamic value with an unsupported scalar
+counterpart is still rejected by `Build`.
 
 ### Preserve numeric candidates in collection guards
 
@@ -369,13 +397,13 @@ profile.scores:flatmap(score=>[score,score])=[80,80,90,90]
 The following operations remain unsupported for JSON-backed values and return
 a source-located `hff.BackendError` from `Build`:
 
-- Comparisons between two dynamic values and method calls on an `Any` or union
-  receiver when the schema and stored representation cannot resolve their
-  semantics. Dynamic `type()` and `exists()` remain available. A dynamic
-  value compared with one statically typed scalar is supported as described
-  above; JSONB needs numeric metadata when both integer and float candidates
-  remain possible or when part of the numeric value, such as negative zero,
-  has been lost.
+- Dynamic comparisons for which the schema, JSON spelling, and configured
+  metadata cannot recover the operand representations. Dynamic `type()` and
+  `exists()` remain available. Comparisons with a statically typed scalar,
+  another recoverable dynamic value, or a statically represented JSON
+  collection are supported as described above. JSONB needs numeric metadata
+  when both integer and float candidates remain possible or an operation needs
+  a numeric distinction lost during JSONB normalization.
 - Dynamic string methods other than `len()`, `startswith()`, and `endswith()`;
   `contains()` and `concat()` are not dynamically overloaded.
 - Other dynamic operations whose result cannot be resolved from schema
@@ -483,8 +511,9 @@ JSON representation. Metadata-backed dynamic type guards and statically typed
 string or numeric indexing are supported for the verified profile. Dynamic
 `type()` and `exists()` are available directly. Other `Any`/union operations
 require schema candidates and the stored representation to resolve their
-semantics; comparisons between two dynamic values remain unsupported even
-when numeric metadata is present. Comparisons between one dynamic value and one
+semantics. Comparisons between two dynamic values, or between a dynamic value
+and a statically represented JSON collection, are supported when both operand
+representations are recoverable as described above. Comparisons with one
 statically typed scalar follow the rules above.
 Unsupported ambiguous HFF unions or operations are rejected rather than
 guessed.
