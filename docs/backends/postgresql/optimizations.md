@@ -66,6 +66,19 @@ guarantee. See the
 The measured workload and tradeoffs are recorded in [JSONB metadata
 restoration](../../optimizations/002-postgresql-jsonb-metadata-restoration.md).
 
+### Reuse a restored parent for overlapping paths
+
+Within the same projection scope, a fixed descendant can reuse an unguarded
+JSONB parent that has already been restored. The parent restoration uses
+document-relative metadata pointers; the descendant is extracted from that
+restored JSON text without a second metadata lookup. A direct nested `BindJSON`
+can qualify within its binding boundary, and the most-specific physical
+binding takes precedence. The translator does not hoist a parent that appears
+later in the query. Guarded values are not shared, and callback and order-demand
+projections keep separate caches. See the
+[measured overlapping-path comparison](../../optimizations/003-postgresql-jsonb-overlap-reuse.md)
+for the workload that benefits and the controls that do not.
+
 ### Use correlated existence checks for plain relation predicates
 
 A plain relation path consumed by `any()` or `all()` can lower to correlated

@@ -19,6 +19,9 @@ var metadataBenchmarkQueries = []struct{ name, source string }{
 	{"Scalar", `doc.price>10.5`},
 	{"Repeated", `doc.price>10.5 doc.price<90 doc.price!=25 doc.price=doc.price:[float]`},
 	{"Guards", `doc.price:[float]>10.5 doc.items:[list[float]]:size>=4`},
+	{"RootAndChild", `doc:type="object" doc.price>10.5`},
+	{"NestedAndChildren", `doc.nested:type="object" doc.nested.price>10.5 doc.nested.name="Alice"`},
+	{"ChildrenThenParent", `doc.nested.price>10.5 doc.nested:type="object"`},
 	{"Callback", `doc.items:[list[float]]:any(x=>x>3) doc.price>10.5`},
 }
 
@@ -101,9 +104,11 @@ func metadataBenchmarkFixture(i int) (hff.Value, string, string) {
 	for index := 0; index < 8; index++ {
 		payload = append(payload, hff.Object(map[string]hff.Value{"key": hff.String("unused"), "value": hff.String("payload")}))
 	}
-	value := hff.Object(map[string]hff.Value{"price": hff.Float(price), "items": hff.List(items...), "payload": hff.List(payload...), "name": hff.String("Alice")})
+	nested := hff.Object(map[string]hff.Value{"price": hff.Float(price), "name": hff.String("Alice"), "payload": hff.List(payload...)})
+	value := hff.Object(map[string]hff.Value{"price": hff.Float(price), "items": hff.List(items...), "payload": hff.List(payload...), "name": hff.String("Alice"), "nested": nested})
+	types["/nested/price"] = map[string]string{"type": "float", "text": priceText}
 	rawPayload := strings.TrimSuffix(strings.Repeat(`{"key":"unused","value":"payload"},`, 8), ",")
-	raw := `{"price":` + priceText + `,"items":[0.0,1.0,2.0,3.0,4.0],"payload":[` + rawPayload + `],"name":"Alice"}`
+	raw := `{"nested":{"price":` + priceText + `,"name":"Alice","payload":[` + rawPayload + `]},"price":` + priceText + `,"items":[0.0,1.0,2.0,3.0,4.0],"payload":[` + rawPayload + `],"name":"Alice"}`
 	metadata, _ := json.Marshal(map[string]any{"version": 1, "types": types})
 	return value, raw, string(metadata)
 }

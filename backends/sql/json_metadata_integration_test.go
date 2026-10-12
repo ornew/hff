@@ -90,6 +90,19 @@ func TestPostgreSQLJSONMetadataSubpathTraversal(t *testing.T) {
 		{"data.`a/b~`.``:string=\"-0.0\"", `{"a/b~":{"":0}}`, `{"/a~1b~0/":{"type":"float","text":"-0.0"}}`, "t"},
 		{`data.parent.child=null`, `{"parent":null}`, `{}`, "t"},
 		{`data.parent!.child=null`, `{"parent":null}`, `{}`, "f"},
+		{`data:type="object" data.parent.child=null`, `{"parent":null}`, `{}`, "t"},
+		{`data.parent:type="null" data.parent.child=null`, `{"parent":null}`, `{}`, "t"},
+		{`data.parent!:type="null" | data.parent.child=null`, `{"parent":null}`, `{}`, "t"},
+		{`data.parent:type="object" data.parent!.child=null`, `{"parent":{}}`, `{}`, "t"},
+		{`data.parent:type="number" data.parent.child=null`, `{"parent":3}`, `{}`, "t"},
+		{`data.parent:type="list" data.parent.child=null`, `{"parent":[]}`, `{}`, "t"},
+		{`data.parent:type="null" data.parent.child=null`, `{}`, `{}`, "t"},
+		{`data.parent:type="object" data.items:any(x=>data.parent.child:[float]=1 x=2)`, `{"parent":{"child":1},"items":[1,2,0]}`, `{"/parent/child":{"type":"float","text":"1.0"}}`, "t"},
+		{`data.items:any(x=>data.parent:type="object" data.parent.child:[float]=1 x=2)`, `{"parent":{"child":1},"items":[1,2,0]}`, `{"/parent/child":{"type":"float","text":"1.0"}}`, "t"},
+		{`data.items:any(x=>data.items:any(y=>data.parent:type="object" data.parent.child:[float]=1 x=2 y=1))`, `{"parent":{"child":1},"items":[1,2,0]}`, `{"/parent/child":{"type":"float","text":"1.0"}}`, "t"},
+		{`data.parent:type="object" data.items:any(data=>data.parent:type="object" data.parent.child:[float]=1)`, `{"parent":{"child":42},"items":[{"parent":{"child":0}},{"parent":{"child":1}}]}`, `{"/items/1/parent/child":{"type":"float","text":"1.0"}}`, "t"},
+		{"data:type=\"object\" data.`a/b~`.``:string=\"-0.0\"", `{"a/b~":{"":0}}`, `{"/a~1b~0/":{"type":"float","text":"-0.0"}}`, "t"},
+		{"data.`a/b~`:type=\"object\" data.`a/b~`.``:string=\"-0.0\"", `{"a/b~":{"":0}}`, `{"/a~1b~0/":{"type":"float","text":"-0.0"}}`, "t"},
 	} {
 		activeEngine := e
 		if strings.Contains(tc.source, ":string") {

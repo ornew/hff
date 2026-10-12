@@ -71,3 +71,52 @@ func TestJSONMetadataFixedPathSQLGrowsLinearly(t *testing.T) {
 		t.Fatalf("nonlinear SQL growth: 10 fields=%d bytes, 20 fields=%d bytes", short, deep)
 	}
 }
+
+func TestMetadataParentRestorationIsReusedInScope(t *testing.T) {
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Any("data"))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		source string
+		walks  int
+	}{
+		{`data:type="object" data.child.value>1`, 1},
+		{`data.child:type="object" data.child.value>1 data.child.name="Alice"`, 1},
+		{`data.child.value>1 data.child:type="object"`, 2},
+		{`data.child:type="object" data.child!:exists`, 1},
+	} {
+		p, err := e.Compile(context.Background(), tc.source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		q, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindJSON(hff.Path{"data"}, hffsql.Column("data"), hffsql.JSONB, hffsql.WithTypeMetadata(hffsql.Column("meta")))))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Count(q.Where(), "(value,pointer,position,prefix)"); got != tc.walks {
+			t.Fatalf("%s: metadata walks=%d want%d", tc.source, got, tc.walks)
+		}
+	}
+}
+
+func TestMetadataParentsStayWithinNestedBindingBoundaries(t *testing.T) {
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("data", schema.Struct(schema.Any("left"), schema.Any("right"))))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := e.Compile(context.Background(), `data.left:type="object" data.right:type="object" data.left.value:json="1.0" data.right.value:json="2.0"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(
+		hffsql.BindJSON(hff.Path{"data", "left"}, hffsql.Column("left_data"), hffsql.JSONB, hffsql.WithTypeMetadata(hffsql.Column("left_meta"))),
+		hffsql.BindJSON(hff.Path{"data", "right"}, hffsql.Column("right_data"), hffsql.JSONB, hffsql.WithTypeMetadata(hffsql.Column("right_meta"))),
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(q.Where(), "(value,pointer,position,prefix)"); got != 2 {
+		t.Fatalf("independent parent restorations=%d want2", got)
+	}
+}

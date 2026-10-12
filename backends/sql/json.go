@@ -215,6 +215,9 @@ func (b *builder) metadataSubpath(n hff.Node) (expression, bool, error) {
 			if size == len(path) || binding.metadata == nil || binding.format != JSONB {
 				return expression{}, false, nil
 			}
+			if value, reused, err := b.restoredMetadataParent(n, size); reused || err != nil {
+				return value, true, err
+			}
 			code, err := quoteColumn(binding.column)
 			if err != nil {
 				return expression{}, true, err
