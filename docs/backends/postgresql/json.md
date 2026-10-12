@@ -923,28 +923,29 @@ statically typed scalar follow the rules above.
 Unsupported ambiguous HFF unions or operations are rejected rather than
 guessed.
 
-For a fixed unguarded field chain rooted at a variable whose nearest binding is
-a direct metadata-backed JSONB binding, the translator can restore numeric
-metadata from only the selected subtree. The lookup still uses the subtree's
-JSON Pointer within the original document; it does not rewrite the caller's
-sidecar contract. Whole-document access and paths whose resolution depends on
-a guard, computed receiver, dynamic index, callback parameter, or nested
-physical binding keep the general restoration path. A fixed field prefix that
-can be extracted before a later guard remains eligible. Within a callback, an
-outer `doc.price` path can qualify; a path rooted at the callback item does
-not. See the
+For a fixed literal field chain, the translator can restore numeric metadata
+from only the selected subtree when the path is rooted at a direct metadata-
+backed JSONB binding, crosses a flattened `BindStruct`, or reads a JSONB
+document from a relation item's physical binding. Parent presence/null state
+is preserved, and metadata lookup continues to use pointers relative to the
+original document. Whole-document access and paths that cross a guard,
+computed receiver, or dynamic index use the general restoration path. A fixed
+field prefix extracted before a later guard can still qualify. Callback scopes
+remain isolated; a fixed path rooted at a relation item's bound JSON document
+can qualify inside that item's scope. This is a SQL-shape optimization, not
+validation of stored values or metadata; the caller-owned consistency contract
+is unchanged. See the
 [PostgreSQL translation choices](optimizations.md#restore-only-a-selected-jsonb-metadata-subtree)
-for the scope of this SQL-shape optimization.
+and [measured flattened/relation cases](../../optimizations/010-postgresql-structured-metadata-subtrees.md).
 
 The recursive restoration walk also avoids expanding scalar leaves as
-children. It still visits each leaf to restore numeric representations, apply
-the document-relative metadata pointer, and reconstruct the complete value.
-This applies to direct, flattened, and relation-backed metadata bindings;
-flattened and relation bindings still restore their full document. It does not
-prune subtrees or validate the stored document; the caller remains responsible
-for consistency between stored JSON and metadata. See
+children. It still visits each leaf needed to restore numeric representations,
+apply the document-relative metadata pointer, and reconstruct the selected or
+complete value. Other flattened and relation paths still restore their full
+document. This walk does not validate stored data; the caller remains
+responsible for consistency between JSON and metadata. See
 [JSONB leaf expansion](../../optimizations/005-postgresql-jsonb-leaf-expansion.md)
-for the measured profiles and limitations.
+for the leaf-filter measurements and limitations.
 
 PostgreSQL is the only supported SQL dialect. JSON and JSONB use their native
 operators; this support does not promise stable generated SQL text or database

@@ -273,7 +273,7 @@ func (b *builder) structPath(n hff.Node) (expression, bool, error) {
 			return expression{}, false, nil
 		}
 		mapping, ok := b.physicalParameters[parameter.ID()]
-		if !ok || mapping.structure == nil {
+		if !ok || (mapping.structure == nil && !(mapping.format == JSONB && mapping.metadata != nil)) {
 			return expression{}, false, nil
 		}
 		fields := make([]string, len(reversed))
@@ -289,13 +289,19 @@ func (b *builder) structPath(n hff.Node) (expression, bool, error) {
 		if !ok {
 			return expression{}, false, nil
 		}
-		for size := len(path) - 1; size > 0; size-- {
-			if mapping, found := b.structBindings[pathKey(path[:size])]; found {
+		// A nearer explicit mapping owns the path, even when it is not a
+		// flattened struct. Do not bypass it with an ancestor optimization.
+		for size := len(path); size > 0; size-- {
+			if _, bound := b.bindings[pathKey(path[:size])]; !bound {
+				continue
+			}
+			if mapping, found := b.structBindings[pathKey(path[:size])]; found && size < len(path) {
 				candidates = append(candidates, struct {
 					mapping Binding
 					fields  []string
 				}{mapping, path[size:]})
 			}
+			break
 		}
 	default:
 		return expression{}, false, nil
@@ -305,6 +311,10 @@ func (b *builder) structPath(n hff.Node) (expression, bool, error) {
 		fields := candidate.fields
 		var states []*structBinding
 		for offset, name := range fields {
+			if mapping.format == JSONB && mapping.metadata != nil {
+				value, err := b.structuredMetadataSubpath(n, mapping, fields[offset:], states)
+				return value, true, err
+			}
 			if mapping.structure == nil {
 				return expression{}, false, nil
 			}

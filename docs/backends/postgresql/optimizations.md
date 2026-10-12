@@ -49,33 +49,33 @@ requirements.
 
 ### Restore only a selected JSONB metadata subtree
 
-For a fixed, unguarded field path rooted at a variable whose nearest binding is
-a direct metadata-backed JSONB `BindJSON`, the translator can extract the
-selected subtree before restoring numeric types. Metadata lookup retains the
-pointer prefix relative to the original document, so nested numbers use the
-same sidecar entries as whole-document restoration. Whole-document access and
-paths whose resolution depends on a guard, computed receiver, dynamic index,
-callback parameter, or nested physical binding retain the general restoration
-path. A fixed field prefix that can be extracted before a later guard remains
-eligible. Within a callback, an outer `doc.price` path can qualify; a path
-rooted at the callback item does not.
-Each selected extraction still needs an object check and projection; this
-describes the generated SQL shape, not a measured speedup or PostgreSQL plan
-guarantee. See the
-[JSONB binding contract](json.md#storage-requirements-and-limits).
-The measured workload and tradeoffs are recorded in [JSONB metadata
-restoration](../../optimizations/002-postgresql-jsonb-metadata-restoration.md).
+For a fixed literal field chain, the translator can extract a selected subtree
+before restoring numeric types. Direct metadata-backed `BindJSON` has this
+support; it also applies when the chain crosses a flattened `BindStruct` or
+reads a JSONB document in a relation item's physical binding. Parent
+presence/null state is retained, and metadata lookup uses the subtree's
+document-relative JSON Pointer. Whole-document reads and paths whose
+resolution crosses a guard, computed value, or dynamic index retain the
+general restoration path. Callback projection scopes remain isolated, while a
+fixed path rooted at a physically bound relation item can qualify within its
+own scope. Each extraction still needs an object check and projection; this
+describes SQL shape, not a plan or runtime guarantee. The caller remains
+responsible for stored document/metadata consistency; no per-attribute
+metadata API is added. See the [JSONB binding contract](json.md#storage-requirements-and-limits),
+[direct-binding measurements](../../optimizations/002-postgresql-jsonb-metadata-restoration.md),
+and [flattened/relation measurements](../../optimizations/010-postgresql-structured-metadata-subtrees.md).
 
 ### Skip child expansion for JSONB scalar leaves
 
 During recursive metadata restoration, scalar leaves remain in the walk for
 numeric type/text restoration, pointer lookup, and reconstruction, but the
 recursive term does not try to expand them as children. The same leaf filter
-applies to direct, flattened, and relation-backed metadata documents. Direct
-nested `BindJSON` already has selected-subtree restoration; flattened and
-relation bindings still restore the full document. This reduces recursive
-expansion work without pruning values or changing the metadata contract. The
-measured profiles and tradeoffs are in [JSONB leaf expansion](../../optimizations/005-postgresql-jsonb-leaf-expansion.md).
+applies to direct, flattened, and relation-backed metadata documents.
+Independently, fixed field chains under flattened and relation bindings can
+use selected-subtree restoration as described above; other paths may still
+restore the full document. Scalar-leaf filtering does not validate stored
+documents or change the metadata contract. The measured profiles are in
+[JSONB leaf expansion](../../optimizations/005-postgresql-jsonb-leaf-expansion.md).
 
 ### Reuse fixed Float SQL fragments during Build
 
