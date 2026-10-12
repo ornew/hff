@@ -29,12 +29,18 @@ func WithTypeMetadata(column ColumnRef) JSONBindingOption {
 // typed lowering. Keeping it as json (rather than jsonb) preserves restored
 // numeric subtype spelling and signed zero through existing collection paths.
 func (b *builder) restoreJSONMetadata(data, metadata string) string {
+	return b.restoreJSONMetadataAt(data, metadata, "''::text")
+}
+
+// restoreJSONMetadataAt retains document-relative pointers while walking only
+// a selected subtree. The pointer is a bound value, never query SQL text.
+func (b *builder) restoreJSONMetadataAt(data, metadata, pointer string) string {
 	walk, child, tokens := b.nextAlias(), b.nextAlias(), b.nextAlias()
 	// Each node emits its opening/scalar token before children and its closing
 	// token after them. Lexicographically ordered bigint paths preserve DFS
 	// order without relying on physical JSON object enumeration order.
 	return `(WITH RECURSIVE ` + walk + `(value,pointer,position,prefix) AS (
- SELECT ` + data + `,''::text,ARRAY[]::bigint[],''::text
+ SELECT ` + data + `,` + pointer + `,ARRAY[]::bigint[],''::text
  UNION ALL
  SELECT ` + child + `.value,
  ` + walk + `.pointer || '/' || replace(replace(` + child + `.key,'~','~0'),'/','~1'),

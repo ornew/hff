@@ -32,7 +32,7 @@ func TestPostgreSQLJSONMetadataRestoresNumericText(t *testing.T) {
 		t.Fatal(err)
 	}
 	var script strings.Builder
-	sources := []string{`data["a/b~"]:string="-0.0"`, `data:json="{\"a/b~\":-0.0,\"日\":1.0}"`, `data:values:any(x=>x:string="-0.0")`, `data["日"]=1.0`, `data:[map[float]]["a/b~"]:string="-0.0"`}
+	sources := []string{`data["a/b~"]:string="-0.0"`, `data:json="{\"a/b~\":-0.0,\"日\":1.0}"`, `data:values:any(x=>x:string="-0.0")`, `data["日"]=1.0`, `data:[map[float]]["a/b~"]:string="-0.0"`, "data.`a/b~`:string=\"-0.0\"", "data.`日`=1.0", `data.missing=null`, "data.`a/b~`:string=\"-0.0\" data:values:any(x=>x:string=\"-0.0\")"}
 	for index, source := range sources {
 		activeEngine := e
 		if strings.Contains(source, ":[map[float]]") {
@@ -70,6 +70,58 @@ func TestPostgreSQLJSONMetadataRestoresNumericText(t *testing.T) {
 	for index, result := range results {
 		if result != "t" {
 			t.Errorf("%s: %s", sources[index], result)
+		}
+	}
+}
+
+func TestPostgreSQLJSONMetadataSubpathTraversal(t *testing.T) {
+	container := os.Getenv("HFF_POSTGRES_CONTAINER")
+	if container == "" {
+		t.Fatal("integration tests require HFF_POSTGRES_CONTAINER")
+	}
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Any("data"))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ source, data, metadata, want string }{
+		{"data.`0`=null", `[1]`, `{}`, "t"},
+		{"data.`0`=null", `{"0":1}`, `{}`, "f"},
+		{"data.``:string=\"-0.0\"", `{"":0}`, `{"/":{"type":"float","text":"-0.0"}}`, "t"},
+		{"data.`a/b~`.``:string=\"-0.0\"", `{"a/b~":{"":0}}`, `{"/a~1b~0/":{"type":"float","text":"-0.0"}}`, "t"},
+		{`data.parent.child=null`, `{"parent":null}`, `{}`, "t"},
+		{`data.parent!.child=null`, `{"parent":null}`, `{}`, "f"},
+	} {
+		activeEngine := e
+		if strings.Contains(tc.source, ":string") {
+			typ := schema.MapOf(schema.FloatType)
+			if strings.Contains(tc.source, "a/b~") {
+				typ = schema.MapOf(typ)
+			}
+			activeEngine, err = engine.New(engine.WithSchema(schema.Struct(schema.Field("data", typ))), engine.WithCapabilities(capabilities.Standard()))
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		program, err := activeEngine.Compile(context.Background(), tc.source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		query, err := hffsql.Build(context.Background(), program, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindJSON(hff.Path{"data"}, hffsql.Column("records", "data"), hffsql.JSONB, hffsql.WithTypeMetadata(hffsql.Column("records", "meta")))))
+		if err != nil {
+			t.Fatalf("%s: %v", tc.source, err)
+		}
+		var types, literals []string
+		for _, arg := range query.Args() {
+			typ, literal := sqlFixtureParameter(t, arg)
+			types = append(types, typ)
+			literals = append(literals, literal)
+		}
+		script := fmt.Sprintf("PREPARE traversal(%s) AS SELECT %s FROM (VALUES ('%s'::jsonb,'{\"version\":1,\"types\":%s}'::jsonb)) records(data,meta); EXECUTE traversal(%s);", strings.Join(types, ","), query.Where(), tc.data, tc.metadata, strings.Join(literals, ","))
+		command := exec.Command("docker", "exec", "-i", container, "psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-U", "postgres")
+		command.Stdin = strings.NewReader(script)
+		output, err := command.CombinedOutput()
+		if err != nil || strings.TrimSpace(string(output)) != tc.want {
+			t.Fatalf("%s: want %s, got %s (%v)", tc.source, tc.want, output, err)
 		}
 	}
 }

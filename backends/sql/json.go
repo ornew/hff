@@ -106,6 +106,9 @@ func (b *builder) hasJSONAncestor(n hff.Node) bool {
 	return false
 }
 func (b *builder) jsonPath(n hff.Node) (expression, bool, error) {
+	if value, handled, err := b.metadataSubpath(n); handled {
+		return value, true, err
+	}
 	if path, ok := n.Path(); ok {
 		if format, yes := b.jsonBindings[pathKey(path)]; yes {
 			code := b.bindings[pathKey(path)]
@@ -159,6 +162,77 @@ func (b *builder) jsonPath(n hff.Node) (expression, bool, error) {
 	}
 	result, err := b.jsonDecode(n, "("+value.code+" -> "+key.code+")", format, n.Type(), value.present)
 	return result, true, err
+}
+
+// metadataSubpath prunes direct physical documents only. Guards, callback
+// parameters and computed accesses retain their ordinary lowering and scope.
+func (b *builder) metadataSubpath(n hff.Node) (expression, bool, error) {
+	if n.Kind() != hff.FieldNode {
+		return expression{}, false, nil
+	}
+	eligible := false
+	for _, binding := range b.physicalBindings {
+		if binding.metadata != nil && binding.format == JSONB {
+			eligible = true
+			break
+		}
+	}
+	if !eligible {
+		return expression{}, false, nil
+	}
+	root := n
+	for root.Kind() == hff.FieldNode {
+		root, _ = root.Child(0)
+	}
+	if root.Kind() != hff.VariableNode {
+		return expression{}, false, nil
+	}
+	path, ok := n.Path()
+	if !ok {
+		return expression{}, false, nil
+	}
+	// A more-specific mapping must win, including non-JSON bindings.
+	for size := len(path); size > 0; size-- {
+		if _, bound := b.bindings[pathKey(path[:size])]; !bound {
+			continue
+		}
+		for _, binding := range b.physicalBindings {
+			if pathKey(binding.path) != pathKey(path[:size]) {
+				continue
+			}
+			if size == len(path) || binding.metadata == nil || binding.format != JSONB {
+				return expression{}, false, nil
+			}
+			code, err := quoteColumn(binding.column)
+			if err != nil {
+				return expression{}, true, err
+			}
+			metadata, err := b.checkJSONMetadata(binding)
+			if err != nil {
+				return expression{}, true, err
+			}
+			pointer := ""
+			for _, field := range path[size:] {
+				// Keep path lowering linear: the category test and extraction
+				// share a projection rather than duplicating a growing expression.
+				code = b.project(code)
+				key, err := b.parameter(n, hff.String(field))
+				if err != nil {
+					return expression{}, true, err
+				}
+				code = "(CASE WHEN jsonb_typeof(" + code + ")='object' THEN " + code + " -> " + key.code + "::text ELSE NULL END)"
+				pointer += "/" + strings.ReplaceAll(strings.ReplaceAll(field, "~", "~0"), "/", "~1")
+			}
+			prefix, err := b.parameter(n, hff.String(pointer))
+			if err != nil {
+				return expression{}, true, err
+			}
+			value, err := b.jsonDecode(n, b.restoreJSONMetadataAt(code, metadata, prefix.code+"::text"), JSON, n.Type(), "TRUE")
+			return value, true, err
+		}
+		return expression{}, false, nil
+	}
+	return expression{}, false, nil
 }
 func ordinaryPresence(values []expression) string {
 	present := "TRUE"

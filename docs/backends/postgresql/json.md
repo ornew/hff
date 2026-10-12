@@ -489,6 +489,17 @@ statically typed scalar follow the rules above.
 Unsupported ambiguous HFF unions or operations are rejected rather than
 guessed.
 
+For a fixed unguarded field chain rooted at a variable whose nearest binding is
+a direct metadata-backed JSONB binding, the translator can restore numeric
+metadata from only the selected subtree. The lookup still uses the subtree's
+JSON Pointer within the original document; it does not rewrite the caller's
+sidecar contract. Whole-document access and chains that traverse a guard,
+computed receiver, dynamic index, callback parameter, or nested physical
+binding keep the general restoration path. An independent unguarded field path
+elsewhere in the query can still use this optimization. See the
+[PostgreSQL translation choices](optimizations.md#restore-only-a-selected-jsonb-metadata-subtree)
+for the scope of this SQL-shape optimization.
+
 PostgreSQL is the only supported SQL dialect. JSON and JSONB use their native
 operators; this support does not promise stable generated SQL text or database
 execution order. SQL execution constraints are reported by the SQL API, and

@@ -47,6 +47,22 @@ general conversion path when required. See [composite bindings](composites.md)
 and [flattened struct bindings](flattened-structures.md) for representation
 requirements.
 
+### Restore only a selected JSONB metadata subtree
+
+For a fixed, unguarded field path rooted at a variable whose nearest binding is
+a direct metadata-backed JSONB `BindJSON`, the translator can extract the
+selected subtree before restoring numeric types. Metadata lookup retains the
+pointer prefix relative to the original document, so nested numbers use the
+same sidecar entries as whole-document restoration. Whole-document access and
+chains that traverse a guard, computed receiver, dynamic index, callback
+parameter, or nested physical binding retain the general restoration path.
+An independent unguarded field path elsewhere in the same query can still use
+this optimization.
+Each selected extraction still needs an object check and projection; this
+describes the generated SQL shape, not a measured speedup or PostgreSQL plan
+guarantee. See the
+[JSONB binding contract](json.md#storage-requirements-and-limits).
+
 ### Use correlated existence checks for plain relation predicates
 
 A plain relation path consumed by `any()` or `all()` can lower to correlated
