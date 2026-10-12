@@ -54,14 +54,17 @@ a direct metadata-backed JSONB `BindJSON`, the translator can extract the
 selected subtree before restoring numeric types. Metadata lookup retains the
 pointer prefix relative to the original document, so nested numbers use the
 same sidecar entries as whole-document restoration. Whole-document access and
-chains that traverse a guard, computed receiver, dynamic index, callback
-parameter, or nested physical binding retain the general restoration path.
-An independent unguarded field path elsewhere in the same query can still use
-this optimization.
+paths whose resolution depends on a guard, computed receiver, dynamic index,
+callback parameter, or nested physical binding retain the general restoration
+path. A fixed field prefix that can be extracted before a later guard remains
+eligible. Within a callback, an outer `doc.price` path can qualify; a path
+rooted at the callback item does not.
 Each selected extraction still needs an object check and projection; this
 describes the generated SQL shape, not a measured speedup or PostgreSQL plan
 guarantee. See the
 [JSONB binding contract](json.md#storage-requirements-and-limits).
+The measured workload and tradeoffs are recorded in [JSONB metadata
+restoration](../../optimizations/002-postgresql-jsonb-metadata-restoration.md).
 
 ### Use correlated existence checks for plain relation predicates
 

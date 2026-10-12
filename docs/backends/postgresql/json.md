@@ -493,10 +493,12 @@ For a fixed unguarded field chain rooted at a variable whose nearest binding is
 a direct metadata-backed JSONB binding, the translator can restore numeric
 metadata from only the selected subtree. The lookup still uses the subtree's
 JSON Pointer within the original document; it does not rewrite the caller's
-sidecar contract. Whole-document access and chains that traverse a guard,
-computed receiver, dynamic index, callback parameter, or nested physical
-binding keep the general restoration path. An independent unguarded field path
-elsewhere in the query can still use this optimization. See the
+sidecar contract. Whole-document access and paths whose resolution depends on
+a guard, computed receiver, dynamic index, callback parameter, or nested
+physical binding keep the general restoration path. A fixed field prefix that
+can be extracted before a later guard remains eligible. Within a callback, an
+outer `doc.price` path can qualify; a path rooted at the callback item does
+not. See the
 [PostgreSQL translation choices](optimizations.md#restore-only-a-selected-jsonb-metadata-subtree)
 for the scope of this SQL-shape optimization.
 
