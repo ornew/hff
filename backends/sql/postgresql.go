@@ -610,7 +610,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		return b.jsonFold(n, name)
 	}
 	switch name {
-	case "fromjson", "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
+	case "bool", "number", "fromjson", "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
 	default:
 		return expression{}, b.failure(n, "PostgreSQL does not yet support method "+name)
 	}
@@ -624,6 +624,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		values[i] = value
 	}
 	receiver := values[0]
+	if name == "bool" || name == "number" {
+		return b.primitiveConversion(n, name, receiver)
+	}
 	if name == "fromjson" {
 		return b.jsonParseCall(n, receiver)
 	}

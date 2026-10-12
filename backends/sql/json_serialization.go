@@ -83,6 +83,11 @@ func (b *builder) losesFloat(n hff.Node, environment map[hff.BindingID]bool) boo
 	if !jsonHasFloat(n.Type()) {
 		return false
 	}
+	if method, ok := n.Method(); ok && (method.Name() == "number" || method.Name() == "fromjson") {
+		// Parsing consumes exact string content and creates fresh numeric values.
+		// A discarded float receiver branch contributes no float provenance.
+		return false
+	}
 	if mapping, exists := b.relationMapping(n, b.physicalParameters); exists {
 		return b.bindingLosesFloat(mapping, n.Type())
 	}

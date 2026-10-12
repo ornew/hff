@@ -126,8 +126,32 @@ ordinary null. SQL lowering does not enforce the local runtime's
 `MaxJSONDepth` or step budgets; database execution limits and input-size
 controls remain the caller's responsibility.
 
-This adds JSON parsing only. Conversions to bytes, timestamps, durations,
-booleans, and numbers remain unsupported by the PostgreSQL backend.
+### Convert strings with `bool()` and `number()`
+
+`bool()` accepts exactly lowercase `true` or `false`; it is case-sensitive and
+does not trim surrounding whitespace. `number()` accepts one strict JSON
+number spelling, also without surrounding whitespace. Integer spellings must
+fit int64 and return int64; a decimal point or exponent selects float64. Invalid
+spellings, integer overflow, float overflow, and non-finite results return
+ordinary null. Finite subnormals and underflow to signed zero remain valid, so
+`-0.0` keeps its float subtype and sign. A null or inapplicable receiver returns
+null, while no-value propagates without invoking the conversion.
+
+These conversions can read string columns or runtime JSON strings:
+
+```hff
+enabled_text:bool=true
+amount_text:number>10.0
+payload.value:number:[float]:exists
+```
+
+The final example creates a fresh numeric value from stored text. It does not
+inherit JSONB float-loss provenance from the source string. Numeric subtype
+recovery for values read from JSONB numbers still follows the schema and
+metadata rules above. `number()` requires PostgreSQL 16 or later for
+`pg_input_is_valid`; `bool()` adds no PostgreSQL version requirement. The
+backend was tested with PostgreSQL 18.6. See the
+[PostgreSQL 16 input-validation functions](https://www.postgresql.org/docs/16/functions-info.html).
 
 ### Numeric arithmetic
 
@@ -712,7 +736,7 @@ a source-located `hff.BackendError` from `Build`:
   index.
 - Dynamic folds whose seed or callback-result representations cannot be
   determined from the schema and available JSONB metadata.
-- Conversions to bytes/timestamps/durations/booleans/numbers, float64
+- Conversions to bytes/timestamps/durations, float64
   serialization when JSONB has lost required numeric representation, and
   operations requiring a runtime type not fixed by the schema or metadata.
 

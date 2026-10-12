@@ -20,20 +20,12 @@ func (b *builder) parsedJSON(text string) string {
 }
 
 func (b *builder) jsonParseCall(n hff.Node, receiver expression) (expression, error) {
-	text := receiver.code
-	switch receiver.kind {
-	case hff.NullType:
+	if receiver.kind == hff.NullType {
 		return b.jsonDecode(n, "NULL::json", JSON, n.Type(), receiver.present)
-	case hff.StringType:
-	case hff.AnyType:
-		format, ok := b.jsonValues[receiver.code]
-		if !ok {
-			return expression{}, b.failure(n, "JSON parsing requires a recoverable string receiver")
-		}
-		text = "(CASE WHEN " + string(format) + "_typeof(" + receiver.code + ")='string' THEN (" + receiver.code + " #>> '{}'::text[]) ELSE NULL::text END)"
-	default:
-		// Partial union dispatch returns null on inapplicable runtime families.
-		return b.jsonDecode(n, "NULL::json", JSON, n.Type(), receiver.present)
+	}
+	text, err := b.stringConversionInput(n, receiver)
+	if err != nil {
+		return expression{}, err
 	}
 	return b.jsonDecode(n, b.parsedJSON(text), JSON, n.Type(), receiver.present)
 }
