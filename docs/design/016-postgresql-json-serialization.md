@@ -58,8 +58,9 @@ storage representation determine their numeric forms. This includes supported
 numeric arithmetic results and nested collections. Arbitrary HFF bytes,
 timestamps, and durations inside dynamic JSON are not inferred from JSON
 strings. `fromjson()` and conversions that require reconstructing those
-non-JSON HFF types require separate PostgreSQL implementations; their HFF
-conversion contracts are defined independently.
+non-JSON HFF types are separate from serialization. The HFF conversion
+contracts are defined independently; PostgreSQL parsing behavior for
+`fromjson()` is recorded in [017](017-postgresql-json-parsing.md).
 
 ### Implementation and invariants
 
@@ -89,7 +90,8 @@ caller's responsibility. No PostgreSQL callback evaluation order is implied.
 This is PostgreSQL-specific lowering of existing HFF method behavior; it does
 not change the language contract or imply support in another SQL backend.
 Unrecoverable JSONB numeric representations and dynamic non-JSON HFF types
-remain unsupported. `fromjson()` remains a separate conversion feature.
+remain unsupported. `fromjson()` parsing is implemented separately and does
+not imply support for conversions to bytes, timestamps, or durations.
 
 ## Alternatives considered
 
@@ -120,7 +122,7 @@ prove behavior for every possible PostgreSQL document or depth.
 
 Dynamic JSON serialization is limited to JSON-native values whose required
 numeric representation can be recovered. Metadata restores numeric kinds and
-values only. Bytes, timestamps, durations, and `fromjson()` require separate
-backend implementations under their existing HFF conversion contracts. The
+values only. Bytes, timestamps, and durations require separate backend
+implementations under their existing HFF conversion contracts. The
 SQL serializer has no local runtime JSON-depth or step-budget guarantee, and
 no latency or SQL-size guarantee is made.

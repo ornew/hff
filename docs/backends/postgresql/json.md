@@ -94,6 +94,41 @@ the distinction. The application must store data and metadata that satisfy
 the declared schema and remain consistent with each other. `Build` does not
 inspect rows, read the database, or validate stored documents or metadata.
 
+### Parse JSON text with `fromjson()`
+
+For a string receiver, `fromjson()` parses one complete JSON document and
+returns its JSON-native HFF value. A recoverable dynamic JSON string is also
+accepted; a dynamic receiver of another runtime family returns ordinary null.
+The root and all nested arrays, objects, and numbers are validated before the
+result is exposed. Invalid syntax, duplicate object keys, invalid Unicode
+escapes, int64 overflow, and non-finite or overflowing float values produce
+ordinary null for the entire document. No partial value is returned. JSON
+whitespace around the single root value is accepted. Float underflow remains
+valid and preserves the sign when it rounds to zero.
+
+For example, bind `payload_text` as a string column and declare that field as
+`String` in the engine schema. `fromjson()` returns a dynamic value, so its
+parsed fields do not need to be enumerated in the schema:
+
+```hff
+payload_text:fromjson.active=true
+payload_text:fromjson.items:[list]:any(item=>item.price>10.0)
+```
+
+This lowering uses PostgreSQL's `IS JSON ... WITH UNIQUE KEYS` and
+`pg_input_is_valid` primitives, so PostgreSQL `fromjson()` support requires
+version 16 or later; it was tested against PostgreSQL 18.6. See the
+[PostgreSQL 16 JSON functions](https://www.postgresql.org/docs/16/functions-json.html)
+and [PostgreSQL 16 input-validation functions](https://www.postgresql.org/docs/16/functions-info.html).
+The caller must ensure decoded JSON strings and object keys contain no NUL,
+which PostgreSQL text cannot represent. Other invalid JSON documents return
+ordinary null. SQL lowering does not enforce the local runtime's
+`MaxJSONDepth` or step budgets; database execution limits and input-size
+controls remain the caller's responsibility.
+
+This adds JSON parsing only. Conversions to bytes, timestamps, durations,
+booleans, and numbers remain unsupported by the PostgreSQL backend.
+
 ### Numeric arithmetic
 
 Schema-known scalar `Float` values support `+`, `-`, `*`, and `/`; mixed
@@ -363,9 +398,9 @@ lowering. Native JSON continues to use its stored numeric spelling. Dynamic
 representations still require schema or metadata information sufficient for
 the particular operation; `Any` is not a general escape from type recovery.
 Current metadata supports numeric types only: bytes, timestamps, and durations
-are not restored by type tags, and `fromjson()` remains unsupported. Dynamic
-serialization is limited to JSON-native values whose numeric representation
-is recoverable; it does not make arbitrary `Any` values serializable.
+are not restored by type tags. Dynamic serialization is limited to JSON-native
+values whose numeric representation is recoverable; it does not make arbitrary
+`Any` values serializable.
 
 Nested callbacks can capture outer callback values and schema fields, with
 lexical shadowing:
@@ -677,7 +712,7 @@ a source-located `hff.BackendError` from `Build`:
   index.
 - Dynamic folds whose seed or callback-result representations cannot be
   determined from the schema and available JSONB metadata.
-- `fromjson()`, conversions to bytes/timestamps/durations, float64
+- Conversions to bytes/timestamps/durations/booleans/numbers, float64
   serialization when JSONB has lost required numeric representation, and
   operations requiring a runtime type not fixed by the schema or metadata.
 

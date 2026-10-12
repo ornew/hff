@@ -121,7 +121,9 @@ at scalar leaves, scalar type guards, `exists()`, and `type()` are supported.
 The generic `json()` and `string()` methods support the scalar and
 collection profile described in the JSON guide, including finite float values
 from scalar columns and native JSON. JSONB float serialization requires the
-numeric metadata described in that guide; `fromjson()` remains unsupported.
+numeric metadata described in that guide. String and recoverable dynamic JSON
+values support `fromjson()` on PostgreSQL 16 and later; see the JSON guide for
+its validation rules and NUL precondition.
 String methods currently supported are `len()`, `contains()`, `startswith()`,
 `endswith()`, and `concat()`; boolean `not()`, `and()`, and `or()` are supported.
 The generic scalar `in()` method is supported for membership among its
@@ -173,8 +175,9 @@ and finiteness constraints.
 
 An unsupported operation or type returns a source-located `hff.BackendError`
 from `Build`. For scalar bindings, the current subset rejects regex, collection
-operations, `Any` and non-null mixed unions, JSON and temporal conversions,
-and guarded access through nullable parents. JSON bindings support the
+operations, `Any` and non-null mixed unions, conversions outside the JSON
+guide's `fromjson()` profile, and guarded access through nullable parents.
+JSON bindings support the
 schema-known access and inspection described in the [JSON guide](json.md).
 JSONB metadata supports selected numeric type
 guards and typed indexing; unguarded dynamic comparisons and methods, and
@@ -184,9 +187,10 @@ unsupported. JSON list/object structural equality, list
 available for schema-known values when their required capabilities are enabled;
 `map()` and `flatmap()` are supported when callback result types are known.
 Folds are supported for known accumulator types; see the JSON guide for their
-type and null rules. Other collection transformations, `fromjson()`, float64
-serialization when JSONB has lost required numeric representation, and
-bytes/timestamp/duration conversions remain unsupported.
+type and null rules. Other collection transformations, conversions to
+booleans/numbers/bytes/timestamps/durations, float64 serialization when JSONB
+has lost required numeric representation, and other unsupported types remain
+unsupported.
 Unsupported operations do not fall back to local evaluation.
 PostgreSQL is the only currently supported SQL dialect.
 

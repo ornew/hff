@@ -39,6 +39,7 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 			{Name: "limits", Value: "translation cannot enforce HFF step, generated-value, or JSON-depth budgets in the database"},
 			{Name: "evaluation.order", Value: "SQL preserves supported expression results; database planning may reorder work and does not guarantee HFF evaluation steps"},
 			{Name: "bindings", Value: "explicit scalar, JSON/JSONB, composite, flattened struct, or relation bindings; version-1 JSONB numeric metadata supplements schema; caller guarantees stored metadata consistency; unrecoverable representations are rejected"},
+			{Name: "json.parsing", Value: "fromjson requires PostgreSQL 16+ JSON validation; caller guarantees decoded JSON strings and keys contain no NUL"},
 			{Name: "regex", Value: "RE2-compatible regex translation is not supported by this implementation"},
 			{Name: "extensions.contract", Value: "translators use typed expressions and parameter binding; caller guarantees trusted SQL templates and database function behavior"},
 		},
@@ -52,6 +53,9 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 		if name, method := strings.CutPrefix(string(id), "method:"); method && !profileSQLMethod(name) {
 			feature.Level, feature.Conditions = hff.Unsupported, "method translation is unavailable"
 		}
+		if id == capabilities.Method("string.fromjson") {
+			feature.Conditions += "; PostgreSQL 16+; decoded strings and keys must contain no NUL"
+		}
 		config.Features = append(config.Features, feature)
 	}
 	return config, nil
@@ -62,7 +66,7 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 func profileSQLMethod(id string) bool {
 	switch id {
 	case "any.type", "any.json", "any.string", "any.in", "any.exists",
-		"bool.and", "bool.or", "bool.not", "string.len", "string.contains", "string.startswith", "string.endswith", "string.concat",
+		"bool.and", "bool.or", "bool.not", "string.fromjson", "string.len", "string.contains", "string.startswith", "string.endswith", "string.concat",
 		"list.size", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr",
 		"object.size", "object.has", "object.get", "object.keys", "object.values", "object.items":
 		return true

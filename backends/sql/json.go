@@ -89,6 +89,12 @@ func (b *builder) jsonDecode(n hff.Node, code string, format JSONFormat, typ hff
 }
 func (b *builder) hasJSONAncestor(n hff.Node) bool {
 	for n.Valid() {
+		if n.Kind() == hff.ObjectNode || n.Kind() == hff.ListNode {
+			return true
+		}
+		if method, ok := n.Method(); ok && method.Name() == "fromjson" {
+			return true
+		}
 		if binding, ok := n.Binding(); ok {
 			if _, exists := b.parameters[binding.ID()]; exists {
 				return true
@@ -143,13 +149,19 @@ func (b *builder) jsonPath(n hff.Node) (expression, bool, error) {
 	if value, handled, err := b.compositePath(n); handled {
 		return value, true, err
 	}
-	if n.Kind() != hff.FieldNode || !b.hasJSONAncestor(n) {
+	if n.Kind() != hff.FieldNode {
 		return expression{}, false, nil
 	}
 	parent, _ := n.Child(0)
+	if !b.hasJSONAncestor(n) && parent.Type().Kind() != hff.NullType && parent.Type().Kind() != hff.NeverType {
+		return expression{}, false, nil
+	}
 	value, err := b.expression(parent)
 	if err != nil {
 		return expression{}, true, err
+	}
+	if value.kind == hff.NullType {
+		return value, true, nil
 	}
 	format, ok := b.jsonValues[value.code]
 	if !ok {
@@ -246,6 +258,9 @@ func (b *builder) jsonIndex(n hff.Node) (expression, error) {
 	value, err := b.expression(parent)
 	if err != nil {
 		return expression{}, err
+	}
+	if value.kind == hff.NullType {
+		return value, nil
 	}
 	format, ok := b.jsonValues[value.code]
 	if !ok {

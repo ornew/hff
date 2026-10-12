@@ -56,9 +56,10 @@ func TestSharedConformanceJSONBuildContracts(t *testing.T) {
 	supported["decisive_and_skips_budgeted_callback"] = true
 	supported["json_null_is_observable"] = true
 	supported["json_guard_stays_absent"] = true
+	supported["json_preserves_float"] = true
+	supported["json_duplicate_keys_fail"] = true
 	rejected := map[string]bool{}
 	for _, name := range []string{
-		"json_preserves_float", "json_duplicate_keys_fail",
 		"regex_partial_match", "invalid_regex_does_not_match_negation",
 		"strict_base64", "duration_compound_fraction", "timestamp_utc_components", "epoch_is_truthy",
 		"zero_duration_is_falsy",
