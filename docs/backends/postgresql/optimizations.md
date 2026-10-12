@@ -96,6 +96,16 @@ the tested repeated query and does not establish a database speedup for other
 workloads. See [Float operand reuse](../../optimizations/008-postgresql-float-decomposition-reuse.md)
 for the Build and PostgreSQL measurements.
 
+### Prune scalar leaves during canonical JSON serialization
+
+The recursive token CTE keeps scalar and null rows as token sources but does
+not expand them as children. Float tokens project their decoded value once
+before canonical text formatting. This reduces generated SQL for the measured
+dynamic JSON shapes; it does not guarantee faster execution for every query or
+enforce the local JSON-depth limit. See [canonical JSON lowering]
+(../../optimizations/009-postgresql-canonical-json-lowering.md) for the
+workloads, controls, and limits.
+
 ### Specialize recoverable JSON equality by declared root type
 
 When both operands have definite roots in the same structured category, the

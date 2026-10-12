@@ -465,6 +465,14 @@ reconstructs the exact IEEE value and searches decimal precisions from one to
 seventeen using nearest, ties-to-even rounding; this correctness-first SQL
 lowering is a baseline, not a performance guarantee.
 
+The canonical JSON token walk retains scalar and null rows as values while
+skipping their child expansion. It also decodes each Float token once before
+formatting. This lowers generated SQL for the measured dynamic JSON shapes;
+typed controls do not use that token walk. See [the canonical serialization
+measurements](../../optimizations/009-postgresql-canonical-json-lowering.md)
+for the tested cases and limits. PostgreSQL execution still follows database
+behavior and does not enforce the local runtime's JSON-depth limit.
+
 For dynamic JSON values, the backend first resolves recoverable schema and
 numeric metadata, then serializes the normalized JSON-native result. This
 preserves integer-versus-float kinds inside unions and nested collections,
