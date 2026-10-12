@@ -44,6 +44,7 @@
     "spec/methods.md",
     "spec/capabilities.md",
     "docs/tutorials/README.md",
+    "docs/tutorials/05-go-bindings.md",
     "docs/guides/README.md",
     "docs/guides/getting-started.md",
     "docs/guides/compiling.md",
@@ -65,6 +66,10 @@
     "docs/backends/postgresql/README.md",
     "docs/backends/postgresql/json.md",
     "docs/backends/postgresql/composites.md",
+    "docs/backends/postgresql/flattened-structures.md",
+    "docs/backends/postgresql/relations.md",
+    "docs/backends/postgresql/optimizations.md",
+    "docs/optimizations/001-postgresql-order-independence.md",
     "docs/design/README.md",
     "docs/development/README.md",
     "docs/development/parser.md",
@@ -151,7 +156,8 @@
       "title": "Development",
       "match": [
         "docs/development/**",
-        "docs/*.md"
+        "docs/*.md",
+        "docs/optimizations/**"
       ],
       "collapsed": true
     }

@@ -87,6 +87,9 @@ conflicting presence expressions and verify that query literals remain bound.
 
 ## Limitations and open questions
 
-The explicit-expression policy is accepted. Exact binding structs, constructors,
-and supported flattened layouts are implementation work; this record does not
-claim that a flattened binding API is already available.
+The explicit-expression policy is implemented by `sql.BindStruct`. Field
+bindings are relative to the bound struct; nested structs use nested
+`BindStruct` values with their own presence and null expressions. Required
+fields need bindings, while an unbound optional field remains absent. See the
+[flattened PostgreSQL struct guide](../backends/postgresql/flattened-structures.md)
+for the API and supported child binding forms.

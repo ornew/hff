@@ -14,6 +14,8 @@ For a quick browser experiment, try the [Playground](../playground.md).
 4. [Translate a method to PostgreSQL](04-postgresql-translator.md): register a
    typed backend translator, build a parameterized predicate, and inspect
    execution guarantees without opening a database connection.
+5. [Bind a Go record type](05-go-bindings.md): infer an HFF schema and build a
+   typed local filter from an application record type.
 
 Run each complete example from the repository root:
 
@@ -22,6 +24,7 @@ go run ./examples/tutorial-first-filter
 go run ./examples/tutorial-service
 go run ./examples/extensions
 go run ./examples/sql-extensions
+go run ./examples/go-binding
 ```
 
 For feature explanations, continue with the [guides](../guides/README.md).

@@ -12,7 +12,7 @@ for rationale. Query semantics remain defined by the
 |:--|:--|
 | `github.com/ornew/hff` | Immutable values, types, limits, errors, and compiled-plan inspection. |
 | `github.com/ornew/hff/schema` | Struct, map, and primitive schema constructors. |
-| `github.com/ornew/hff/adapters/govalue` | Optional schema-checked conversion from Go values. |
+| `github.com/ornew/hff/adapters/govalue` | Explicit Go-to-HFF conversion or inferred `Binding[T]` and typed local filters. |
 | `github.com/ornew/hff/capabilities` | Standard and custom capability sets. |
 | `github.com/ornew/hff/engine` | Engine configuration, validation, and query compilation. |
 | `github.com/ornew/hff/backends/local` | Reusable local filters and matching. |
@@ -82,9 +82,10 @@ them. `Input.Value()` returns the validated immutable value and
 `Input.Compatible(type)` checks exact schema compatibility.
 
 For optional reflection-based Go-to-HFF conversion, use
-[`adapters/govalue`](../guides/go-values.md). It requires an explicit HFF
-schema and explicit mappings for Go structs; it does not replace the explicit
-`Value` API or infer schema from Go types.
+[`adapters/govalue`](../guides/go-values.md). `govalue.New` converts into an
+explicit HFF schema with explicit struct mappings. `govalue.NewBinding[T]`
+instead infers a schema from a static Go type and provides a typed local
+filter. Neither replaces the explicit `Value` API.
 
 ## Build and run a local filter
 
@@ -136,6 +137,15 @@ hffsql.BindJSON(
 See the [PostgreSQL JSON binding guide](../backends/postgresql/json.md) for the
 supported schema profile, collection access and equality behavior, and storage
 requirements.
+
+For a struct stored in separate columns, `hffsql.BindStruct` requires trusted
+parent-present and parent-null expressions, plus relative child bindings. A
+caller-owned related row source uses `hffsql.NewRelation` with
+`WithRelationSource`, `WithCorrelation`, and `WithRelationItem`; use
+`WithUniqueOrder` only when an operation observes list order. See the
+[flattened struct guide](../backends/postgresql/flattened-structures.md) and
+[relation guide](../backends/postgresql/relations.md) for null/presence rules,
+typed items, and ordering requirements.
 
 For a native PostgreSQL composite column, bind an unambiguous struct schema
 with `hffsql.BindComposite(path, column)`. Composite attribute names must match

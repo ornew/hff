@@ -74,6 +74,11 @@ current rejection boundary.
 Struct values can also be bound to native PostgreSQL composite columns with
 `BindComposite`; see [composite bindings](composites.md) for attribute presence,
 null handling, and the supported nested and array profile.
+For schemas spread across columns, use [flattened struct bindings](flattened-structures.md);
+for caller-owned correlated row sources, see [relation bindings](relations.md).
+See [PostgreSQL translation optimizations](optimizations.md) for SQL-shape
+choices, semantic boundaries, and reproducible translation and database
+measurements.
 
 The initial builder supports nullable scalar columns whose HFF type is one of
 null, boolean, int64, finite float64, or string. Required struct parents may be

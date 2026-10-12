@@ -100,7 +100,10 @@ database evaluates rows in HFF callback order.
 
 ## Limitations and open questions
 
-The immutable relation contract and ordering rule are accepted. Exact public
-field names, expression constructors, and the supported relation-operation
-matrix are implementation work; this record does not imply that relation
-bindings are currently available.
+The immutable relation contract and ordering rule are implemented by
+`sql.NewRelation`, `sql.BindRelation`, and relation options. The current
+operation matrix is validated by `Build`; a unique ordering is required only
+when an operation observes list order. See the
+[PostgreSQL relation guide](../backends/postgresql/relations.md) for the public
+constructors, trusted-expression boundary, supported order behavior, and
+current fallback conditions.

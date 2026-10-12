@@ -1,8 +1,9 @@
 # Converting Go Values
 
 The optional `adapters/govalue` package converts ordinary Go records into
-owned, schema-checked HFF values. The application still declares the HFF schema
-explicitly; conversion does not infer a query contract from a Go type.
+owned, schema-checked HFF values. Choose an explicit schema and field mapping
+when the HFF contract is independent of Go structs, or infer a schema and typed
+filter from a Go type with `Binding[T]`.
 
 The examples use these imports:
 
@@ -151,3 +152,69 @@ go run ./examples/go-values
 
 The example prints `Match: true` after converting a Go struct and evaluating
 the resulting HFF value with a local filter.
+
+## Infer a schema and bind a Go record type
+
+When the Go type itself is the service contract, `NewBinding[T]` derives an
+HFF schema and immutable conversion plan together. The resulting typed filter
+accepts `T` directly:
+
+```go
+type Person struct {
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
+binding, err := govalue.NewBinding[Person]()
+if err != nil {
+	return err
+}
+e, err := engine.New(
+	engine.WithSchema(binding.Schema()),
+	engine.WithCapabilities(capabilities.Standard()),
+)
+if err != nil {
+	return err
+}
+program, err := e.Compile(ctx, `age>=18 name`)
+if err != nil {
+	return err
+}
+filter, err := binding.Build(ctx, program)
+if err != nil {
+	return err
+}
+matched, err := filter.Match(ctx, Person{Name: "Alice", Age: 24})
+```
+
+`Build` requires the program's schema to equal the inferred schema. The
+`Filter[T]` retains that binding and converts each input record before local
+matching. `Binding.Convert` is available when a caller needs an explicit
+`hff.Value`; unlike `Converter`, an inferred binding does not accept a second
+schema or custom struct mapping.
+
+Exported struct fields become HFF fields. A field's name comes from its `hff`
+tag, then its `json` tag, then its Go field name. A `-` tag omits the field;
+`omitempty` marks it optional and uses Go's `encoding/json` empty-value rule.
+Other tag options are rejected. Embedded structs are promoted using the same
+name rules. If promotion or tags yield duplicate HFF names, inference fails
+rather than choosing one field. Unsupported or recursive Go types also fail
+when the binding is created.
+
+Pointers, maps, slices, and interfaces that are nil convert to HFF null;
+non-nil empty maps and slices remain empty objects and lists. Numeric kinds are
+preserved without coercion, and `time.Time`, `time.Duration`, and `hff.Value`
+have their corresponding HFF representations. The binding snapshots the
+inferred schema and conversion plan. Do not mutate a source value while it is
+being converted or matched. Runtime cycles in pointers, maps, or slices are
+rejected; repeated non-cyclic references are converted independently.
+
+The Go traversal and the resulting HFF validation each apply the configured
+input depth/value limits. Pointer and interface wrappers count toward Go
+traversal depth and visited values. Other runtime budgets do not govern this
+conversion adapter. The typed-binding path is shown end to end by the
+[runnable example](https://github.com/ornew/hff/tree/main/examples/go-binding):
+
+```sh
+go run ./examples/go-binding
+```
