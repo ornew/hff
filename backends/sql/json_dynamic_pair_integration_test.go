@@ -122,7 +122,7 @@ func TestPostgreSQLDynamicJSONPairs(t *testing.T) {
 	}
 }
 
-func pairTypeMetadata(t *testing.T, value hff.Value) string {
+func pairTypeMetadata(t testing.TB, value hff.Value) string {
 	t.Helper()
 	types := map[string]map[string]string{}
 	var walk func(hff.Value, string)

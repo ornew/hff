@@ -119,7 +119,10 @@ func (b *builder) jsonEqual(n hff.Node, left string, lf JSONFormat, lt hff.Type,
 }
 
 func (b *builder) jsonEqualValue(n hff.Node, left string, lf JSONFormat, lt hff.Type, right string, rf JSONFormat, rt hff.Type) (string, error) {
-	if needsDynamicJSONEquality(lt) || needsDynamicJSONEquality(rt) {
+	if code, handled, err := b.jsonAnyScalarEqual(n, left, lf, lt, right, rf, rt); handled {
+		return code, err
+	}
+	if (needsDynamicJSONEquality(lt) || needsDynamicJSONEquality(rt)) && !definiteJSONContainerPair(lt, rt) {
 		l, err := b.comparisonDocumentAgainst(n, left, lf, lt, rt)
 		if err != nil {
 			return "", err

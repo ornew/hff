@@ -574,6 +574,16 @@ null at the same location, while a missing object key differs from a present
 null key. This preserves the distinction between a top-level dynamic type
 mismatch and a recursive structural mismatch.
 
+When both JSON-backed operands have definite roots in the same structured
+category, PostgreSQL can use typed recursive equality even when nested values
+are `Any`. An `Any` operand compared with a known scalar can use that scalar's
+category and comparison. Two unconstrained roots, an unconstrained root
+compared with a container, and ambiguous structural unions retain the generic
+recursive plan. Numeric representability checks and JSONB metadata
+requirements are unchanged. See the
+[measured comparison](../../optimizations/007-postgresql-guided-json-equality.md)
+for the tested shapes and controls.
+
 Dynamic-to-dynamic ordering is available for compatible strings and numbers;
 booleans support equality and inequality, while lists and objects support
 structural equality and inequality. The same lowering can compare a dynamic

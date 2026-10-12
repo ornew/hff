@@ -86,6 +86,18 @@ was a byte-identical SQL control, not evidence of a database speed change. See
 [Float Build fragments](../../optimizations/006-postgresql-float-build-fragments.md)
 for the scoped measurements and limitations.
 
+### Specialize recoverable JSON equality by declared root type
+
+When both operands have definite roots in the same structured category, the
+translator uses typed list or object recursion even when nested values are
+`Any`. An `Any` value compared with a known scalar also uses the known scalar
+category and comparison. Comparisons between two unconstrained roots, an
+unconstrained root and a container, and ambiguous structural unions keep the
+generic recursive path. Numeric representability and JSONB metadata checks
+still apply to both operands. See the [measured JSON equality comparison]
+(../../optimizations/007-postgresql-guided-json-equality.md) for workload and
+control results; it does not promise a performance gain for other schemas.
+
 ### Reuse parsed JSON within a projection scope
 
 Repeated `fromjson()` calls on the same projected receiver can reuse the

@@ -238,7 +238,7 @@ func TestPostgreSQLDynamicJSONGuards(t *testing.T) {
 		}
 	}
 }
-func metadataJSONFixture(t *testing.T, value hff.Value) string {
+func metadataJSONFixture(t testing.TB, value hff.Value) string {
 	t.Helper()
 	switch value.Kind() {
 	case hff.NullKind:
