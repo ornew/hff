@@ -64,28 +64,7 @@ func jsonKind(t hff.Type) (hff.TypeKind, bool) {
 	return hff.InvalidType, false
 }
 func (b *builder) jsonDecode(n hff.Node, code string, format JSONFormat, typ hff.Type, present string) (expression, error) {
-	kind, ok := jsonKind(typ)
-	if !ok {
-		if typ.Kind() != hff.AnyType && typ.Kind() != hff.UnionType {
-			return expression{}, b.failure(n, "JSON value requires a supported schema type")
-		}
-		raw := b.project(code)
-		normalized := "(CASE WHEN " + string(format) + "_typeof(" + raw + ") = 'null' THEN NULL ELSE " + raw + " END)"
-		b.jsonValues[normalized] = format
-		return expression{normalized, present, hff.AnyType}, nil
-	}
-	raw := b.project(code)
-	normalized := "(CASE WHEN " + string(format) + "_typeof(" + raw + ") = 'null' THEN NULL ELSE " + raw + " END)"
-	switch kind {
-	case hff.NullType:
-		return expression{"NULL", present, hff.NullType}, nil
-	case hff.ListType, hff.MapType, hff.StructType:
-		b.jsonValues[normalized] = format
-		return expression{normalized, present, kind}, nil
-	default:
-		text := "(" + normalized + " #>> '{}'::text[])"
-		return expression{jsonScalarCast(text, kind), present, kind}, nil
-	}
+	return b.jsonDecodeProjected(n, b.project(code), format, typ, present)
 }
 func (b *builder) hasJSONAncestor(n hff.Node) bool {
 	for n.Valid() {

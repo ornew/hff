@@ -126,6 +126,15 @@ ordinary null. SQL lowering does not enforce the local runtime's
 `MaxJSONDepth` or step budgets; database execution limits and input-size
 controls remain the caller's responsibility.
 
+When the same projected string receiver is passed to `fromjson()` more than
+once in a projection scope, PostgreSQL SQL can reuse the fully validated JSON
+document. Each call still evaluates its own presence state, and callback or
+shadowed-alias scopes are isolated. Different SQL expressions are not combined
+based on equal runtime string contents. This reuse does not skip validation of
+unused nested fields. See the
+[measured parsing and validation comparison](../../optimizations/004-postgresql-json-validation-reuse.md)
+for the workload, generated-SQL tradeoffs, and sample limits.
+
 ### Convert strings with `bool()` and `number()`
 
 `bool()` accepts exactly lowercase `true` or `false`; it is case-sensitive and

@@ -66,6 +66,17 @@ guarantee. See the
 The measured workload and tradeoffs are recorded in [JSONB metadata
 restoration](../../optimizations/002-postgresql-jsonb-metadata-restoration.md).
 
+### Reuse parsed JSON within a projection scope
+
+Repeated `fromjson()` calls on the same projected receiver can reuse the
+complete validated JSON result within one projection scope. Each call keeps
+its own presence state. Callback and shadowed-alias scopes remain isolated;
+different SQL expressions are not merged just because they contain equal
+runtime text. Full-document syntax, Unicode, duplicate-key, and nested numeric
+validation still runs before the value is exposed. See the
+[measured parsing and validation comparison](../../optimizations/004-postgresql-json-validation-reuse.md)
+for the workload, generated-SQL tradeoffs, and sample limits.
+
 ### Reuse a restored parent for overlapping paths
 
 Within the same projection scope, a fixed descendant can reuse an unguarded
