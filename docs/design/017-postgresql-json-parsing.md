@@ -34,7 +34,7 @@ behavior.
 
 ## Non-goals
 
-- This design does not add PostgreSQL lowering for `bool()`, `number()`,
+- This design does not cover the separate PostgreSQL conversions
   `frombase64()`, `timestamp()`, or `duration()`.
 - It does not make PostgreSQL enforce the local runtime's JSON-depth,
   evaluation-step, or generated-value budgets.
@@ -76,9 +76,10 @@ signed zero. The parsed document is returned only if all nested checks pass;
 otherwise the expression evaluates to SQL null.
 
 The numeric traversal covers both arrays and object values. It does not infer
-bytes, timestamps, or durations from JSON strings. Database execution limits
-and caller-owned input-size bounds remain separate from HFF's local runtime
-budgets.
+bytes, timestamps, or durations from JSON strings. The separate `bool()` and
+`number()` conversions have their own strict conversion contract; `fromjson()`
+does not invoke them implicitly. Database execution limits and caller-owned
+input-size bounds remain separate from HFF's local runtime budgets.
 
 ### Compatibility and backend support
 
@@ -116,5 +117,5 @@ primitives.
 
 The caller must prevent decoded NUL in JSON strings and keys. The PostgreSQL
 backend does not enforce the local `MaxJSONDepth`, step, or generated-value
-limits. Conversions to bytes, timestamps, durations, booleans, and numbers
-remain unsupported by this backend.
+limits. Conversions to bytes, timestamps, and durations remain separate
+features and are not inferred from JSON strings.
