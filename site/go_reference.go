@@ -80,6 +80,30 @@ func referenceFuncID(f *doc.Func) string {
 	}
 	return f.Name
 }
+
+// Keep index signatures identical to Go source, including named receivers.
+func referenceSignature(pkg *referencePackage, decl *ast.FuncDecl) (string, error) {
+	copy := *decl
+	copy.Doc, copy.Body = nil, nil
+	var out bytes.Buffer
+	if err := printer.Fprint(&out, pkg.set, &copy); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out.String()), nil
+}
+
+// Symbol headings use the receiver type without a variable name, like pkg.go.dev.
+func referenceFunctionTitle(pkg *referencePackage, f *doc.Func) (string, error) {
+	if f.Decl.Recv == nil || len(f.Decl.Recv.List) == 0 {
+		return "func " + f.Name, nil
+	}
+	var receiver bytes.Buffer
+	if err := printer.Fprint(&receiver, pkg.set, f.Decl.Recv.List[0].Type); err != nil {
+		return "", err
+	}
+	return "func (" + receiver.String() + ") " + f.Name, nil
+}
+
 func referenceDecl(pkg *referencePackage, decl ast.Decl) (string, error) {
 	var node ast.Node = decl
 	switch d := decl.(type) {
@@ -189,7 +213,12 @@ func (g *referenceGenerator) render(pkg *referencePackage) (string, []sitegen.He
 		headings = append(headings, sitegen.Heading{ID: id, Title: title, Level: level})
 	}
 	symbol := func(owner *referencePackage, level int, id, label string, decl ast.Decl, text string) error {
-		heading(level, id, label)
+		if _, isFunction := decl.(*ast.FuncDecl); isFunction {
+			fmt.Fprintf(&out, "<h%d id=\"%s\"><code class=\"language-go api-declaration\">%s</code></h%d>\n", level, html.EscapeString(id), html.EscapeString(label), level)
+			headings = append(headings, sitegen.Heading{ID: id, Title: label, Level: level})
+		} else {
+			heading(level, id, label)
+		}
 		pos := owner.set.Position(decl.Pos())
 		file, _ := filepath.Rel(g.repo, pos.Filename)
 		fmt.Fprintf(&out, "<p><a href=\"https://github.com/ornew/hff/blob/main/%s#L%d\">Source</a></p>\n", html.EscapeString(filepath.ToSlash(file)), pos.Line)
@@ -224,7 +253,11 @@ func (g *referenceGenerator) render(pkg *referencePackage) (string, []sitegen.He
 			if alias != "" {
 				id = alias + "." + f.Name
 			}
-			if err := symbol(owner, 3, id, "func "+id, f.Decl, f.Doc); err != nil {
+			title, err := referenceFunctionTitle(owner, f)
+			if err != nil {
+				return err
+			}
+			if err := symbol(owner, 3, id, title, f.Decl, f.Doc); err != nil {
 				return err
 			}
 			examples, err := referenceExamples(owner, f.Examples, referenceURL(pkg.dir))
@@ -241,9 +274,17 @@ func (g *referenceGenerator) render(pkg *referencePackage) (string, []sitegen.He
 	heading(2, "overview", "Overview")
 	out.WriteString(referenceDoc(pkg, pkg.pkg.Doc, referenceURL(pkg.dir)))
 	var index strings.Builder
-	index.WriteString("<h2 id=\"index\">Index</h2><ul>")
+	index.WriteString("<h2 id=\"index\">Index</h2><ul class=\"api-index\">")
 	indexItem := func(id, label string) {
 		fmt.Fprintf(&index, "<li><a href=\"#%s\"><code>%s</code></a></li>", html.EscapeString(id), html.EscapeString(label))
+	}
+	indexFunc := func(owner *referencePackage, f *doc.Func, id string) error {
+		signature, err := referenceSignature(owner, f.Decl)
+		if err != nil {
+			return err
+		}
+		indexItem(id, signature)
+		return nil
 	}
 	for _, list := range [][]*doc.Value{pkg.pkg.Consts, pkg.pkg.Vars} {
 		for _, v := range list {
@@ -253,10 +294,12 @@ func (g *referenceGenerator) render(pkg *referencePackage) (string, []sitegen.He
 		}
 	}
 	for _, f := range pkg.pkg.Funcs {
-		indexItem(referenceFuncID(f), "func "+f.Name)
+		if err := indexFunc(pkg, f, referenceFuncID(f)); err != nil {
+			return "", nil, err
+		}
 	}
 	for _, typ := range pkg.pkg.Types {
-		indexItem(typ.Name, "type "+typ.Name)
+		fmt.Fprintf(&index, "<li><a href=\"#%s\"><code>type %s</code></a><ul>", html.EscapeString(typ.Name), html.EscapeString(typ.Name))
 		for _, list := range [][]*doc.Value{typ.Consts, typ.Vars} {
 			for _, value := range list {
 				for _, name := range value.Names {
@@ -265,17 +308,22 @@ func (g *referenceGenerator) render(pkg *referencePackage) (string, []sitegen.He
 			}
 		}
 		for _, f := range append(append([]*doc.Func(nil), typ.Funcs...), typ.Methods...) {
-			indexItem(referenceFuncID(f), f.Name)
+			if err := indexFunc(pkg, f, referenceFuncID(f)); err != nil {
+				return "", nil, err
+			}
 		}
-		alias, definition, err := g.alias(pkg, typ)
+		owner, definition, err := g.alias(pkg, typ)
 		if err != nil {
 			return "", nil, err
 		}
-		if alias != nil {
+		if owner != nil {
 			for _, f := range definition.Methods {
-				indexItem(typ.Name+"."+f.Name, typ.Name+"."+f.Name)
+				if err := indexFunc(owner, f, typ.Name+"."+f.Name); err != nil {
+					return "", nil, err
+				}
 			}
 		}
+		index.WriteString("</ul></li>")
 	}
 	index.WriteString("</ul>")
 	out.WriteString(index.String())
@@ -394,6 +442,13 @@ func referenceExamples(owner *referencePackage, examples []*doc.Example, current
 			return "", err
 		}
 		out.WriteString("<pre><code class=\"language-go\">" + html.EscapeString(code.String()) + "</code></pre>\n")
+		if example.Play != nil {
+			var complete bytes.Buffer
+			if err := printer.Fprint(&complete, owner.set, example.Play); err != nil {
+				return "", err
+			}
+			out.WriteString("<details class=\"api-example-program\"><summary>Complete runnable example</summary><pre><code class=\"language-go\">" + html.EscapeString(complete.String()) + "</code></pre></details>\n")
+		}
 		if example.Output != "" {
 			out.WriteString("<p>Output:</p><pre>" + html.EscapeString(example.Output) + "</pre>\n")
 		}

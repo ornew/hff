@@ -230,3 +230,13 @@ details.nav-section>a,.nav-subsection>a { padding-left: 24px; }
 
 @media(min-width:801px) { .sidebar-hidden .sidebar { display: none; }.sidebar-hidden .doc-shell { grid-template-columns: minmax(0,1fr) 180px; } }
 @media(min-width:801px) and (max-width:959px) { .sidebar-hidden .doc-shell { grid-template-columns: minmax(0,1fr); } }
+
+.api-index,.api-index ul { list-style: none; margin: 0; padding: 0; }
+.api-index ul { padding-left: 24px; }
+.api-index li { margin: 3px 0; }
+.api-index a { text-decoration: none; }
+.api-index code { background: none; padding: 0; font-size: 14px; }
+.prose h3 code.api-declaration { background: none; padding: 0; font-size: .85em; font-weight: 600; }
+
+.api-example-program { margin: 12px 0; }
+.api-example-program summary { cursor: pointer; color: var(--accent); font-size: 13px; }

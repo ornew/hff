@@ -48,7 +48,7 @@ func (p *Problem) Error() string {return p.Code}
 		t.Fatal(err)
 	}
 	body := read(t, out, "docs/reference/go/hff/index.html")
-	for _, required := range []string{`id="Box.Get"`, `id="Problem.Error"`, "Callers may inspect Code", "A type example", "A package example", `href="#Standard"`, `Box[int]`, "value.go#L", `errors.go#L`, "Generated from this checkout"} {
+	for _, required := range []string{`id="Box.Get"`, `class="api-index"`, `func (b Box[T]) Get() T`, `func (Box[T]) Get`, `id="Problem.Error"`, "Callers may inspect Code", "A type example", "A package example", `href="#Standard"`, `Box[int]`, "value.go#L", `errors.go#L`, "Generated from this checkout"} {
 		if !strings.Contains(body, required) {
 			t.Errorf("reference missing %q", required)
 		}

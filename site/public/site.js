@@ -225,7 +225,7 @@
   };
   rules.golang = rules.go;
   rules.bash = rules.shell = rules.console = rules.sh;
-  document.querySelectorAll('pre code[class*="language-"]').forEach(function (code) {
+  document.querySelectorAll('pre code[class*="language-"], code.api-declaration').forEach(function (code) {
     var language = Array.from(code.classList).find(function (name) { return name.startsWith('language-'); });
     var languageRules = rules[language.slice(9).toLowerCase()];
     if (!languageRules) return;
@@ -240,7 +240,7 @@
       }
       if (!token) { offset++; continue; }
       if (kind === 'ident') {
-        kind = goKeywords.has(token[0]) ? 'keyword' : goTypes.has(token[0]) ? 'type' : /^\s*\(/.test(source.slice(offset + token[0].length)) ? 'function' : null;
+        kind = goKeywords.has(token[0]) ? 'keyword' : goTypes.has(token[0]) ? 'type' : (/^\s*\(/.test(source.slice(offset + token[0].length)) || (code.classList.contains('api-declaration') && offset + token[0].length === source.length)) ? 'function' : null;
       }
       if (kind) {
         fragment.append(document.createTextNode(source.slice(plainStart, offset)));
