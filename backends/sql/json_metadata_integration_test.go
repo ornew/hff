@@ -149,6 +149,10 @@ func TestPostgreSQLDynamicJSONGuards(t *testing.T) {
 	supported["flatmap_preserves_order"] = true
 	supported["concat_preserves_order"] = true
 	supported["object_enumeration_key_order"] = true
+	supported["fold_argument_order"] = true
+	supported["map_preserves_null_and_order"] = true
+	supported["decisive_or_skips_budgeted_callback"] = true
+	supported["decisive_and_skips_budgeted_callback"] = true
 	var script strings.Builder
 	var expected []string
 	for _, tc := range conformance.Cases() {
@@ -172,6 +176,10 @@ func TestPostgreSQLDynamicJSONGuards(t *testing.T) {
 			t.Fatal(tc.Name, err)
 		}
 		for _, row := range tc.Records {
+			// Local execution budgets are not a PostgreSQL guarantee.
+			if row.Error != "" {
+				continue
+			}
 			var columns, values, types, literals []string
 			for _, field := range tc.Schema.Fields() {
 				value, _ := row.Value.Lookup(field.Name)

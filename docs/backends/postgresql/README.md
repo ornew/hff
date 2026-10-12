@@ -130,12 +130,14 @@ arguments. For JSON-backed lists, the backend also supports `contains()`,
 `flatmap()`; callbacks may use scalar `in()`. See the
 [JSON guide](json.md) for equality capabilities and collection semantics.
 
-Integer arithmetic supports `+`, `-`, `*`, `%`, and integer/integer `/`:
+Integer and floating-point arithmetic follow HFF's numeric rules:
 
 ```text
 age+1>18
 age/2>10.5
 age%2=0
+price*1.08>=100.0
+count+rate>10.0
 ```
 
 Integer addition, subtraction, multiplication, negation, and remainder preserve
@@ -143,8 +145,16 @@ HFF's int64 range and signed-remainder behavior. Intermediate arithmetic is
 checked before conversion back to `bigint`; overflow produces null. Division
 returns float64, and a zero divisor produces null. For example, when `age` is
 the maximum int64 value, `(age+1):exists` is false because the overflowing
-result is null. Float/float and mixed int/float arithmetic remain unsupported
-and are rejected by `Build`.
+result is null.
+
+Float/float and mixed int/float `+`, `-`, `*`, and `/` are supported. Mixed
+arithmetic promotes the integer operand to float64. Results use IEEE 754
+round-to-nearest, ties-to-even; overflow or a non-finite result yields null,
+while subnormal results and underflow to signed zero remain valid. Float
+remainder is unsupported. PostgreSQL lowering preserves these results without
+relying on the database's floating-point arithmetic for final rounding; see
+the [numeric JSON guide](json.md#numeric-arithmetic) and
+[design record 015](../../design/015-postgresql-float-arithmetic.md).
 
 For mixed numeric ordering, the builder partitions float values around the
 int64 range, floors only in the safely castable range, and compares the integer
@@ -164,9 +174,9 @@ and finiteness constraints.
 An unsupported operation or type returns a source-located `hff.BackendError`
 from `Build`. For scalar bindings, the current subset rejects regex, collection
 operations, `Any` and non-null mixed unions, JSON and temporal conversions,
-float/float and mixed int/float arithmetic, and guarded access through nullable
-parents. JSON bindings support the schema-known access and inspection described
-in the [JSON guide](json.md). JSONB metadata supports selected numeric type
+and guarded access through nullable parents. JSON bindings support the
+schema-known access and inspection described in the [JSON guide](json.md).
+JSONB metadata supports selected numeric type
 guards and typed indexing; unguarded dynamic comparisons and methods, and
 ambiguous representations that schema and metadata cannot recover, remain
 unsupported. JSON list/object structural equality, list

@@ -339,6 +339,8 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 			return expression{}, err
 		}
 		switch value.kind {
+		case hff.AnyType:
+			return b.dynamicJSONNegation(n, value)
 		case hff.NullType:
 			return value, nil
 		case hff.IntType:
@@ -427,8 +429,10 @@ func truth(value expression) string {
 	var test string
 	switch value.kind {
 	case hff.AnyType:
-		raw := "(" + value.code + "::jsonb)"
-		test = "(CASE jsonb_typeof(" + raw + ") WHEN 'null' THEN FALSE WHEN 'boolean' THEN (" + raw + " #>> '{}'::text[])::boolean WHEN 'number' THEN (" + raw + " #>> '{}'::text[])::numeric<>0 WHEN 'string' THEN (" + raw + " #>> '{}'::text[])<>'' WHEN 'array' THEN " + raw + "<>'[]'::jsonb WHEN 'object' THEN " + raw + "<>'{}'::jsonb ELSE FALSE END)"
+		raw := "(" + value.code + "::json)"
+		text := "(" + raw + " #>> '{}'::text[])"
+		test = "(CASE json_typeof(" + raw + ") WHEN 'null' THEN FALSE WHEN 'boolean' THEN " + text + "::boolean WHEN 'number' THEN " + jsonFloatCast(text) + "<>0 WHEN 'string' THEN " + text + "<>'' WHEN 'array' THEN json_array_length(" + raw + ")>0 WHEN 'object' THEN EXISTS(SELECT 1 FROM json_object_keys(" + raw + ")) ELSE FALSE END)"
+
 	case hff.NullType:
 		test = "FALSE"
 	case hff.BoolType:
@@ -436,9 +440,9 @@ func truth(value expression) string {
 	case hff.IntType, hff.FloatType:
 		test = "(" + value.code + " <> 0)"
 	case hff.ListType:
-		test = "(" + value.code + "::jsonb <> '[]'::jsonb)"
+		test = "(json_array_length(" + value.code + "::json)>0)"
 	case hff.StructType, hff.MapType:
-		test = "(" + value.code + "::jsonb <> '{}'::jsonb)"
+		test = "EXISTS(SELECT 1 FROM json_object_keys(" + value.code + "::json))"
 	case hff.StringType:
 		test = "(" + value.code + " COLLATE \"C\" <> '' COLLATE \"C\")"
 	}
@@ -535,8 +539,14 @@ func (b *builder) arithmetic(n hff.Node, left, right expression, op hff.Operator
 	if right.kind == hff.NullType {
 		return expression{"NULL", present, hff.NullType}, nil
 	}
+	if left.kind == hff.AnyType || right.kind == hff.AnyType {
+		return b.dynamicJSONArithmetic(n, left, right, op)
+	}
 	if left.kind != hff.IntType || right.kind != hff.IntType {
-		return expression{}, b.failure(n, "PostgreSQL floating-point arithmetic requires finite-result and underflow lowering")
+		if (left.kind == hff.IntType || left.kind == hff.FloatType) && (right.kind == hff.IntType || right.kind == hff.FloatType) {
+			return b.floatArithmetic(n, left, right, op)
+		}
+		return expression{}, b.failure(n, "arithmetic requires recoverable SQL numbers")
 	}
 	l, r := left.code, right.code
 	if op == hff.Divide {

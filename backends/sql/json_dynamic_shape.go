@@ -71,7 +71,8 @@ func (b *builder) dynamicJSONShape(n hff.Node, name string, values []expression)
 						isFloat = "(" + argument + " #>> '{}'::text[]) ~ '[.eE]'"
 					}
 				}
-				converted.code = "(CASE WHEN " + string(physical) + "_typeof(" + argument + ")='" + category + "' THEN (" + argument + " #>> '{}'::text[])::" + scalar + " ELSE NULL::" + scalar + " END)"
+				cast := jsonScalarCast("("+argument+" #>> '{}'::text[])", converted.kind)
+				converted.code = "(CASE WHEN " + string(physical) + "_typeof(" + argument + ")='" + category + "' THEN " + cast + " ELSE NULL::" + scalar + " END)"
 			}
 			branchPresence = ordinaryPresence([]expression{r, converted})
 			if converted.kind == hff.NullType {

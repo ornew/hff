@@ -50,15 +50,17 @@ func TestSharedConformanceJSONBuildContracts(t *testing.T) {
 	supported["flatmap_preserves_order"] = true
 	supported["concat_preserves_order"] = true
 	supported["object_enumeration_key_order"] = true
+	supported["fold_argument_order"] = true
+	supported["map_preserves_null_and_order"] = true
+	supported["decisive_or_skips_budgeted_callback"] = true
+	supported["decisive_and_skips_budgeted_callback"] = true
 	rejected := map[string]bool{}
 	for _, name := range []string{
 		"json_preserves_float", "json_duplicate_keys_fail", "json_null_is_observable", "json_guard_stays_absent",
-		"fold_argument_order", "regex_partial_match", "invalid_regex_does_not_match_negation",
+		"regex_partial_match", "invalid_regex_does_not_match_negation",
 		"strict_base64", "duration_compound_fraction", "timestamp_utc_components", "epoch_is_truthy",
 		"zero_duration_is_falsy",
-		"map_preserves_null_and_order", "sort_mixed_numbers_and_reject_null",
-		"decisive_or_skips_budgeted_callback",
-		"decisive_and_skips_budgeted_callback",
+		"sort_mixed_numbers_and_reject_null",
 	} {
 		rejected[name] = true
 	}

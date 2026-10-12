@@ -67,7 +67,7 @@ func (b *builder) dynamicJSONComparison(n hff.Node, left, right expression, op h
 			floating = both(matches, "("+text+" ~ '[.eE]')")
 		}
 		intValue := expression{"(CASE WHEN " + integer + " THEN " + jsonScalarCast(text, hff.IntType) + " ELSE NULL END)", "TRUE", hff.IntType}
-		floatValue := expression{"(CASE WHEN " + floating + " THEN " + text + "::double precision ELSE NULL END)", "TRUE", hff.FloatType}
+		floatValue := expression{"(CASE WHEN " + floating + " THEN " + jsonScalarCast(text, hff.FloatType) + " ELSE NULL END)", "TRUE", hff.FloatType}
 		intComparison, floatComparison := compare(intValue), compare(floatValue)
 		code := "(CASE WHEN " + nullOrAbsent + " THEN FALSE WHEN " + integer + " THEN " + intComparison.code + " WHEN " + floating + " THEN " + floatComparison.code + " ELSE NULL::boolean END)"
 		return expression{code, "TRUE", hff.BoolType}, nil

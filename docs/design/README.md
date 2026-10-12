@@ -20,5 +20,6 @@ These documents explain the rationale, contracts, and tradeoffs behind HFF's lan
 | [012\. PostgreSQL JSONB Type Metadata](012-postgresql-jsonb-type-metadata.md) | Accepted | 2026\-10\-12 | \@ornew |
 | [013\. PostgreSQL Flattened Structure Presence](013-postgresql-flattened-structure-presence.md) | Accepted | 2026\-10\-12 | \@ornew |
 | [014\. PostgreSQL Relation Bindings](014-postgresql-relation-bindings.md) | Accepted | 2026\-10\-12 | \@ornew |
+| [015\. Exact PostgreSQL Float Arithmetic](015-postgresql-float-arithmetic.md) | Accepted | 2026\-10\-13 | \@ornew |
 
 Use the [record template](000-template.md) when adding a design record.

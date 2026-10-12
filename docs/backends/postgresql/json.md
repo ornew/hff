@@ -94,6 +94,54 @@ the distinction. The application must store data and metadata that satisfy
 the declared schema and remain consistent with each other. `Build` does not
 inspect rows, read the database, or validate stored documents or metadata.
 
+### Numeric arithmetic
+
+Schema-known scalar `Float` values support `+`, `-`, `*`, and `/`; mixed
+`Int`/`Float` operations promote the integer to float64. Remainder (`%`) remains
+integer-only. Arithmetic over JSON `Any` and unions also supports `+`, `-`,
+`*`, `/`, `%`, and unary negation when the runtime JSON numbers can be
+classified and represented. For example:
+
+```hff
+price*1.08>=100.0
+(payload.amount+tax):[float]:exists
+payload.amount%2=0
+-payload.amount<0
+```
+
+The dynamic form preserves an integer result for integer-only arithmetic and
+uses float64 for division or mixed numeric operands. A nonnumeric runtime value
+produces ordinary null. Integer overflow, division by zero, float overflow,
+and other non-finite float results also produce null. The right operand's HFF
+result follows ordinary left-to-right null/no-value propagation; SQL does not
+promise physical expression evaluation order or local step budgets.
+
+Float arithmetic follows IEEE 754 round-to-nearest, ties-to-even. Subnormal
+results and underflow to signed zero are retained. PostgreSQL's native float
+operators are not used as the final rounding step: operands are represented as
+exact decimal values, the operation is rounded back to binary64, and division
+uses a high-precision decimal candidate with an exact midpoint check. This
+preserves HFF results at ties, subnormal boundaries, signed zero, and overflow.
+See [design record 015](../../design/015-postgresql-float-arithmetic.md) for
+the numerical rationale and tested boundaries.
+
+Native JSON retains numeric spelling that can distinguish integer and float
+values for dynamic operations. JSONB may erase that distinction; provide the
+numeric metadata described below when a dynamic operation needs it. Metadata
+also preserves a value such as negative zero when the operation or a later
+serialization can observe its sign. Schema-known operations only require
+metadata for distinctions the stored representation has lost and the
+operation needs to recover. Arithmetic results from an `Int|Float` union
+cannot currently be passed to dynamic `json()` or `string()` serialization;
+that result representation remains unsupported.
+
+Float decoding checks the decimal spelling before the double-precision cast. A
+finite spelling below the binary64 range, such as
+`1e-400` or `-1e-9999`, becomes positive or negative zero rather than a decode
+error; dynamic truth checks treat that decoded zero as false. JSONB can discard
+the sign of zero, so use metadata when a later operation must observe that
+sign.
+
 Known-schema field access is supported for nested struct/map fields. List
 indexing accepts negative indexes from the end and integer-valued floating
 indexes. A fractional or out-of-range index produces a null result. Missing

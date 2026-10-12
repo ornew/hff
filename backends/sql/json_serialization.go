@@ -161,7 +161,7 @@ func (b *builder) serializeJSON(n hff.Node, raw string, format JSONFormat, typ h
 		case hff.IntType:
 			code = jsonScalarCast("("+raw+" #>> '{}')", hff.IntType) + "::text"
 		case hff.FloatType:
-			code = b.floatText("((" + raw + " #>> '{}')::double precision)")
+			code = b.floatText(jsonScalarCast("("+raw+" #>> '{}')", hff.FloatType))
 		case hff.BoolType:
 			code = "((" + raw + " #>> '{}')::boolean)::text"
 		case hff.StringType:
