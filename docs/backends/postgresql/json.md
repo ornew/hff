@@ -202,9 +202,42 @@ or non-list callback result produces null for the whole method; guarded
 no-value propagates as no-value. Evaluation stops at the first callback result
 that determines a whole-method result, so a later guard cannot override an
 earlier null or no-value result. This is HFF result precedence; it does not
-promise PostgreSQL's physical callback evaluation order. Callback result types
-must be determined by the schema; dynamic `Any` and ambiguous int/float unions
-remain Build errors.
+promise PostgreSQL's physical callback evaluation order.
+
+### Dynamic JSON callbacks
+
+An `Any` or union receiver can use `any()`, `all()`, `map()`, and `flatmap()`
+when its schema admits a list shape. The backend checks the runtime JSON shape
+before invoking callbacks: a no-value receiver propagates, while a null or
+non-list receiver returns ordinary null. An empty list produces false for
+`any()` and true for `all()`. Callback results for `any()` and `all()` use the
+usual HFF boolean conversion, including guarded no-value as false.
+
+```hff
+data:any(x=>x:exists)
+data:all(x=>x=true)
+data:map(x=>"fixed")=["fixed","fixed"]
+data:flatmap(x=>["fixed"])=["fixed","fixed"]
+```
+
+`map()` retains callback results in input order, including ordinary nulls;
+guarded no-value propagates to the whole method. `flatmap()` concatenates only
+list callback results, preserving outer and inner ordinal order. A null or
+non-list callback result makes the whole result ordinary null, while a reached
+guarded no-value propagates as no-value. The first callback result that
+determines a whole-method failure controls its result. These are HFF result
+semantics; PostgreSQL's physical callback evaluation order and local
+`MaxSteps`/`MaxGeneratedValues` budgets are not guaranteed.
+
+Callback outputs are normalized against their declared types before being
+retained or aggregated. A constant string result such as `map(x=>"fixed")`
+does not need numeric metadata. An operation that observes a numeric
+distinction JSONB has erased, such as an integer-versus-float type guard, or
+retains an ambiguous numeric value, requires native JSON or sufficient JSONB
+metadata. Truthiness and `exists()` do not inherently need numeric subtype
+metadata. `flatmap()` restores the callback's list candidates; an irrelevant
+scalar integer/float alternative does not by itself require metadata. As
+elsewhere, unsupported execution-budget requirements are rejected by `Build`.
 
 `foldl()` and `foldr()` use the same known-type boundary for accumulators:
 int64, bool, string, or schema-known lists. The accumulator type includes the
@@ -558,7 +591,8 @@ a source-located `hff.BackendError` from `Build`:
 - Other dynamic operations whose result cannot be resolved from schema
   candidates, a supported type guard, or a statically typed string/numeric
   index.
-- Other unsupported collection transformations.
+- Dynamic folds and collection operations whose receiver or callback result
+  representation cannot be determined from schema and available metadata.
 - `fromjson()`, conversions to bytes/timestamps/durations, float64
   serialization when JSONB has lost required numeric representation, and
   operations requiring a runtime type not fixed by the schema or metadata.

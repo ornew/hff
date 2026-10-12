@@ -58,18 +58,34 @@ func (b *builder) jsonTransform(n hff.Node, name string) (expression, error) {
 	if value.kind == hff.NullType {
 		return value, nil
 	}
-	format, ok := b.jsonValues[value.code]
-	if !ok || value.kind != hff.ListType {
-		return expression{}, b.failure(n, "list transformations require a JSON list receiver")
+	value, format, err := b.jsonCallbackReceiver(n, value)
+	if err != nil {
+		return expression{}, err
 	}
 	callback, _ := n.Child(1)
 	from, ordinal, result, err := b.jsonCallbackRows(n, value, format, callback)
 	if err != nil {
 		return expression{}, err
 	}
-	raw, _, err := b.jsonRepresentation(n, result)
+	raw, resultFormat, err := b.jsonRepresentation(n, result)
 	if err != nil {
 		return expression{}, err
+	}
+	body, _ := callback.Child(0)
+	resultType := body.Type()
+	if name == "flatmap" {
+		resultType = containsListType(resultType)
+	}
+	normalized, err := b.comparisonDocument(body, raw, resultFormat, resultType)
+	if err != nil {
+		return expression{}, err
+	}
+	if name == "flatmap" {
+		// Scalar alternatives fail the operation instead of becoming output
+		// elements. Their numeric subtypes do not need to be restored.
+		raw = "(CASE WHEN " + string(resultFormat) + "_typeof(" + raw + ")='array' THEN " + normalized + " ELSE NULL::json END)"
+	} else {
+		raw = normalized
 	}
 	rows, output := b.nextAlias(), b.nextAlias()
 	// MATERIALIZED avoids duplicating callback SQL when collecting both its

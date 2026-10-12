@@ -27,9 +27,9 @@ func (b *builder) jsonPredicate(n hff.Node, name string) (expression, error) {
 	if value.kind == hff.NullType {
 		return value, nil
 	}
-	format, ok := b.jsonValues[value.code]
-	if !ok || value.kind != hff.ListType {
-		return expression{}, b.failure(n, "collection predicates require a native JSON list")
+	value, format, err := b.jsonCallbackReceiver(n, value)
+	if err != nil {
+		return expression{}, err
 	}
 	callback, _ := n.Child(1)
 	parameters, ok := callback.Parameters()
