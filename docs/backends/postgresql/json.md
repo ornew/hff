@@ -114,6 +114,41 @@ by HFF equality, so repeated stored nulls and repeated nested composite values
 are duplicates. These operations require applicable list/object equality
 capabilities for the types actually compared.
 
+### Dynamic `size()`, `has()`, and `keys()`
+
+When the receiver is `Any` or a union that admits the relevant object/list
+signatures, these methods dispatch by the stored JSON shape:
+
+```hff
+data:size=2
+data:has("team")
+data:has(index)
+data:keys=["environment","team"]
+```
+
+`size()` returns the number of object members or list elements. `keys()`
+requires an object and returns a `List<String>` sorted by Unicode code point.
+The receiver selects `has()`'s signature: on an object it accepts a string
+key, and on a list it accepts a numeric index. Object lookup tests key
+presence even when the stored value is JSON null. List lookup accepts
+integer-valued indexes within the signed int64 range, with negative indexes
+counting from the end. An int64 index outside the list bounds returns false;
+a fractional or out-of-int64 float index returns null.
+
+A null receiver or one with no applicable object/list family produces null
+before argument evaluation, so a later no-value argument is skipped. Once the
+receiver selects a family, a reached no-value argument propagates. A runtime
+argument of the wrong family produces null. `size()` and `keys()` do not need
+numeric metadata, and dynamic object `has()` with a string key does not either.
+For list `has()`, a statically typed integer or float index works with plain
+JSONB. A dynamic numeric argument requires native JSON or JSONB metadata when
+the stored number could be an integer or float: a valid but out-of-range
+integer index is false, while an invalid float index is null, so collapsing
+the numeric representation would change the result.
+
+Dynamic `get()`, `values()`, and `items()` are not yet supported; use a
+schema-known receiver or a supported type guard before those methods.
+
 `sort()` returns a stable ascending copy. Schema-known integer and float lists
 sort numerically; strings sort by Unicode code point using PostgreSQL's `C`
 collation. Equal values retain their input order. A runtime list containing

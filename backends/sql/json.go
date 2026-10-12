@@ -352,7 +352,7 @@ func (b *builder) jsonCall(n hff.Node, name string, values []expression, format 
 			// Non-integer indices are data failures; out-of-range integer indices are false.
 			integral := "TRUE"
 			if arg.kind == hff.FloatType {
-				integral = "(" + arg.code + " = trunc(" + arg.code + "))"
+				integral = both("("+arg.code+" = trunc("+arg.code+"))", validFloatIndex(arg.code))
 			}
 			length := string(format) + "_array_length(" + r.code + ")::bigint"
 			code = "(CASE WHEN " + r.code + " IS NULL OR " + arg.code + " IS NULL OR NOT " + integral + " THEN NULL ELSE (" + arg.code + " >= -" + length + " AND " + arg.code + " < " + length + ") END)"
