@@ -14,7 +14,7 @@ import (
 // Enumerating rejections keeps backend limitations visible without accepting
 // new or regressed cases merely because Build returned an error.
 func TestSharedConformanceJSONBuildContracts(t *testing.T) {
-	supported := map[string]bool{"strict_base64": true, "regex_partial_match": true, "invalid_regex_does_not_match_negation": true}
+	supported := map[string]bool{"sort_mixed_numbers_and_reject_null": true, "strict_base64": true, "regex_partial_match": true, "invalid_regex_does_not_match_negation": true}
 	for _, name := range []string{"empty_filter", "and_before_or", "grouped_or", "implicit_truthiness", "fractional_integer_division", "overflow_is_null", "unicode_code_points", "invalid_host_input_is_rejected", "typed_composite_null_identity", "typed_composite_parent_guard", "typed_array_negative_index"} {
 		supported[name] = true
 	}
@@ -62,7 +62,6 @@ func TestSharedConformanceJSONBuildContracts(t *testing.T) {
 	for _, name := range []string{
 		"duration_compound_fraction", "timestamp_utc_components", "epoch_is_truthy",
 		"zero_duration_is_falsy",
-		"sort_mixed_numbers_and_reject_null",
 	} {
 		rejected[name] = true
 	}

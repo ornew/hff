@@ -159,7 +159,9 @@ integer or float subtype.
 The generic scalar `in()` method is supported for membership among its
 arguments. For JSON-backed lists, the backend also supports `contains()`,
 `unique()`, `sort()`, `concat(list)`, `any()`, `all()`, `map()`, and
-`flatmap()`; callbacks may use scalar `in()`. See the
+`flatmap()`; callbacks may use scalar `in()`. Dynamic `Any` or list-union
+sorting requires recoverable JSON values; JSONB needs numeric metadata when it
+has erased the int64/float64 distinction. See the
 [JSON guide](json.md) for equality capabilities and collection semantics.
 
 ### Bytes and base64
@@ -232,11 +234,13 @@ guarded access through nullable parents.
 JSON bindings support the
 schema-known access and inspection described in the [JSON guide](json.md).
 JSONB metadata supports selected numeric type
-guards and typed indexing; unguarded dynamic comparisons and methods, and
-ambiguous representations that schema and metadata cannot recover, remain
-unsupported. JSON list/object structural equality, list
-`contains()` and `unique()`, `sort()`, `concat(list)`, and `any()`/`all()` are
-available for schema-known values when their required capabilities are enabled;
+guards and typed indexing. Dynamic operations require schema candidates and
+stored representations that preserve the distinctions their semantics observe;
+operations outside that supported subset remain unsupported. JSON list/object
+structural equality, list `contains()`, `unique()`, `sort()`, `concat(list)`,
+and `any()`/`all()` are available for schema-known values when their required
+capabilities are enabled. `sort()` also supports recoverable dynamic `Any` and
+list-union values; see the JSON guide for its conditions.
 `map()` and `flatmap()` are supported when callback result types are known.
 Folds are supported for known accumulator types; see the JSON guide for their
 type and null rules. Bytes values cannot be materialized inside JSON/JSONB

@@ -56,7 +56,11 @@ func (b *builder) jsonSequence(n hff.Node, name string, values []expression, for
 	if !canonicalScalarSort(n) && !b.orderBlind[n] {
 		order = append(order, alias+".ord")
 	}
-	aggregate := "(SELECT COALESCE(" + string(format) + "_agg(" + raw + " ORDER BY " + strings.Join(order, ",") + "),'[]'::" + string(format) + ") FROM " + from + ")"
+	aggregateOrder := ""
+	if len(order) > 0 {
+		aggregateOrder = " ORDER BY " + strings.Join(order, ",")
+	}
+	aggregate := "(SELECT COALESCE(" + string(format) + "_agg(" + raw + aggregateOrder + "),'[]'::" + string(format) + ") FROM " + from + ")"
 	code := "(CASE WHEN " + r.code + " IS NULL OR " + invalid + " OR " + mixed + " THEN NULL ELSE " + aggregate + " END)"
 	b.jsonValues[code] = format
 	return expression{code, r.present, hff.ListType}, nil

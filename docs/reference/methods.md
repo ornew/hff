@@ -61,6 +61,11 @@ not materialize Bytes inside JSON/JSONB collections; see the
 [PostgreSQL bytea guide](../backends/postgresql/README.md#bytes-and-base64).
 PostgreSQL 15 and later also supports `string:matches()` for literal patterns
 in the documented [RE2 subset](../backends/postgresql/README.md#regular-expressions).
+PostgreSQL supports `list:sort()` for JSON-backed lists, including recoverable
+`Any` and list-union values; JSONB numeric subtype restoration may require
+type metadata. See the
+[JSON guide](../backends/postgresql/json.md#sort-json-backed-lists) for the
+supported profile.
 
 Invalid conversions and invalid regular expressions yield null. The HFF regex
 reference is RE2 except `\\C`, which is rejected. Base64 decoding rejects

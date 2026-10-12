@@ -25,6 +25,11 @@ objects compare by contents and numeric subtypes compare by numeric value.
 `sort()` returns a stable sorted copy and does not modify its input. Elements
 must share an orderable type; mixed integer and float values are allowed. A
 runtime list with incompatible or non-orderable members produces null.
+The PostgreSQL backend also sorts `Any` and list-union JSON values when their
+stored element representations are recoverable; JSONB may need numeric type
+metadata. See the
+[PostgreSQL JSON guide](../backends/postgresql/json.md#sort-json-backed-lists)
+for the supported subset.
 `concat(list)` returns a new list containing the receiver followed by the
 argument.
 

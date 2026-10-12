@@ -634,6 +634,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		values[i] = value
 	}
 	receiver := values[0]
+	if name == "sort" {
+		return b.jsonSort(n, receiver)
+	}
 	if name == "matches" {
 		return b.regexCall(n, "", receiver, values[1])
 	}

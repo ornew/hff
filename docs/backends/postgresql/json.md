@@ -348,14 +348,39 @@ only; it does not add support for bytes, timestamps, or durations inside
 dynamic JSON values. Plans whose selected result cannot be determined from the
 schema and available representation information remain Build errors.
 
+### Sort JSON-backed lists
+
 `sort()` returns a stable ascending copy. Schema-known integer and float lists
 sort numerically; strings sort by Unicode code point using PostgreSQL's `C`
 collation. Equal values retain their input order. A runtime list containing
 null or incompatible/non-orderable values produces null. A statically known
 type with no orderable member is rejected during compilation. A
-JSON-distinguishable union can be sorted when all runtime elements share one
-orderable family; an ambiguous int/float union remains unsupported without
-type metadata.
+dynamic `Any` or list union can also be sorted when its stored list and
+element representations are recoverable. Dynamic lists may contain all
+numbers (including mixed int64 and float64) or all strings; mixed families,
+null elements, and other non-orderable elements produce null. For JSONB, supply
+numeric type metadata when normalization has erased the int64/float64
+distinction. Sorting is stable for equal numeric values, so original order and
+numeric representations such as signed zero are retained:
+
+```hff
+data:sort=[1,2.0,3.0]
+data:sort[0]:[int]:exists
+data:sort[1]:[float]:exists
+data:sort:json="[1.0,1]"
+```
+
+For `data` containing `[2.0,1,3.0]`, the first three predicates observe the
+sorted list `[1,2.0,3.0]` and its numeric subtypes. For `data` containing
+`[1.0,1]`, the final predicate checks that equal numeric values retain input
+order when their representations are recoverable. The same query can use an
+`Any` field bound to a JSON or JSONB column. Native JSON retains JSON-native
+numeric types; JSONB needs the configured metadata when the stored values
+could be either int64 or float64. A schema-known Float type identifies the
+numeric subtype, but it cannot recover a negative-zero sign lost during JSONB
+normalization; include the Float text metadata if that sign must remain
+observable. See the [storage requirements](#storage-requirements-and-limits)
+for the sidecar format.
 
 `concat(list)` preserves left-to-right order, duplicates, and null elements.
 JSON- or JSONB-backed lists can be concatenated with schema-compatible list
