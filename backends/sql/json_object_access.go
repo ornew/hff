@@ -17,7 +17,7 @@ func (b *builder) jsonObjectAccess(n hff.Node, name string, values []expression)
 	// Inapplicable receiver families become ordinary null before arguments.
 	object := "(CASE WHEN " + string(format) + "_typeof(" + raw + ")='object' THEN " + raw + " ELSE NULL::" + string(format) + " END)"
 	normalize := func() (string, error) {
-		document, err := b.comparisonDocument(child, raw, format, jsonObjectType(child.Type()))
+		document, err := b.comparisonDocument(child, raw, format, jsonObjectType(b.jsonStoredType(child)))
 		if err != nil {
 			return "", err
 		}
@@ -48,7 +48,7 @@ func (b *builder) jsonObjectAccess(n hff.Node, name string, values []expression)
 		if constant && stringKey {
 			// A literal key's inferred result type is precise. Unused fields
 			// must not impose restoration requirements on this selected value.
-			code, err = b.comparisonDocument(n, "("+object+" -> "+key+"::text)", format, n.Type())
+			code, err = b.comparisonDocument(n, "("+object+" -> "+key+"::text)", format, b.jsonStoredType(n))
 			if err != nil {
 				return expression{}, err
 			}

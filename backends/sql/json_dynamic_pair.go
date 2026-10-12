@@ -187,7 +187,7 @@ func (b *builder) dynamicJSONPair(n hff.Node, left, right expression, op hff.Ope
 			return expression{}, b.failure(n, "dynamic comparison requires recoverable JSON representations")
 		}
 		child, _ := n.Child(i)
-		code, err := b.comparisonDocument(n, values[i].code, format, child.Type())
+		code, err := b.comparisonDocument(n, values[i].code, format, b.jsonStoredType(child))
 		if err != nil {
 			return expression{}, err
 		}

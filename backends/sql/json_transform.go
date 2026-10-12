@@ -72,7 +72,7 @@ func (b *builder) jsonTransform(n hff.Node, name string) (expression, error) {
 		return expression{}, err
 	}
 	body, _ := callback.Child(0)
-	resultType := body.Type()
+	resultType := b.jsonStoredType(body)
 	if name == "flatmap" {
 		resultType = containsListType(resultType)
 	}

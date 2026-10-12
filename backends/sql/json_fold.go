@@ -17,16 +17,20 @@ func (b *builder) jsonFold(n hff.Node, name string) (expression, error) {
 	if value.kind == hff.NullType {
 		return value, nil
 	}
-	format, ok := b.jsonValues[value.code]
-	if !ok || value.kind != hff.ListType {
-		return expression{}, b.failure(n, "fold requires a JSON list receiver")
+	value, format, err := b.jsonCallbackReceiver(n, value)
+	if err != nil {
+		return expression{}, err
 	}
 	seed, _ := n.Child(1)
 	initial, err := b.expression(seed)
 	if err != nil {
 		return expression{}, err
 	}
-	rawSeed, _, err := b.jsonRepresentation(seed, initial)
+	rawSeed, seedFormat, err := b.jsonRepresentation(seed, initial)
+	if err != nil {
+		return expression{}, err
+	}
+	rawSeed, err = b.comparisonDocument(seed, rawSeed, seedFormat, b.jsonStoredType(seed))
 	if err != nil {
 		return expression{}, err
 	}
@@ -44,11 +48,16 @@ func (b *builder) jsonFold(n hff.Node, name string) (expression, error) {
 	if err != nil {
 		return expression{}, err
 	}
-	result, steps, err := b.jsonFoldBody(callback, parameters, accumulatorIndex, previous, item, accumulatorType, receiver, seed)
+	result, steps, storedType, err := b.jsonFoldBody(callback, parameters, accumulatorIndex, previous, item, accumulatorType, receiver, seed, format)
 	if err != nil {
 		return expression{}, err
 	}
-	rawResult, _, err := b.jsonRepresentation(n, result)
+	rawResult, resultFormat, err := b.jsonRepresentation(n, result)
+	if err != nil {
+		return expression{}, err
+	}
+	body, _ := callback.Child(0)
+	rawResult, err = b.comparisonDocument(body, rawResult, resultFormat, storedType)
 	if err != nil {
 		return expression{}, err
 	}
@@ -60,7 +69,7 @@ func (b *builder) jsonFold(n hff.Node, name string) (expression, error) {
 	if len(steps) > 0 {
 		from += " CROSS JOIN LATERAL " + strings.Join(steps, " CROSS JOIN LATERAL ")
 	}
-	cte := "WITH RECURSIVE " + items + " AS MATERIALIZED (SELECT value::json AS value,ord FROM " + string(format) + "_array_elements(" + value.code + ") WITH ORDINALITY AS " + source + "(value,ord)), " + state + "(pos,acc,p) AS (SELECT 0::bigint," + rawSeed + "::json," + initial.present + " UNION ALL SELECT " + previous + ".pos+1," + rawResult + "::json," + result.present + " FROM " + from + " WHERE " + previous + ".p)"
+	cte := "WITH RECURSIVE " + items + " AS MATERIALIZED (SELECT value,ord FROM " + string(format) + "_array_elements(" + value.code + ") WITH ORDINALITY AS " + source + "(value,ord)), " + state + "(pos,acc,p) AS (SELECT 0::bigint," + rawSeed + "::json," + initial.present + " UNION ALL SELECT " + previous + ".pos+1," + rawResult + "::json," + result.present + " FROM " + from + " WHERE " + previous + ".p)"
 	// The last reached state is either the final accumulator or the first
 	// no-value failure. An empty list leaves the seed state intact.
 	b.steps = append(b.steps, "("+cte+" SELECT acc,p FROM "+state+" ORDER BY pos DESC LIMIT 1 OFFSET 0) AS "+final)
@@ -73,23 +82,16 @@ func (b *builder) jsonFold(n hff.Node, name string) (expression, error) {
 	return b.jsonDecode(n, code, JSON, resultType, present)
 }
 
-// Lists with differing element shapes have one container representation. Merge
-// those shapes for decoding only; the checked IR retains the exact union type.
+// Recursive state uses normalized JSON, retaining the exact inferred union.
+// Every seed and callback result must have a recoverable native representation.
 func (b *builder) jsonFoldType(n hff.Node, typ hff.Type) (hff.Type, error) {
-	members, err := b.jsonEqualityMembers(n, typ)
-	if err != nil {
-		return hff.Type{}, err
-	}
-	if len(members) == 0 {
-		return hff.PrimitiveType(hff.NullType), nil
-	}
-	if len(members) != 1 {
-		return hff.Type{}, b.failure(n, "fold accumulator requires one JSON-distinguishable concrete type")
-	}
-	return hff.NewUnionType(members[0], hff.PrimitiveType(hff.NullType)), nil
+	// Actual seeds and results are checked before entering recursive state.
+	// Removing null from Any can expand its static type to every HFF family;
+	// this backend's JSON-native storage contract still bounds runtime values.
+	return jsonNativeCarrierType(typ), nil
 }
 
-func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accumulatorIndex int, previous, item string, accumulatorType hff.Type, receiver, seed hff.Node) (expression, []string, error) {
+func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accumulatorIndex int, previous, item string, accumulatorType hff.Type, receiver, seed hff.Node, format JSONFormat) (expression, []string, hff.Type, error) {
 	outer := b.steps
 	outerPaths := b.sharedPaths
 	b.steps = nil
@@ -133,10 +135,10 @@ func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accu
 	for i, binding := range parameters {
 		id := binding.ID()
 		old[i], existed[i] = b.parameters[id]
-		parameter := jsonParameter{code: item + ".value", format: JSON, lossy: receiverLoss}
+		parameter := jsonParameter{code: item + ".value", format: format, lossy: receiverLoss}
 
 		if i == accumulatorIndex {
-			parameter.code, parameter.typ = previous+".acc", accumulatorType
+			parameter.code, parameter.typ, parameter.format = previous+".acc", accumulatorType, JSON
 			parameter.lossy = accumulatorLoss
 		}
 		b.parameters[id] = parameter
@@ -153,5 +155,5 @@ func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accu
 		}
 	}()
 	result, err := b.expression(body)
-	return result, b.steps, err
+	return result, b.steps, b.jsonStoredType(body), err
 }

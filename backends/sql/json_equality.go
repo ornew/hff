@@ -35,6 +35,13 @@ func (b *builder) jsonLiteral(n hff.Node) (expression, error) {
 			code = "NULL::text"
 		} else if v.kind == hff.FloatType {
 			code = b.floatText(code) + "::json"
+		} else if format, ok := b.jsonValues[code]; ok {
+			// A native JSON container must not relabel unresolved JSONB
+			// children as if their numeric spelling had been preserved.
+			code, err = b.comparisonDocument(child, code, format, b.jsonStoredType(child))
+			if err != nil {
+				return expression{}, err
+			}
 		}
 		args = append(args, code)
 	}

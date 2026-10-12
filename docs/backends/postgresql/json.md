@@ -206,18 +206,20 @@ promise PostgreSQL's physical callback evaluation order.
 
 ### Dynamic JSON callbacks
 
-An `Any` or union receiver can use `any()`, `all()`, `map()`, and `flatmap()`
-when its schema admits a list shape. The backend checks the runtime JSON shape
-before invoking callbacks: a no-value receiver propagates, while a null or
-non-list receiver returns ordinary null. An empty list produces false for
-`any()` and true for `all()`. Callback results for `any()` and `all()` use the
-usual HFF boolean conversion, including guarded no-value as false.
+An `Any` or union receiver can use `any()`, `all()`, `map()`, `flatmap()`,
+`foldl()`, and `foldr()` when its schema admits a list shape. The backend checks
+the runtime JSON shape before invoking callbacks: a no-value receiver
+propagates, while a null or non-list receiver returns ordinary null. An empty
+list produces false for `any()` and true for `all()`. Callback results for
+`any()` and `all()` use the usual HFF boolean conversion, including guarded
+no-value as false.
 
 ```hff
 data:any(x=>x:exists)
 data:all(x=>x=true)
 data:map(x=>"fixed")=["fixed","fixed"]
 data:flatmap(x=>["fixed"])=["fixed","fixed"]
+data:foldl(0,(acc,x)=>acc+1)=2
 ```
 
 `map()` retains callback results in input order, including ordinary nulls;
@@ -229,8 +231,8 @@ determines a whole-method failure controls its result. These are HFF result
 semantics; PostgreSQL's physical callback evaluation order and local
 `MaxSteps`/`MaxGeneratedValues` budgets are not guaranteed.
 
-Callback outputs are normalized against their declared types before being
-retained or aggregated. A constant string result such as `map(x=>"fixed")`
+Callback outputs are normalized against their inferred schema types before
+being retained or aggregated. A constant string result such as `map(x=>"fixed")`
 does not need numeric metadata. An operation that observes a numeric
 distinction JSONB has erased, such as an integer-versus-float type guard, or
 retains an ambiguous numeric value, requires native JSON or sufficient JSONB
@@ -239,15 +241,30 @@ metadata. `flatmap()` restores the callback's list candidates; an irrelevant
 scalar integer/float alternative does not by itself require metadata. As
 elsewhere, unsupported execution-budget requirements are rejected by `Build`.
 
-`foldl()` and `foldr()` use the same known-type boundary for accumulators:
-int64, bool, string, or schema-known lists. The accumulator type includes the
-initial value and every callback result, and the callback must type-check for
-that inferred type. Mixed distinct scalar accumulator types, dynamic `Any`, and
-ambiguous int/float unions remain Build errors. Folds visit list elements in
-ordinal order (`foldl`) or reverse ordinal order (`foldr`). An empty list returns
-the initial value, including null; a null receiver returns null. A null callback
-result becomes the next accumulator, while guarded no-value propagates to the
-whole fold.
+`foldl()` calls its callback as `(accumulator, item)` in list ordinal order;
+`foldr()` calls it as `(item, accumulator)` in reverse ordinal order. The
+accumulator type is inferred from the initial value and all callback results,
+including `Any` and scalar/list/object unions of JSON-native values. The backend
+normalizes the seed and each callback result before using it as the next
+accumulator. An empty list returns the normalized initial value, preserving
+its type; an ordinary
+null callback result becomes the next accumulator, while no-value stops the
+fold and propagates. A null or non-list receiver returns ordinary null before
+the seed or callback is evaluated.
+
+A callback that ignores an ambiguous JSONB item and returns a known type, such
+as `foldl(0,(acc,item)=>acc+1)`, does not need metadata for that item's numeric
+subtype. When a callback retains an `Any` or ambiguous value in the accumulator,
+JSONB needs metadata if its storage erased a numeric distinction the result
+depends on; normalization itself preserves the recovered value. Native JSON
+retains JSON-native types. Type guards such as `item!` and access through a
+constructor, `get()`, field, or index preserve recovered types. JSON
+constructors inside a callback also normalize their represented children
+before the result is retained, so a list or object literal does not hide a lost
+JSONB subtype.
+PostgreSQL does not provide local `MaxSteps` or `MaxGeneratedValues` enforcement
+or a guarantee about physical callback evaluation order. JSONB metadata and
+these dynamic folds do not add support for bytes, timestamps, or durations.
 
 ```hff
 profile.scores:foldl(0,(acc,score)=>acc-score)=-170
@@ -591,8 +608,8 @@ a source-located `hff.BackendError` from `Build`:
 - Other dynamic operations whose result cannot be resolved from schema
   candidates, a supported type guard, or a statically typed string/numeric
   index.
-- Dynamic folds and collection operations whose receiver or callback result
-  representation cannot be determined from schema and available metadata.
+- Dynamic folds whose seed or callback-result representations cannot be
+  determined from the schema and available JSONB metadata.
 - `fromjson()`, conversions to bytes/timestamps/durations, float64
   serialization when JSONB has lost required numeric representation, and
   operations requiring a runtime type not fixed by the schema or metadata.
