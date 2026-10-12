@@ -1,8 +1,9 @@
 package local
 
 import (
-	"github.com/ornew/hff/internal/core"
 	"math/bits"
+
+	"github.com/ornew/hff/internal/core"
 )
 
 func (e *evaluation) matchesType(v core.Value, t core.Type) (bool, error) {

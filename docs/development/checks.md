@@ -6,12 +6,13 @@ Run the repository's local verification entry point from the repository root:
 sh hack/check.sh
 ```
 
-The script requires Go 1.27.1. It runs all Go tests with the race detector and
-`go vet`, regenerates the PEGO parser and checks that the generated parser has
-no diff, runs every `examples/*/main.go` program, tests and vets the site
-module, builds the documentation site (including its local-link checks), and
-finishes with `git diff --check`. Parser generation pins PEGO to a revision;
-`PEGO_BIN` can be set to a local compatible PEGO executable.
+The script requires Go 1.27.1 and rejects Go files that `gofmt -l` reports as
+unformatted. It then runs all Go tests with the race detector and `go vet`,
+regenerates the PEGO parser and checks that the generated parser has no diff,
+runs every `examples/*/main.go` program, tests and vets the site module, builds
+the documentation site (including its local-link checks), and finishes with
+`git diff --check`. Parser generation pins PEGO to a revision; `PEGO_BIN` can
+be set to a local compatible PEGO executable.
 
 The GitHub Actions workflow in `.github/workflows/check.yml` runs the same
 script on pushes and pull requests. It uses the Go 1.27.1 toolchain and only
@@ -29,8 +30,9 @@ sh hack/check-wasm.sh
 sh hack/check-fuzz.sh
 ```
 
-`check.sh` runs native race tests and vet, verifies generated parser freshness,
-runs all examples, checks and builds the site, and checks the diff. The
+`check.sh` enforces Go formatting, runs native race tests and vet, verifies
+generated parser freshness, runs all examples, checks and builds the site, and
+checks the diff. The
 WebAssembly script runs package tests through Node's `js/wasm` executor. The
 fuzz script runs all eight bounded parser, compiler, runtime, SQL Build, and
 playground bridge fuzz targets for 15 seconds each with two workers by default.

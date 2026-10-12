@@ -1,8 +1,9 @@
 package core_test
 
 import (
-	"github.com/ornew/hff/internal/core"
 	"testing"
+
+	"github.com/ornew/hff/internal/core"
 )
 
 func TestIndexedFieldsPreserveImmutability(t *testing.T) {

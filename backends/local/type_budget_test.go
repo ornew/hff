@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ornew/hff/internal/core"
 	"testing"
+
+	"github.com/ornew/hff/internal/core"
 )
 
 func optionalWideType(n int) core.Type {

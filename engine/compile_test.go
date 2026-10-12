@@ -3,13 +3,14 @@ package engine_test
 import (
 	"context"
 	"errors"
+	"sync"
+	"testing"
+
 	"github.com/ornew/hff"
 	"github.com/ornew/hff/capabilities"
 	"github.com/ornew/hff/engine"
 	"github.com/ornew/hff/internal/conformance"
 	"github.com/ornew/hff/schema"
-	"sync"
-	"testing"
 )
 
 func compilerSchema() hff.Type {

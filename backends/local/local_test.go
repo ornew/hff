@@ -3,15 +3,16 @@ package local_test
 import (
 	"context"
 	"errors"
+	"math"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/ornew/hff"
 	"github.com/ornew/hff/backends/local"
 	"github.com/ornew/hff/capabilities"
 	"github.com/ornew/hff/engine"
 	"github.com/ornew/hff/schema"
-	"math"
-	"sync"
-	"testing"
-	"time"
 )
 
 func configured(t *testing.T) *engine.Engine {

@@ -1,9 +1,10 @@
 package local
 
 import (
-	"github.com/ornew/hff/internal/core"
 	"math"
 	"testing"
+
+	"github.com/ornew/hff/internal/core"
 )
 
 func TestNumberConversionBoundaries(t *testing.T) {

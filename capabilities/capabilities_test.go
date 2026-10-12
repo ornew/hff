@@ -1,8 +1,9 @@
 package capabilities_test
 
 import (
-	"github.com/ornew/hff/capabilities"
 	"testing"
+
+	"github.com/ornew/hff/capabilities"
 )
 
 func TestSelectionDoesNotMutateProfiles(t *testing.T) {

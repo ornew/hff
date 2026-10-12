@@ -1,9 +1,10 @@
 package schema_test
 
 import (
+	"testing"
+
 	"github.com/ornew/hff"
 	"github.com/ornew/hff/schema"
-	"testing"
 )
 
 func TestDescriptorsOwnTheirStorage(t *testing.T) {

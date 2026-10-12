@@ -2,9 +2,10 @@ package local
 
 import (
 	"context"
+	"math"
+
 	"github.com/ornew/hff/internal/core"
 	"github.com/ornew/hff/internal/plan"
-	"math"
 )
 
 // present=false is guard failure, distinct from an ordinary null value.

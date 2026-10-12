@@ -1,12 +1,13 @@
 package local
 
 import (
-	"github.com/ornew/hff/internal/core"
-	"github.com/ornew/hff/internal/plan"
 	"math"
 	"math/big"
 	"math/rand"
 	"testing"
+
+	"github.com/ornew/hff/internal/core"
+	"github.com/ornew/hff/internal/plan"
 )
 
 func TestExactMixedComparisonAgainstRational(t *testing.T) {

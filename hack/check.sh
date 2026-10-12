@@ -6,6 +6,13 @@ cd "$(dirname "$0")/.."
 export GOTOOLCHAIN=go1.27.1
 test "$(go env GOVERSION)" = go1.27.1
 
+hff_unformatted_files=$("$(go env GOROOT)/bin/gofmt" -l .)
+if [ -n "$hff_unformatted_files" ]; then
+  printf '%s\n' "$hff_unformatted_files"
+  printf '%s\n' 'Go files must be formatted with gofmt before checks can pass.' >&2
+  exit 1
+fi
+
 go test -race ./...
 go vet ./...
 sh hack/generate-parser.sh

@@ -2,11 +2,12 @@ package local
 
 import (
 	"bytes"
-	"github.com/ornew/hff/internal/core"
-	"github.com/ornew/hff/internal/plan"
 	"math"
 	"regexp"
 	"strings"
+
+	"github.com/ornew/hff/internal/core"
+	"github.com/ornew/hff/internal/plan"
 )
 
 func numeric(v core.Value) bool { return v.Kind() == core.IntKind || v.Kind() == core.FloatKind }

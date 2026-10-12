@@ -1,8 +1,9 @@
 package compiler
 
 import (
-	"github.com/ornew/hff/internal/core"
 	"testing"
+
+	"github.com/ornew/hff/internal/core"
 )
 
 func TestTypeUnionsAndAccess(t *testing.T) {
