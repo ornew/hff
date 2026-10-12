@@ -146,8 +146,39 @@ the stored number could be an integer or float: a valid but out-of-range
 integer index is false, while an invalid float index is null, so collapsing
 the numeric representation would change the result.
 
-Dynamic `get()`, `values()`, and `items()` are not yet supported; use a
-schema-known receiver or a supported type guard before those methods.
+### Dynamic object `get()`, `values()`, and `items()`
+
+An `Any` or union receiver can use these methods when its schema admits an
+object shape. `get(key)` accepts a string key; `values()` and `items()` enumerate
+the object's actual keys in Unicode code-point order, matching `keys()`. The
+values and key/value pairs use that same order:
+
+```hff
+data:get("team")="platform"
+data:values=[1,2]
+data:items=[["a",1],["b",2]]
+```
+
+The receiver is checked first. A null or inapplicable receiver returns
+ordinary null without evaluating the key. For an applicable object receiver,
+a reached no-value key propagates; an ordinary null or a key with the wrong
+runtime type produces ordinary null. `get()` returns null for both a missing
+key and a key whose stored value is JSON null; use `has()` to distinguish
+those cases. A null key does not require numeric metadata.
+
+Values selected or enumerated from a schema-known object are normalized using
+their declared field types before they are returned or aggregated. This keeps,
+for example, a JSONB field declared as float distinct from an integer even
+when its stored numeric spelling is `1`. With a constant key such as
+`data:get("price")`, only the selected field's type needs to be recoverable;
+unrelated fields do not require numeric metadata. A dynamic key can select any
+member, so its candidate field types must be recoverable wherever JSONB has
+erased a needed numeric distinction. Native JSON retains JSON-native runtime
+types for `Any`; JSONB `Any` requires metadata when a selected or enumerated
+numeric subtype must be restored. Metadata restores numeric representations
+only; it does not add support for bytes, timestamps, or durations inside
+dynamic JSON values. Plans whose selected result cannot be determined from the
+schema and available representation information remain Build errors.
 
 `sort()` returns a stable ascending copy. Schema-known integer and float lists
 sort numerically; strings sort by Unicode code point using PostgreSQL's `C`

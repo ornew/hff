@@ -614,6 +614,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		values[i] = value
 	}
 	receiver := values[0]
+	if name == "get" || name == "values" || name == "items" {
+		return b.jsonObjectAccess(n, name, values)
+	}
 	if name == "size" || name == "has" || name == "keys" {
 		for _, value := range values {
 			if value.kind == hff.AnyType {

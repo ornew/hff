@@ -295,6 +295,9 @@ func validJSONIndex(index expression) string {
 	return test
 }
 func (b *builder) jsonCall(n hff.Node, name string, values []expression, format JSONFormat) (expression, error) {
+	if name == "get" || name == "values" || name == "items" {
+		return b.jsonObjectAccess(n, name, values)
+	}
 	r := values[0]
 	present := ordinaryPresence(values)
 	if r.kind == hff.AnyType && (name == "len" || name == "startswith" || name == "endswith") {
@@ -329,17 +332,12 @@ func (b *builder) jsonCall(n hff.Node, name string, values []expression, format 
 			code = "(CASE WHEN " + r.code + " IS NULL THEN NULL ELSE (SELECT count(*) FROM " + string(format) + "_object_keys(" + r.code + ")) END)"
 		}
 		return expression{code, present, hff.IntType}, nil
-	case "keys", "values", "items":
+	case "keys":
 		if r.kind != hff.StructType && r.kind != hff.MapType {
 			return expression{}, b.failure(n, "JSON enumeration requires an object")
 		}
 		alias := b.nextAlias()
 		item := alias + ".key"
-		if name == "values" {
-			item = alias + ".value"
-		} else if name == "items" {
-			item = string(format) + "_build_array(" + alias + ".key, " + alias + ".value)"
-		}
 		code := "(CASE WHEN " + r.code + " IS NULL THEN NULL ELSE (SELECT COALESCE(" + string(format) + "_agg(" + item + " ORDER BY " + alias + ".key COLLATE \"C\"), '[]'::" + string(format) + ") FROM " + string(format) + "_each(" + r.code + ") AS " + alias + ") END)"
 		return b.jsonDecode(n, code, format, n.Type(), present)
 	case "has":
@@ -363,15 +361,6 @@ func (b *builder) jsonCall(n hff.Node, name string, values []expression, format 
 			code = "(CASE WHEN " + r.code + " IS NULL OR " + arg.code + " IS NULL THEN NULL ELSE (" + r.code + " -> " + arg.code + "::text IS NOT NULL) END)"
 		}
 		return expression{code, present, hff.BoolType}, nil
-	case "get":
-		if r.kind == hff.ListType {
-			return expression{}, b.failure(n, "JSON get requires an object")
-		}
-		arg := values[1]
-		if arg.kind != hff.StringType && arg.kind != hff.NullType {
-			return expression{}, b.failure(n, "JSON get requires a string")
-		}
-		return b.jsonDecode(n, "("+r.code+" -> "+arg.code+"::text)", format, n.Type(), present)
 	default:
 		return expression{}, b.failure(n, "JSON collection method is not yet supported: "+name)
 	}
