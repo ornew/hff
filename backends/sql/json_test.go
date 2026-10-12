@@ -267,7 +267,7 @@ func TestJSONBindingRejectsConflictingPhysicalMappings(t *testing.T) {
 
 func TestJSONUnsupportedSemanticsAreExplicitBuildErrors(t *testing.T) {
 	ctx := context.Background()
-	for _, source := range []string{`scores=[10,20.0]`, `scores:foldl(0.0,(acc,x)=>x)>0`, `scores:foldl("",(acc,x)=>x):exists`} {
+	for _, source := range []string{`scores:foldl(0.0,(acc,x)=>x)>0`, `scores:foldl("",(acc,x)=>x):exists`} {
 		p, err := jsonEngine(t).Compile(ctx, source)
 		if err != nil {
 			t.Fatal(source, err)

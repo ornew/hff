@@ -6,6 +6,62 @@ import (
 	"github.com/ornew/hff"
 )
 
+// Numeric metadata is unnecessary when the opposite schema cannot contain
+// numbers at any compared position. Keep unmatched JSONB numbers as data,
+// rather than turning them into null and accidentally matching a null needle.
+func (b *builder) comparisonDocumentAgainst(n hff.Node, raw string, format JSONFormat, typ, other hff.Type) (string, error) {
+	if format == JSONB && jsonNativeSchema(typ) && !jsonMayContainNumbers(other) {
+		return "COALESCE(" + raw + "::json,'null'::json)", nil
+	}
+	return b.comparisonDocument(n, raw, format, typ)
+}
+
+func jsonNativeSchema(typ hff.Type) bool {
+	switch typ.Kind() {
+	case hff.NullType, hff.NeverType, hff.BoolType, hff.IntType, hff.FloatType, hff.StringType, hff.AnyType:
+		return true
+	case hff.ListType, hff.MapType:
+		return jsonNativeSchema(typ.Element())
+	case hff.UnionType:
+		for _, member := range typ.Members() {
+			if !jsonNativeSchema(member) {
+				return false
+			}
+		}
+		return true
+	case hff.StructType:
+		for _, field := range typ.Fields() {
+			if !jsonNativeSchema(field.Type) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func jsonMayContainNumbers(typ hff.Type) bool {
+	switch typ.Kind() {
+	case hff.IntType, hff.FloatType, hff.AnyType:
+		return true
+	case hff.ListType, hff.MapType:
+		return jsonMayContainNumbers(typ.Element())
+	case hff.UnionType:
+		for _, member := range typ.Members() {
+			if jsonMayContainNumbers(member) {
+				return true
+			}
+		}
+	case hff.StructType:
+		for _, field := range typ.Fields() {
+			if jsonMayContainNumbers(field.Type) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // comparisonDocument normalizes schema-known numeric subtypes before a dynamic
 // tree walk. Any and ambiguous numbers require preserved JSON spelling; plain
 // JSONB cannot recover those distinctions from value magnitude.
@@ -17,7 +73,7 @@ func (b *builder) comparisonDocument(n hff.Node, raw string, format JSONFormat, 
 		if format != JSON {
 			return "", b.failure(n, "dynamic JSON equality requires preserved numeric types or type metadata")
 		}
-		return raw, nil
+		return "COALESCE(" + raw + ",'null'::json)", nil
 	}
 	members := []hff.Type{typ}
 	if typ.Kind() == hff.UnionType {
@@ -201,6 +257,6 @@ func (b *builder) dynamicJSONTreeEqual(left, right string) string {
 	lv, rv := l+".value", r+".value"
 	lc, rc := "json_typeof("+lv+")", "json_typeof("+rv+")"
 	lt, rt := "("+lv+" #>> '{}'::text[])", "("+rv+" #>> '{}'::text[])"
-	equal := "CASE WHEN " + lc + "<>" + rc + " THEN FALSE WHEN " + lc + " IN ('null','array','object') THEN TRUE WHEN " + lc + "='number' THEN " + b.dynamicJSONNumbers(lt, rt, hff.Equal) + " ELSE " + lt + " COLLATE \"C\"=" + rt + " COLLATE \"C\" END"
+	equal := "CASE WHEN " + lv + " IS NULL OR " + rv + " IS NULL THEN FALSE WHEN " + lc + "<>" + rc + " THEN FALSE WHEN " + lc + " IN ('null','array','object') THEN TRUE WHEN " + lc + "='number' THEN " + b.dynamicJSONNumbers(lt, rt, hff.Equal) + " ELSE " + lt + " COLLATE \"C\"=" + rt + " COLLATE \"C\" END"
 	return "(WITH RECURSIVE " + walk(l, left) + "," + walk(r, right) + " SELECT NOT EXISTS(SELECT 1 FROM " + l + " FULL JOIN " + r + " ON " + l + ".path COLLATE \"C\"=" + r + ".path COLLATE \"C\" WHERE " + l + ".path IS NULL OR " + r + ".path IS NULL OR NOT (" + equal + ")))"
 }

@@ -112,6 +112,17 @@ func (b *builder) jsonEqual(n hff.Node, left string, lf JSONFormat, lt hff.Type,
 }
 
 func (b *builder) jsonEqualValue(n hff.Node, left string, lf JSONFormat, lt hff.Type, right string, rf JSONFormat, rt hff.Type) (string, error) {
+	if needsDynamicJSONEquality(lt) || needsDynamicJSONEquality(rt) {
+		l, err := b.comparisonDocumentAgainst(n, left, lf, lt, rt)
+		if err != nil {
+			return "", err
+		}
+		r, err := b.comparisonDocumentAgainst(n, right, rf, rt, lt)
+		if err != nil {
+			return "", err
+		}
+		return b.dynamicJSONTreeEqual(l, r), nil
+	}
 	lmembers, err := b.jsonEqualityMembers(n, lt)
 	if err != nil {
 		return "", err
@@ -139,6 +150,42 @@ func (b *builder) jsonEqualValue(n hff.Node, left string, lf JSONFormat, lt hff.
 		}
 	}
 	return "(" + code + " ELSE FALSE END)", nil
+}
+
+// Runtime tree equality handles unconstrained values and mixed numeric unions
+// without recursively expanding an Any type into an infinite static schema.
+func needsDynamicJSONEquality(typ hff.Type) bool {
+	switch typ.Kind() {
+	case hff.AnyType:
+		return true
+	case hff.UnionType:
+		i, f := jsonNumericCandidates(typ)
+		if i && f {
+			return true
+		}
+		categories := map[string]bool{}
+		for _, member := range typ.Members() {
+			category := jsonCategory(member.Kind())
+			if category == "array" || category == "object" {
+				if categories[category] {
+					return true
+				}
+				categories[category] = true
+			}
+			if needsDynamicJSONEquality(member) {
+				return true
+			}
+		}
+	case hff.ListType, hff.MapType:
+		return needsDynamicJSONEquality(typ.Element())
+	case hff.StructType:
+		for _, field := range typ.Fields() {
+			if needsDynamicJSONEquality(field.Type) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (b *builder) jsonEqualityMembers(n hff.Node, typ hff.Type) ([]hff.Type, error) {

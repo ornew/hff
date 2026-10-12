@@ -614,6 +614,13 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		values[i] = value
 	}
 	receiver := values[0]
+	if name == "contains" {
+		for _, value := range values {
+			if value.kind == hff.AnyType {
+				return b.dynamicJSONContains(n, values)
+			}
+		}
+	}
 	if name == "json" || name == "string" {
 		return b.serialize(n, receiver, name)
 	}

@@ -144,6 +144,11 @@ func TestPostgreSQLDynamicJSONGuards(t *testing.T) {
 	supported["not_of_null_comparison"] = true
 	supported["exact_mixed_number_comparison"] = true
 	supported["structural_equality_ignores_key_order"] = true
+	supported["contains_requires_all_arguments"] = true
+	supported["unique_is_a_predicate"] = true
+	supported["flatmap_preserves_order"] = true
+	supported["concat_preserves_order"] = true
+	supported["object_enumeration_key_order"] = true
 	var script strings.Builder
 	var expected []string
 	for _, tc := range conformance.Cases() {

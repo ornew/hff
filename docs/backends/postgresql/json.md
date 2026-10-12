@@ -338,9 +338,51 @@ When reached during evaluation, a no-value receiver or argument remains
 no-value. For methods with an argument, an ordinary null receiver or a
 non-string dynamic receiver produces null and suppresses a later no-value
 argument under the normal receiver-first evaluation rule. A non-string dynamic
-argument produces null when the receiver is a string. These dynamic
-receiver/argument rules do not extend `contains()` or `concat()` to arbitrary
-JSON values.
+argument produces null when the receiver is a string. `contains()` also has
+dynamic String/List dispatch, described below; `concat()` remains a statically
+typed method.
+
+### `contains()` on dynamic strings and lists
+
+When the schema permits a string or list receiver, the backend dispatches
+`contains()` to the matching HFF signature. A schema such as
+`String|List<String>` supports both of these runtime JSON values without
+numeric type metadata:
+
+```hff
+labels:contains("platform")
+```
+
+For a string receiver, every supplied substring must occur in the string. The
+selected String signature requires each argument to evaluate to a string. A
+runtime argument of another type yields ordinary null when reached and skips
+remaining arguments. A null string argument propagates null; a no-value
+receiver or reached argument propagates no-value. For a list receiver, every
+supplied needle must be present using HFF structural equality. A null needle
+can match a stored null element when the declared element type permits null; a
+no-value needle propagates no-value.
+
+The receiver is evaluated first. If it is null or no-value, or a dynamic
+receiver has no applicable String/List family, the result is determined
+before its arguments are evaluated. Otherwise arguments are evaluated from
+left to right before containment is checked: a missing substring or element
+does not skip a later argument. If evaluating a reached argument produces
+null or no-value, that state propagates and later arguments are not evaluated.
+A null list needle is data rather than propagated null, so argument evaluation
+continues. Thus a JSON number or object used as
+`labels` yields ordinary null for the example predicate, while a null
+`labels` value also produces a non-match through ordinary predicate
+conversion.
+That number/object behavior applies to an `Any` receiver. With a declared
+`String|List<String>` receiver, an incompatible host value is rejected by
+schema/input validation rather than dynamically treated as an `Any` value.
+
+The schema determines which numeric kinds can occur in list values. A
+`List<String>` candidate needs no numeric metadata. If a dynamic list may
+contain numbers, JSONB requires metadata when normalization erases a numeric
+kind or value needed for structural membership. Local evaluation still
+requires the corresponding list/object equality capability when composite
+elements may be compared.
 
 ### Boolean methods on dynamic JSON values
 
@@ -379,6 +421,11 @@ matching `comparison:list-equality` or
 `group:structural-equality`). Explicit null tests do not require either one.
 At the top-level predicate boundary, `=` and `!=` both return false when the
 comparison result is null or no-value, following HFF predicate conversion.
+`in()` and `unique()` also compare `Any` and union elements recursively when
+their runtime representation can be recovered. JSONB metadata is needed when
+an operation must distinguish numeric kinds or values that JSONB normalization
+has erased; string-only membership over dynamic JSON does not need numeric
+metadata.
 
 For example, list membership, uniqueness, and a callback using scalar `in()`
 can be combined with structural equality:
@@ -404,8 +451,9 @@ a source-located `hff.BackendError` from `Build`:
   collection are supported as described above. JSONB needs numeric metadata
   when both integer and float candidates remain possible or an operation needs
   a numeric distinction lost during JSONB normalization.
-- Dynamic string methods other than `len()`, `startswith()`, and `endswith()`;
-  `contains()` and `concat()` are not dynamically overloaded.
+- Dynamic string methods other than `len()`, `startswith()`, `endswith()`, and
+  the String/List `contains()` overloads described above. `concat()` is not
+  dynamically overloaded.
 - Other dynamic operations whose result cannot be resolved from schema
   candidates, a supported type guard, or a statically typed string/numeric
   index.
