@@ -75,7 +75,11 @@ func (b *builder) jsonTransform(n hff.Node, name string) (expression, error) {
 	// MATERIALIZED avoids duplicating callback SQL when collecting both its
 	// values and its first failure. Evaluation order itself is not guaranteed.
 	cte := "WITH " + rows + " AS MATERIALIZED (SELECT " + ordinal + " AS ord," + raw + "::json AS value," + result.present + " AS p FROM " + from + ")"
-	aggregate := "(SELECT COALESCE(json_agg(" + rows + ".value ORDER BY " + rows + ".ord),'[]'::json) FROM " + rows + ")"
+	aggregateOrder := " ORDER BY " + rows + ".ord"
+	if name == "map" && b.orderBlind[n] {
+		aggregateOrder = ""
+	}
+	aggregate := "(SELECT COALESCE(json_agg(" + rows + ".value" + aggregateOrder + "),'[]'::json) FROM " + rows + ")"
 	failure := "(SELECT COALESCE(bool_and(" + rows + ".p),TRUE) FROM " + rows + ")"
 	valid := "TRUE"
 	if name == "flatmap" {

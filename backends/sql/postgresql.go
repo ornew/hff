@@ -30,6 +30,7 @@ type builder struct {
 	parameterItems        map[hff.BindingID]Binding
 	parameterProvenance   map[hff.BindingID]Binding
 	activeRelationAliases map[string]int
+	orderBlind            map[hff.Node]bool
 }
 
 // present tracks HFF's internal no-value separately from SQL NULL.
@@ -157,7 +158,7 @@ func (b *builder) shareablePath(n hff.Node) (string, bool) {
 		if _, exists := b.parameters[binding.ID()]; !exists {
 			return "", false
 		}
-		return fmt.Sprint("parameter:", binding.ID(), ":", pathKey(fields), ":", n.Type().Key()), true
+		return fmt.Sprint("parameter:", binding.ID(), ":", pathKey(fields), ":", n.Type().Key(), b.pathOrderClass(n)), true
 	}
 	if root.Kind() != hff.VariableNode {
 		return "", false
@@ -167,11 +168,11 @@ func (b *builder) shareablePath(n hff.Node) (string, bool) {
 		return "", false
 	}
 	if _, bound := b.bindings[pathKey(path)]; bound {
-		return "schema:" + pathKey(path) + ":" + n.Type().Key(), true
+		return "schema:" + pathKey(path) + ":" + n.Type().Key() + b.pathOrderClass(n), true
 	}
 	for size := len(path); size > 0; size-- {
 		if _, bound := b.jsonBindings[pathKey(path[:size])]; bound {
-			return "schema:" + pathKey(path) + ":" + n.Type().Key(), true
+			return "schema:" + pathKey(path) + ":" + n.Type().Key() + b.pathOrderClass(n), true
 		}
 	}
 	return "", false
@@ -701,4 +702,24 @@ func (b *builder) call(n hff.Node) (expression, error) {
 	default:
 		return expression{}, b.failure(n, "unsupported string method")
 	}
+}
+
+// Reuse an unordered materialization only within the same order-demand class.
+// Otherwise an earlier membership test could corrupt a later list index.
+func (b *builder) pathOrderClass(n hff.Node) string {
+	// Only a materialized relation path can differ across order contexts.
+	if len(b.relationBindings) == 0 && len(b.structBindings) == 0 && len(b.physicalParameters) == 0 {
+		return ""
+	}
+	if n.Type().Kind() != hff.ListType && n.Type().Kind() != hff.UnionType {
+		return ""
+	}
+	mapping, ok := b.relationMapping(n, b.physicalParameters)
+	if !ok || mapping.relation == nil || len(mapping.relation.config.order) == 0 {
+		return ""
+	}
+	if b.orderBlind[n] {
+		return ":unordered"
+	}
+	return ":ordered"
 }

@@ -31,7 +31,7 @@ func BenchmarkPostgreSQLRelationExecution(b *testing.B) {
 		for _, fanout := range []int{4, 32} {
 			b.Run(fmt.Sprintf("%dParents/%dItems", parents, fanout), func(b *testing.B) {
 				for _, query := range []struct{ name, source string }{
-					{"Any", `items:any(x=>x.price>30)`}, {"All", `items:all(x=>x.active)`},
+					{"Any", `items:any(x=>x.price>30)`}, {"MapAny", `items:map(x=>x.price):any(price=>price>30)`}, {"All", `items:all(x=>x.active)`},
 					{"Index", `items[0].price>30`}, {"Fold", `items:foldl(0,(acc,x)=>acc+x.price)>100`},
 				} {
 					b.Run(query.name, func(b *testing.B) {

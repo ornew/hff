@@ -53,7 +53,9 @@ func (b *builder) jsonSequence(n hff.Node, name string, values []expression, for
 	mixed := "(SELECT count(DISTINCT " + category + ")>1 FROM " + from + ")"
 	// Ordinality is the final key, preserving the original order of equal
 	// elements independently of the database's aggregate/sort implementation.
-	order = append(order, alias+".ord")
+	if !canonicalScalarSort(n) && !b.orderBlind[n] {
+		order = append(order, alias+".ord")
+	}
 	aggregate := "(SELECT COALESCE(" + string(format) + "_agg(" + raw + " ORDER BY " + strings.Join(order, ",") + "),'[]'::" + string(format) + ") FROM " + from + ")"
 	code := "(CASE WHEN " + r.code + " IS NULL OR " + invalid + " OR " + mixed + " THEN NULL ELSE " + aggregate + " END)"
 	b.jsonValues[code] = format
@@ -75,7 +77,11 @@ func (b *builder) jsonConcat(n hff.Node, values []expression, format JSONFormat)
 	// Converting a jsonb element to json changes its physical format only;
 	// its HFF scalar subtype remains determined by the list's schema.
 	rows := "SELECT 0 AS segment," + left + ".ord," + left + ".value::json AS value FROM " + string(format) + "_array_elements(" + r.code + ") WITH ORDINALITY AS " + left + "(value,ord) UNION ALL SELECT 1," + right + ".ord," + right + ".value::json FROM " + string(rf) + "_array_elements(" + arg.code + ") WITH ORDINALITY AS " + right + "(value,ord)"
-	code := "(CASE WHEN " + r.code + " IS NULL OR " + arg.code + " IS NULL THEN NULL ELSE (SELECT COALESCE(json_agg(" + result + ".value ORDER BY " + result + ".segment," + result + ".ord),'[]'::json) FROM (" + rows + ") AS " + result + ") END)"
+	aggregateOrder := " ORDER BY " + result + ".segment," + result + ".ord"
+	if b.orderBlind[n] {
+		aggregateOrder = ""
+	}
+	code := "(CASE WHEN " + r.code + " IS NULL OR " + arg.code + " IS NULL THEN NULL ELSE (SELECT COALESCE(json_agg(" + result + ".value" + aggregateOrder + "),'[]'::json) FROM (" + rows + ") AS " + result + ") END)"
 	b.jsonValues[code] = JSON
 	return expression{code, ordinaryPresence(values), hff.ListType}, nil
 }

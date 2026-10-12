@@ -177,7 +177,7 @@ func (b *builder) relationJSON(n hff.Node, binding Binding) (string, error) {
 		orders = append(orders, column+direction+nulls)
 	}
 	ordered := ""
-	if len(orders) > 0 {
+	if len(orders) > 0 && !b.relationOrderBlind(n, binding) {
 		ordered = " ORDER BY " + strings.Join(orders, ",")
 	}
 	rows := "(SELECT COALESCE(json_agg(" + item + ordered + "),'[]'::json) FROM " + table + " AS " + alias + " WHERE (" + c.correlation.code + "))"
@@ -188,7 +188,7 @@ func (b *builder) relationJSON(n hff.Node, binding Binding) (string, error) {
 // Guards preserve the consuming context; a changed or returned list requires
 // an order unless its consumer can be proven order-independent separately.
 func (b *builder) checkRelationOrder(n hff.Node, parent hff.Node, index int) error {
-	return b.checkRelationConsumer(n, parent, index, nil)
+	return b.checkRelationConsumer(n, parent, index, nil, false)
 }
 func (b *builder) relationMapping(n hff.Node, environment map[hff.BindingID]Binding) (Binding, bool) {
 	if n.Kind() == hff.ParameterNode {
@@ -232,12 +232,24 @@ func (b *builder) relationMapping(n hff.Node, environment map[hff.BindingID]Bind
 	}
 	return Binding{}, false
 }
-func (b *builder) checkRelationConsumer(n hff.Node, parent hff.Node, index int, environment map[hff.BindingID]Binding) error {
+func (b *builder) checkRelationConsumer(n hff.Node, parent hff.Node, index int, environment map[hff.BindingID]Binding, blind bool) error {
 	if err := checkContext(b.ctx); err != nil {
 		return err
 	}
+	binding, mapped := b.relationMapping(n, environment)
+	if orderRelevantNode(n, binding, mapped) {
+		provenBlind := blind || orderBlindConsumer(parent, index)
+		if b.orderBlind == nil {
+			b.orderBlind = make(map[hff.Node]bool)
+		}
+		if previous, seen := b.orderBlind[n]; seen {
+			b.orderBlind[n] = previous && provenBlind
+		} else {
+			b.orderBlind[n] = provenBlind
+		}
+	}
 
-	if binding, exists := b.relationMapping(n, environment); exists && observesRelationContents(parent, index) {
+	if mapped && !blind && observesRelationContents(parent, index) {
 		observed := binding
 		if method, ok := parent.Method(); ok && index == 0 && binding.relation != nil && (method.Name() == "contains" || method.Name() == "unique") {
 			observed = binding.relation.config.item
@@ -246,13 +258,17 @@ func (b *builder) checkRelationConsumer(n hff.Node, parent hff.Node, index int, 
 			return b.failure(n, "relation contents require an explicitly unique order for this operation")
 		}
 	}
-	if binding, exists := b.relationMapping(n, environment); exists && binding.relation != nil && len(binding.relation.config.order) == 0 {
+	if mapped && !blind && binding.relation != nil && len(binding.relation.config.order) == 0 {
 		consumer := parent
 		if consumer.Kind() == hff.GuardNode || consumer.Kind() == hff.TypeGuardNode {
 		} else if consumer.Kind() == hff.BoolNode || consumer.Kind() == hff.NotNode || consumer.Kind() == hff.AndNode || consumer.Kind() == hff.OrNode || consumer.Kind() == hff.NullTestNode {
 		} else if method, ok := consumer.Method(); ok && index == 0 {
 			switch method.Name() {
 			case "any", "all", "size", "has", "contains", "unique", "exists", "type":
+			case "sort":
+				if !canonicalScalarSort(consumer) {
+					return b.failure(n, "stable sort requires relation ordering when equal values can retain distinct representations")
+				}
 			default:
 				return b.failure(n, "relation requires an explicitly unique order for this operation")
 			}
@@ -287,7 +303,19 @@ func (b *builder) checkRelationConsumer(n hff.Node, parent hff.Node, index int, 
 				}
 			}
 		}
-		if err := b.checkRelationConsumer(child, consumer, argument, nested); err != nil {
+		childBlind := false
+		if n.Kind() == hff.GuardNode || n.Kind() == hff.TypeGuardNode {
+			childBlind = blind
+		}
+		if method, ok := n.Method(); ok && (blind || orderBlindConsumer(parent, index)) {
+			if (method.Name() == "map" || method.Name() == "sort") && i == 0 {
+				childBlind = true
+			}
+			if method.Name() == "concat" && listNode(n) && concatOrderBlindSafe(b, n, environment) {
+				childBlind = true
+			}
+		}
+		if err := b.checkRelationConsumer(child, consumer, argument, nested, childBlind); err != nil {
 			return err
 		}
 	}
@@ -334,7 +362,72 @@ func observesRelationContents(parent hff.Node, index int) bool {
 		switch method.Name() {
 		case "any", "all", "size", "has", "exists", "type", "map", "flatmap", "foldl", "foldr", "keys":
 			return false
+		case "sort":
+			return !canonicalScalarSort(parent)
 		}
 	}
 	return true
+}
+
+func listNode(n hff.Node) bool { kind, ok := jsonKind(n.Type()); return ok && kind == hff.ListType }
+
+// Equal int or string values are indistinguishable even in stable-sort ties.
+// Floats are excluded: signed zero and mixed numeric subtypes can be observed.
+func canonicalScalarSort(n hff.Node) bool {
+	method, ok := n.Method()
+	if !ok || method.Name() != "sort" || !listNode(n) {
+		return false
+	}
+	receiver, _ := n.Child(0)
+	element := nonnullJSONType(receiver.Type()).Element()
+	kind, ok := jsonKind(element)
+	return ok && (kind == hff.IntType || kind == hff.StringType)
+}
+func orderBlindConsumer(parent hff.Node, index int) bool {
+	switch parent.Kind() {
+	case hff.BoolNode, hff.NotNode, hff.AndNode, hff.OrNode, hff.NullTestNode:
+		return true
+	}
+	method, ok := parent.Method()
+	if !ok || index != 0 {
+		return false
+	}
+	switch method.Name() {
+	case "any", "all", "size", "has", "contains", "unique", "exists", "type":
+		return true
+	case "sort":
+		return canonicalScalarSort(parent)
+	}
+	return false
+}
+func concatOrderBlindSafe(b *builder, n hff.Node, environment map[hff.BindingID]Binding) bool {
+	for i := 0; i < n.ChildCount(); i++ {
+		child, _ := n.Child(i)
+		if mapping, ok := b.relationMapping(child, environment); ok && mapping.relation != nil && bindingHasUnorderedRelation(mapping.relation.config.item) {
+			return false
+		}
+	}
+	return true
+}
+
+// Outer sequence insensitivity says nothing about lists inside an item. When
+// materializing a whole struct, keep each nested relation's own ordering.
+func (b *builder) relationOrderBlind(n hff.Node, binding Binding) bool {
+	if !b.orderBlind[n] {
+		return false
+	}
+	observed, ok := b.relationMapping(n, b.physicalParameters)
+	return ok && observed.relation == binding.relation
+}
+
+// Scalar and ordinary object nodes do not need sequence-order annotations.
+// Avoid retaining them or traversing their types on normal query paths.
+func orderRelevantNode(n hff.Node, mapping Binding, mapped bool) bool {
+	if method, ok := n.Method(); ok {
+		switch method.Name() {
+		case "map", "concat", "sort":
+			return true
+		}
+	}
+	return mapped && mapping.relation != nil
 }

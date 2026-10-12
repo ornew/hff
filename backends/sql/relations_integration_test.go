@@ -19,10 +19,14 @@ import (
 	"github.com/ornew/hff/schema"
 )
 
-func TestPostgreSQLRelationParity(t *testing.T)       { runRelationParity(t, false, false) }
-func TestPostgreSQLNestedRelationParity(t *testing.T) { runRelationParity(t, true, false) }
-func TestPostgreSQLRelationStateParity(t *testing.T)  { runRelationParity(t, true, true) }
-func runRelationParity(t *testing.T, nested, state bool) {
+func TestPostgreSQLRelationParity(t *testing.T)       { runRelationParity(t, false, false, false) }
+func TestPostgreSQLNestedRelationParity(t *testing.T) { runRelationParity(t, true, false, false) }
+func TestPostgreSQLRelationStateParity(t *testing.T)  { runRelationParity(t, true, true, false) }
+func TestPostgreSQLUnorderedTransformParity(t *testing.T) {
+	t.Run("Present", func(t *testing.T) { runRelationParity(t, true, false, true) })
+	t.Run("Nullable", func(t *testing.T) { runRelationParity(t, true, true, true) })
+}
+func runRelationParity(t *testing.T, nested, state, unordered bool) {
 	container := os.Getenv("HFF_POSTGRES_CONTAINER")
 	if container == "" {
 		t.Fatal("integration tests require HFF_POSTGRES_CONTAINER")
@@ -34,16 +38,17 @@ func runRelationParity(t *testing.T, nested, state bool) {
 	}
 	rows := []struct{ value hff.Value }{
 		{hff.Object(map[string]hff.Value{"items": hff.List()})},
-		{hff.Object(map[string]hff.Value{"items": hff.List(item(20, hff.Bool(true), hff.String("auth")), item(5, hff.Bool(false), hff.String("dev")))})},
+		{hff.Object(map[string]hff.Value{"items": hff.List(item(20, hff.Bool(true), hff.String("auth"), hff.String("z")), item(5, hff.Bool(false), hff.String("dev")))})},
 		{hff.Object(map[string]hff.Value{"items": hff.List(item(0, hff.Null()))})},
 		{hff.Object(map[string]hff.Value{"items": hff.List(item(20, hff.Bool(true), hff.String("auth")), item(20, hff.Bool(true), hff.String("auth")))})},
 	}
+	rows = append(rows, struct{ value hff.Value }{hff.Object(map[string]hff.Value{"items": hff.List(item(20, hff.Null(), hff.String("auth")), item(5, hff.Bool(false), hff.String("dev")))})})
 	if state {
 		rows[0].value = hff.Object(map[string]hff.Value{})
 		rows[1].value = hff.Object(map[string]hff.Value{"items": hff.Null()})
 	}
 	var script strings.Builder
-	script.WriteString("CREATE TEMP TABLE hff_parents(id integer); INSERT INTO hff_parents VALUES(0),(1),(2),(3); CREATE TEMP TABLE hff_related(id bigint,parent_id integer,price bigint,active boolean,tags json); INSERT INTO hff_related VALUES(10,1,20,true,'[\"auth\"]'),(20,1,5,false,'[\"dev\"]'),(30,2,0,NULL,'[]'),(40,3,20,true,'[\"auth\"]'),(50,3,20,true,'[\"auth\"]'),(60,NULL,20,true,'[\"auth\"]'); CREATE TEMP TABLE hff_tags(item_id bigint,position bigint,value text); INSERT INTO hff_tags SELECT related.id,tag.ord,tag.value FROM hff_related AS related CROSS JOIN LATERAL json_array_elements_text(related.tags) WITH ORDINALITY AS tag(value,ord);\n")
+	script.WriteString("CREATE TEMP TABLE hff_parents(id integer); INSERT INTO hff_parents VALUES(0),(1),(2),(3),(4); CREATE TEMP TABLE hff_related(id bigint,parent_id integer,price bigint,active boolean,tags json); INSERT INTO hff_related VALUES(10,1,20,true,'[\"auth\",\"z\"]'),(20,1,5,false,'[\"dev\"]'),(30,2,0,NULL,'[]'),(40,3,20,true,'[\"auth\"]'),(50,3,20,true,'[\"auth\"]'),(60,NULL,20,true,'[\"auth\"]'),(70,4,20,NULL,'[\"auth\"]'),(80,4,5,false,'[\"dev\"]'); CREATE TEMP TABLE hff_tags(item_id bigint,position bigint,value text); INSERT INTO hff_tags SELECT related.id,tag.ord,tag.value FROM hff_related AS related CROSS JOIN LATERAL json_array_elements_text(related.tags) WITH ORDINALITY AS tag(value,ord);\n")
 
 	e := relationEngine(t)
 	if state {
@@ -55,12 +60,17 @@ func runRelationParity(t *testing.T, nested, state bool) {
 	}
 
 	var expected, descriptions []string
-	for _, source := range append(relationUnorderedQueries(), relationOrderedQueries()...) {
+	queries := append(relationUnorderedQueries(), relationOrderedQueries()...)
+	script.WriteString("CREATE TEMP TABLE reversed_related AS SELECT * FROM hff_related ORDER BY id DESC;TRUNCATE hff_related;INSERT INTO hff_related SELECT * FROM reversed_related;CREATE TEMP TABLE reversed_tags AS SELECT * FROM hff_tags ORDER BY item_id DESC,position DESC;TRUNCATE hff_tags;INSERT INTO hff_tags SELECT * FROM reversed_tags;\n")
+	if unordered {
+		queries = append(relationUnorderedQueries(), relationOrderBlindQueries()...)
+	}
+	for _, source := range queries {
 		p, err := e.Compile(ctx, source)
 		if err != nil {
 			t.Fatal(source, err)
 		}
-		query, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(relationBindingConfigured(t, true, nested, true, state)))
+		query, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(relationBindingConfigured(t, !unordered, nested, true, state)))
 		if err != nil {
 			t.Fatal(source, err)
 		}

@@ -80,6 +80,8 @@ func relationOrderedQueries() []string {
 		`items:flatmap(x=>x.tags)=["auth","dev"]`,
 		`items:foldl(0.0,(acc,x)=>{"keep":acc,"text":acc:tostring}.keep)=0.0`,
 		`items:foldr(0.0,(x,acc)=>{"keep":acc,"text":acc:tostring}.keep)=0.0`,
+		`items:map(x=>x.price):any(price=>price>10) items[0].price=20`,
+		`items:concat(items):contains({"price":20,"active":true,"tags":["auth"]}) items[-1].price=5`,
 	}
 }
 func TestRelationBuildAndOrderingContract(t *testing.T) {
@@ -198,5 +200,63 @@ func TestRelationCallbacksPreserveFloatSerializationProvenance(t *testing.T) {
 				t.Fatalf("%s: %v", source, err)
 			}
 		}
+	}
+}
+
+func relationOrderBlindQueries() []string {
+	return []string{
+		`items:map(x=>x.price):any(price=>price>10)`, `items:map(x=>x.price):all(price=>price>10)`,
+		`items:map(x=>x.price):size>=2`, `items:map(x=>x.price):has(-1)`,
+		`items:map(x=>x.price):contains(20)`, `items:map(x=>x.price):unique`,
+		`items:map(x=>x.price):sort=[5,20]`, `items:concat(items):any(x=>x.active)`,
+		`items:concat(items):size>=4`, `items!:map(x=>x.price):any(price=>price>10)`,
+		`items:map(x=>x.active!):any(v=>v)=null`, `!(items:map(x=>x.active!):any(v=>v)=null)`,
+		`items:map(x=>x.active):contains(null)`,
+		`items:map(x=>x.tags[0]):contains("auth")`,
+	}
+}
+func TestRelationOrderIndependenceThroughTransforms(t *testing.T) {
+	e := relationEngine(t)
+	for _, source := range relationOrderBlindQueries() {
+		p, err := e.Compile(context.Background(), source)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		if _, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(relationBinding(t, false))); err != nil {
+			t.Fatal(source, err)
+		}
+	}
+	for _, source := range []string{`items:map(x=>x.price)[0]=20`, `items:concat(items)[0].price=20`, `items:flatmap(x=>x.tags):any(tag=>tag="auth")`} {
+		p, err := e.Compile(context.Background(), source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(relationBinding(t, false))); err == nil {
+			t.Fatal("order-dependent or unproven transform accepted", source)
+		}
+	}
+}
+func TestUnorderedFloatStableSortRetainsOrderRequirement(t *testing.T) {
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.List("values", schema.FloatType))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	relation, err := hffsql.NewRelation(hffsql.WithRelationSource(hffsql.Column("values_table"), "value_row"), hffsql.WithCorrelation(hffsql.TrustedSQL("true")), hffsql.WithRelationItem(schema.FloatType, hffsql.Bind(hff.Path{}, hffsql.Column("value_row", "value"))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	insensitive, err := e.Compile(context.Background(), `values:sort:any(v=>v:tostring="-0.0")`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := hffsql.Build(context.Background(), insensitive, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindRelation(hff.Path{"values"}, relation))); err != nil {
+		t.Fatal(err)
+	}
+	p, err := e.Compile(context.Background(), `values:sort[0]:tostring="-0.0"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindRelation(hff.Path{"values"}, relation))); err == nil {
+		t.Fatal("signed-zero tie ordering was discarded")
 	}
 }
