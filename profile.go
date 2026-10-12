@@ -8,21 +8,27 @@ import (
 )
 
 // SupportLevel describes backend support separately from service permission.
-// Missing feature entries are unknown and must not be treated as supported.
+// An absent feature entry is unknown, not unsupported or supported. Even a
+// Supported entry is descriptive; Build remains authoritative for a concrete
+// program and configuration.
 type SupportLevel uint8
 
 const (
-	// UnknownSupport means the profile makes no claim about the feature.
+	// UnknownSupport means the profile makes no claim about the feature. Profiles
+	// express this by omitting the feature entry; NewProfile rejects an explicit
+	// UnknownSupport entry.
 	UnknownSupport SupportLevel = iota
 	// Supported means the backend declares support, subject to Build validation.
 	Supported
-	// Conditional means support requires the stated conditions.
+	// Conditional means support requires a non-empty Conditions explanation.
 	Conditional
 	// Unsupported means this backend profile declares the feature unavailable.
 	Unsupported
 )
 
-// FeatureSupport records the backend's status for one capability ID.
+// FeatureSupport records the backend's status for one capability ID. This is
+// not permission to compile that feature; the engine's capabilities policy is
+// configured separately.
 type FeatureSupport struct {
 	// ID is the capability or feature identifier being described.
 	ID capabilities.ID
@@ -32,11 +38,13 @@ type FeatureSupport struct {
 	Conditions string
 }
 
-// CompatibilityVersion names an implementation or supplied data version.
-// A missing component is unknown; profiles never infer a database's versions.
+// CompatibilityVersion names a known implementation or caller-supplied data
+// version. A missing component is unknown; a backend must not infer a database
+// version it cannot inspect.
 type CompatibilityVersion struct{ Component, Version string }
 
-// GuaranteeID names one affirmative backend guarantee.
+// GuaranteeID names one affirmative backend guarantee. Absence means only that
+// the profile does not assert the guarantee; it does not claim the opposite.
 type GuaranteeID string
 
 const (
@@ -59,8 +67,10 @@ const (
 type ProfileDetail struct{ Name, Value string }
 
 // ProfileConfig declares backend facts known to the caller or implementation.
-// NewProfile snapshots its slices and limit pointers. Nil stage limits mean
-// unknown; non-nil zero fields mean explicitly unbounded for that stage.
+// NewProfile validates and snapshots slices and limit pointers. Nil stage-limit
+// pointers mean unknown or outside the backend's responsibility; non-nil zero
+// fields mean explicitly unbounded for that stage. Capabilities is a separate
+// explicit service policy, not a backend support report.
 type ProfileConfig struct {
 	// Backend is a stable backend name, such as "local" or "postgresql".
 	Backend string
@@ -84,12 +94,24 @@ type ProfileConfig struct {
 	RuntimeLimits *Limits
 }
 
-// Profile is an immutable declaration of known backend facts. Build remains
-// authoritative for a specific program, mapping, and configuration.
+// Profile is an immutable snapshot of known backend facts and effective
+// configuration. Inspect it for compatibility reporting; Build remains
+// authoritative for a specific program, mapping, and configuration. A zero
+// Profile is invalid.
 type Profile struct{ config ProfileConfig }
 
-// NewProfile validates and snapshots a profile. Empty or duplicate entries and
-// invalid stage limits return a ConfigurationError.
+// NewProfile validates and snapshots a profile. It rejects an empty backend
+// name, invalid or duplicate entries, invalid declarations, and negative
+// limits with a ConfigurationError. Slice and limit-pointer changes made by
+// the caller after construction do not affect the Profile. For example, omit a
+// feature to leave it unknown rather than claiming support:
+//
+//	profile, err := hff.NewProfile(hff.ProfileConfig{
+//	    Backend: "local",
+//	    Features: []hff.FeatureSupport{{ID: capabilities.Access, Level: hff.Supported}},
+//	})
+//	if err != nil { return err }
+//	if access, ok := profile.Feature(capabilities.Access); ok { _ = access.Level }
 func NewProfile(config ProfileConfig) (Profile, error) {
 	fail := func(message string) (Profile, error) {
 		return Profile{}, &Error{Code: ConfigurationError, Message: message}
@@ -146,48 +168,62 @@ func NewProfile(config ProfileConfig) (Profile, error) {
 	return Profile{config: config}, nil
 }
 
-// Valid reports whether p contains a valid profile declaration.
+// Valid reports whether p contains a profile created successfully by
+// NewProfile; the zero Profile is invalid.
 func (p Profile) Valid() bool { return p.config.Backend != "" }
 
-// Backend returns the backend name, or an empty string for an invalid profile.
+// Backend returns the declared backend name, or an empty string for an invalid
+// zero Profile.
 func (p Profile) Backend() string { return p.config.Backend }
 
-// Features returns a defensive copy of known feature statuses.
+// Features returns a defensive copy of declared feature statuses. Omitted
+// feature IDs remain unknown; changing the returned slice cannot change p.
 func (p Profile) Features() []FeatureSupport {
 	return append([]FeatureSupport(nil), p.config.Features...)
 }
 
-// Versions returns a defensive copy of known version components.
+// Versions returns a defensive copy of known version components. Missing
+// components remain unknown; values are never inferred from a backend.
 func (p Profile) Versions() []CompatibilityVersion {
 	return append([]CompatibilityVersion(nil), p.config.Versions...)
 }
 
-// Guarantees returns a defensive copy of affirmative guarantees.
+// Guarantees returns a defensive copy of affirmative guarantees. An absent ID
+// is not an assertion that the backend violates it.
 func (p Profile) Guarantees() []GuaranteeID {
 	return append([]GuaranteeID(nil), p.config.Guarantees...)
 }
 
 // Details returns a defensive copy of backend-specific descriptive values.
+// Details have no built-in interpretation and grant no capability.
 func (p Profile) Details() []ProfileDetail { return append([]ProfileDetail(nil), p.config.Details...) }
 
-// Methods returns the immutable declarations of configured extensions.
-// Their presence does not enable those methods in the service's capability set.
+// Methods returns a defensive copy of configured immutable extension
+// declarations. Their presence does not enable those methods in the service's
+// capability set or prove that a particular Build registered an implementation.
 func (p Profile) Methods() []MethodDeclaration {
 	return append([]MethodDeclaration(nil), p.config.Methods...)
 }
 
 // Capabilities returns the declared service policy. Its zero value is
-// unspecified and does not mean all capabilities are allowed.
+// unspecified and does not mean all capabilities are allowed; use
+// capabilities.Set.Specified to distinguish it from an explicit empty policy.
 func (p Profile) Capabilities() capabilities.Set { return p.config.Capabilities }
 
-// CompileLimits reports query byte, syntax depth, callback depth, and compile
-// work ceilings. Other fields are not applicable.
+// CompileLimits reports query-byte, syntax-depth, callback-depth, and
+// compilation-work ceilings. The bool is false when no stage limits were
+// declared; a true result with zero applicable fields means explicitly
+// unbounded. Other stage fields are not applicable.
 func (p Profile) CompileLimits() (Limits, bool) { return profileLimits(p.config.CompileLimits) }
 
-// InputLimits reports input depth and value count ceilings.
+// InputLimits reports input depth and value-count ceilings. The bool is false
+// when no limits were declared; a true result with zero applicable fields means
+// explicitly unbounded.
 func (p Profile) InputLimits() (Limits, bool) { return profileLimits(p.config.InputLimits) }
 
-// RuntimeLimits reports evaluation steps, generated values, and JSON depth.
+// RuntimeLimits reports evaluation-step, generated-value, and JSON-depth
+// ceilings. The bool is false when no limits were declared; a true result with
+// zero applicable fields means explicitly unbounded.
 func (p Profile) RuntimeLimits() (Limits, bool) { return profileLimits(p.config.RuntimeLimits) }
 func profileLimits(limits *Limits) (Limits, bool) {
 	if limits == nil {
@@ -197,7 +233,8 @@ func profileLimits(limits *Limits) (Limits, bool) {
 }
 
 // Feature looks up a declared feature. The bool is false when the ID has no
-// entry. Unknown support is represented by an absent entry.
+// entry, which means support is unknown. When true, inspect Level and, for
+// Conditional, Conditions; the result does not replace Build validation.
 func (p Profile) Feature(id capabilities.ID) (FeatureSupport, bool) {
 	i := sort.Search(len(p.config.Features), func(i int) bool { return p.config.Features[i].ID >= id })
 	if i < len(p.config.Features) && p.config.Features[i].ID == id {
@@ -206,7 +243,9 @@ func (p Profile) Feature(id capabilities.ID) (FeatureSupport, bool) {
 	return FeatureSupport{}, false
 }
 
-// Version returns a known component version without inferring one from a backend.
+// Version returns a known component version and true when component was
+// declared. A false result means unknown; versions are not guessed from a
+// backend or database connection.
 func (p Profile) Version(component string) (string, bool) {
 	i := sort.Search(len(p.config.Versions), func(i int) bool { return p.config.Versions[i].Component >= component })
 	if i < len(p.config.Versions) && p.config.Versions[i].Component == component {
@@ -215,7 +254,9 @@ func (p Profile) Version(component string) (string, bool) {
 	return "", false
 }
 
-// HasGuarantee reports whether this profile declares the affirmative guarantee.
+// HasGuarantee reports whether this profile explicitly declares the affirmative
+// guarantee. False means no guarantee is asserted, not necessarily that the
+// backend lacks the behavior.
 func (p Profile) HasGuarantee(id GuaranteeID) bool {
 	i := sort.Search(len(p.config.Guarantees), func(i int) bool { return p.config.Guarantees[i] >= id })
 	return i < len(p.config.Guarantees) && p.config.Guarantees[i] == id

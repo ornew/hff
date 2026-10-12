@@ -1,4 +1,3 @@
-// Package capabilities defines immutable semantic permissions, independent of grammar.
 package capabilities
 
 import (
@@ -6,7 +5,9 @@ import (
 	"sort"
 )
 
-// ID is a stable capability identifier.
+// ID is a stable permission identifier used by an explicit capability Set.
+// IDs describe compile-time HFF features; they do not authorize service
+// operations or provide backend implementations.
 type ID string
 
 const (
@@ -43,7 +44,10 @@ const (
 )
 
 // Method identifies a built-in method or declared extension, for example
-// Method("string.matches"). An extension uses its declaration ID.
+// Method("string.matches") or Method("service.lookup.v1"). For an extension,
+// pass the declaration's ID suffix (without the "method:" prefix), then both
+// declare it in the Engine and explicitly Allow this ID. This grants permission
+// only; a backend implementation must be registered separately.
 func Method(name string) ID { return ID("method:" + name) }
 
 var builtins = map[ID][]ID{}
@@ -68,20 +72,27 @@ func init() {
 
 // Set is an immutable capability policy. Its zero value means unspecified;
 // select None or Standard (or derive a policy with Allow and Without) before
-// passing it to engine.New. It is a compile-time permission set, not a runtime
-// backend implementation or service authorization policy.
+// passing it to engine.New. For example, start with Standard().Without(Regex)
+// to remove both regex operators and string.matches. Set is a compile-time
+// permission policy, not a backend implementation or service authorization
+// policy.
 type Set struct {
 	specified bool
 	ids       map[ID]bool
 }
 
-// None returns an explicitly empty policy; it differs from the zero Set, which
-// is unspecified and rejected by engine.New.
+// None returns an explicitly empty policy. It differs from the zero Set, which
+// is unspecified and rejected by engine.New. Add only the permissions a
+// restricted engine should compile:
+//
+//	policy := capabilities.None().Allow(capabilities.Logical, capabilities.Access)
+//	engine.New(engine.WithSchema(schemaType), engine.WithCapabilities(policy))
 func None() Set { return Set{specified: true, ids: map[ID]bool{}} }
 
 // Standard returns the built-in policy, including structural equality and
 // built-in methods. It does not enable extension IDs; each extension needs an
-// explicit Allow(Method(id)) and a matching Engine declaration.
+// explicit Allow(Method(id)) and a matching Engine declaration. It is a
+// permission preset, not a claim that every backend implements every feature.
 func Standard() Set {
 	s := None()
 	for id := range builtins {
@@ -91,7 +102,7 @@ func Standard() Set {
 }
 
 // Specified reports whether a policy was explicitly selected rather than left
-// at the zero value.
+// at the zero value. None is specified even though it contains no IDs.
 func (s Set) Specified() bool { return s.specified }
 func expand(id ID) []ID {
 	if id == StructuralEquality {
@@ -110,8 +121,13 @@ func (s Set) clone() Set {
 	return out
 }
 
-// Allow returns a copy with the requested IDs enabled. Group aliases expand to
-// their member IDs; Check still validates dependencies.
+// Allow returns a new Set with the requested IDs enabled; s is unchanged.
+// StructuralEquality expands to ListEquality and ObjectEquality, and Regex
+// expands to RegexOperators and string.matches. Dependencies are not added
+// implicitly: for example, NestedCallbacks requires Callbacks, so enable both
+// before Check:
+//
+//	policy := capabilities.None().Allow(capabilities.Callbacks, capabilities.NestedCallbacks)
 func (s Set) Allow(ids ...ID) Set {
 	out := s.clone()
 	for _, id := range ids {
@@ -122,7 +138,9 @@ func (s Set) Allow(ids ...ID) Set {
 	return out
 }
 
-// Without returns a copy with the requested IDs removed.
+// Without returns a new Set with the requested IDs removed; s is unchanged.
+// Removing a group alias removes every member. Removing a dependency while
+// leaving a dependent permission can make Check fail.
 func (s Set) Without(ids ...ID) Set {
 	out := s.clone()
 	for _, id := range ids {
@@ -133,7 +151,9 @@ func (s Set) Without(ids ...ID) Set {
 	return out
 }
 
-// Has reports whether id, including all IDs in a group alias, is enabled.
+// Has reports whether id is enabled. For a group alias, it returns true only
+// when every expanded member ID is enabled. The zero Set therefore reports
+// false for every permission.
 func (s Set) Has(id ID) bool {
 	for _, item := range expand(id) {
 		if !s.ids[item] {
@@ -143,7 +163,8 @@ func (s Set) Has(id ID) bool {
 	return true
 }
 
-// IDs returns a copy of the enabled IDs in lexical order.
+// IDs returns a defensive copy of enabled member IDs in lexical order. Group
+// aliases are expanded, so the result lists their constituent IDs.
 func (s Set) IDs() []ID {
 	out := make([]ID, 0, len(s.ids))
 	for id := range s.ids {
@@ -153,11 +174,17 @@ func (s Set) IDs() []ID {
 	return out
 }
 
-// Check validates IDs and dependencies, without implicitly enabling permissions.
+// Check validates that the Set is specified, all enabled IDs are known built-in
+// permissions, and required dependencies are present. It never enables missing
+// permissions. Use CheckWithMethods when the policy explicitly enables declared
+// extension IDs.
 func (s Set) Check() error { return s.CheckWithMethods() }
 
-// CheckWithMethods recognizes explicitly declared extension IDs without adding
-// permissions. Unknown IDs remain configuration errors.
+// CheckWithMethods validates the Set while treating methodIDs as known
+// extension declaration IDs. It does not add permissions: an enabled
+// capabilities.Method(id) is still required. Unknown IDs, an unspecified Set,
+// or missing dependencies return an error. engine.New wraps policy errors in
+// an HFF ConfigurationError when validating Engine options.
 func (s Set) CheckWithMethods(methodIDs ...string) error {
 	extensions := make(map[ID]bool, len(methodIDs))
 	for _, id := range methodIDs {

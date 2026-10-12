@@ -23,6 +23,8 @@ or guide with each implemented feature. Update affected contracts and examples.
 - Use Go 1.27.1. Separate standard-library and external imports. Run `gofmt`
   and `go vet` before committing Go changes, along
   with relevant project checks documented under `docs/development/`.
+- Honor an explicit temporary test/build hold: do not run tests, vet,
+  benchmarks, or heavy builds until the owner releases it.
 - Treat `../pego` as a read-only reference during HFF work.
 - Put repository development scripts in `hack/`; keep `site/build.sh` as the
   dedicated documentation-site entry point. Do not edit generated output by hand.

@@ -1,8 +1,3 @@
-// Package govalue provides optional adapters from Go records to HFF values.
-// Converter uses an explicit HFF schema and explicit struct mappings;
-// NewBinding derives a schema from a static Go type. Reflection and Go-specific
-// conventions stay in this package, while engines and backends use HFF types
-// and immutable Values.
 package govalue
 
 import (

@@ -1,4 +1,3 @@
-// Package sql builds parameterized SQL predicates without opening a database.
 package sql
 
 import (

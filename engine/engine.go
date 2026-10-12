@@ -1,8 +1,3 @@
-// Package engine configures common HFF compilation and validates host records.
-// An Engine snapshots a schema, capability policy, method declarations, and
-// limits. Compile produces a reusable Program; a backend builds that Program
-// for evaluation. Validate creates an immutable Input reusable by a backend's
-// MatchInput method when the schema contracts match.
 package engine
 
 import (

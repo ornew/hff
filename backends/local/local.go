@@ -1,4 +1,3 @@
-// Package local builds pure, concurrent-safe in-process HFF filters.
 package local
 
 import (
@@ -11,10 +10,12 @@ import (
 )
 
 // Config controls per-operation validation and evaluation limits.
-// Zero limit fields select finite defaults. UnlimitedLimits is explicit.
+// Build starts with the Program limits. An explicit Limits replacement uses
+// finite defaults for zero fields; UnlimitedLimits is explicit.
 type Config struct {
 	// Limits selects validation and evaluation ceilings. Zero fields resolve to
-	// the Program's limits where available, then to finite defaults.
+	// finite defaults after an explicit replacement. Without replacement, Build
+	// starts with the Program's complete limits.
 	Limits hff.Limits
 	// UnlimitedLimits explicitly disables limits selected by this configuration.
 	UnlimitedLimits bool
@@ -27,8 +28,16 @@ type Config struct {
 // Option changes one local Build setting. Options apply left to right.
 type Option struct{ apply func(*Config) error }
 
-// WithLimits replaces local validation/evaluation limits and clears the
-// unlimited setting. It does not change the Program's compilation limits.
+// WithLimits replaces the complete local validation/evaluation Limits value
+// and clears the unlimited setting. Zero fields use DefaultLimits, not the
+// corresponding Program fields. To change one ceiling while preserving the
+// Program's other budgets, copy its limits first:
+//
+//	limits := program.Limits()
+//	limits.MaxSteps = 10000
+//	filter, err := local.Build(ctx, program, local.WithLimits(limits))
+//
+// This does not change the Program's compilation limits.
 func WithLimits(l hff.Limits) Option {
 	return Option{func(c *Config) error { c.Limits = l; c.UnlimitedLimits = false; return nil }}
 }
