@@ -72,18 +72,18 @@ func (b *builder) parseDuration(text string) string {
 	parts, columns, whole, result := b.nextAlias(), b.nextAlias(), b.nextAlias(), b.nextAlias()
 	code := `WITH RECURSIVE @parts AS MATERIALIZED (
 SELECT ltrim(split_part(m[1],'.',1),'0') AS integral,
-       rtrim(split_part(m[1],'.',2),'0') AS fraction,
+       convert_to(rtrim(split_part(m[1],'.',2),'0'),'UTF8') AS fraction,
        CASE m[3] WHEN 'h' THEN 3600000000000::numeric WHEN 'm' THEN 60000000000::numeric
        WHEN 's' THEN 1000000000::numeric WHEN 'ms' THEN 1000000::numeric
        WHEN 'us' THEN 1000::numeric ELSE 1::numeric END AS unit
 FROM regexp_matches(@safe,E'@component','g') AS matches(m)
 ), @columns(position,carry,exact) AS (
-SELECT COALESCE(max(length(fraction)),0),0::numeric,TRUE FROM @parts
+SELECT COALESCE(max(octet_length(fraction)),0),0::numeric,TRUE FROM @parts
 UNION ALL
 SELECT position-1,div(amount,10),exact AND mod(amount,10)=0
 FROM @columns CROSS JOIN LATERAL (
- SELECT carry+COALESCE(sum((CASE WHEN length(fraction)>=position
- THEN substr(fraction,position,1)::numeric ELSE 0::numeric END)*unit),0::numeric) AS amount
+ SELECT carry+COALESCE(sum((CASE WHEN position>0 AND octet_length(fraction)>=position
+ THEN (get_byte(fraction,position-1)-48)::numeric ELSE 0::numeric END)*unit),0::numeric) AS amount
  FROM @parts
 ) AS contribution WHERE position>0
 ), @whole AS (
@@ -97,6 +97,9 @@ FROM @columns CROSS JOIN @whole WHERE position=0
 SELECT CASE WHEN @safe IS NULL OR NOT exact OR overflow
  OR ns NOT BETWEEN '-9223372036854775808'::numeric AND '9223372036854775807'::numeric
 THEN NULL::bigint ELSE ns::bigint END FROM @result`
+	// Validation restricts fractional digits to ASCII, so byte offsets preserve
+	// their positions without repeatedly scanning UTF-8 text. Both byte bounds
+	// are guarded even if the planner evaluates a terminating recursive row.
 	// All recursive arithmetic is integral numeric. Carrying decimal digits
 	// avoids PostgreSQL numeric's finite fractional-scale limit while summing
 	// fractional components exactly before checking nanosecond integrality.

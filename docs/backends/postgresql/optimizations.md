@@ -144,6 +144,17 @@ validation still runs before the value is exposed. See the
 [measured parsing and validation comparison](../../optimizations/004-postgresql-json-validation-reuse.md)
 for the workload, generated-SQL tradeoffs, and sample limits.
 
+### Read duration fraction digits as bytes
+
+The duration parser validates its input grammar before processing fractional
+digits, then converts the validated ASCII fraction to UTF-8 bytes once and
+reads digits by byte offset while carrying exact decimal sums. Paired
+measurements show much lower PostgreSQL execution time for the tested long
+fractions, with increased Build size/allocation and a small regression on
+short compound inputs. The result is specific to the measured profile. See
+the [duration parser measurements](../../optimizations/012-postgresql-duration-parser.md)
+for ranges, controls, and limits.
+
 ### Reuse a restored parent for overlapping paths
 
 Within the same projection scope, a fixed descendant can reuse an unguarded
