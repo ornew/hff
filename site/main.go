@@ -146,7 +146,21 @@ func main() {
 	repo := flag.String("repo", "..", "repository root")
 	out := flag.String("out", "dist", "generated site directory")
 	serve := flag.String("serve", "", "serve after building, e.g. localhost:8080")
+	designIndex := flag.Bool("design-index", false, "write the generated Design Records introduction to stdout")
 	flag.Parse()
+	if *designIndex {
+		src, err := designIndexMarkdown(*repo)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if src == nil {
+			log.Fatal("repository has no docs/design directory")
+		}
+		if _, err := os.Stdout.Write(src); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	n, err := build(*repo, *out)
 	if err != nil {
 		log.Fatal(err)
@@ -205,6 +219,19 @@ func build(repo, out string) (int, error) {
 			return 0, err
 		}
 	}
+	designSource, err := designIndexMarkdown(repo)
+	if err != nil {
+		return 0, err
+	}
+	if designSource != nil {
+		found := false
+		for _, source := range sources {
+			found = found || source == "docs/design/README.md"
+		}
+		if !found {
+			sources = append(sources, "docs/design/README.md")
+		}
+	}
 	order := []string{
 		"README.md",
 		"spec/README.md", "spec/syntax.md", "spec/types.md", "spec/evaluation.md", "spec/methods.md", "spec/capabilities.md",
@@ -235,9 +262,13 @@ func build(repo, out string) (int, error) {
 	var pages []*page
 	bySource := map[string]*page{}
 	for _, source := range sources {
-		src, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(source)))
-		if err != nil {
-			return 0, err
+		src := designSource
+		if source != "docs/design/README.md" || src == nil {
+			var err error
+			src, err = os.ReadFile(filepath.Join(repo, filepath.FromSlash(source)))
+			if err != nil {
+				return 0, err
+			}
 		}
 		p := &page{Source: source, URL: pageURL(source), src: src, anchors: map[string]bool{}}
 		p.doc = md.Parser().Parse(text.NewReader(src))

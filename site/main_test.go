@@ -195,7 +195,7 @@ func TestGroupedNavigationAndRemovedPages(t *testing.T) {
 	if err := os.Remove(filepath.Join(repo, "spec/open-questions.md")); err != nil {
 		t.Fatal(err)
 	}
-	write(t, repo, "docs/design/001-test.md", "# 001: A Design Record\n")
+	write(t, repo, "docs/design/001-test.md", "# 001: A Design Record\n\n- **Status**: Accepted\n- **Date**: 2026-10-12\n- **Author**: @ornew\n")
 	if _, err := build(repo, out); err != nil {
 		t.Fatal(err)
 	}

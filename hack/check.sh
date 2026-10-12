@@ -17,6 +17,8 @@ go test -race ./...
 go vet ./...
 sh hack/generate-parser.sh
 git -c core.fsmonitor=false diff --exit-code -- internal/syntax/parser_gen.go
+sh hack/generate-design-index.sh
+git -c core.fsmonitor=false diff --exit-code -- docs/design/README.md
 
 for example in examples/*/main.go; do
   go run "./$(dirname "$example")"

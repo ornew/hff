@@ -9,10 +9,27 @@ sh hack/check.sh
 The script requires Go 1.27.1 and rejects Go files that `gofmt -l` reports as
 unformatted. It then runs all Go tests with the race detector and `go vet`,
 regenerates the PEGO parser and checks that the generated parser has no diff,
-runs every `examples/*/main.go` program, tests and vets the site module, builds
-the documentation site (including its local-link checks), and finishes with
-`git diff --check`. Parser generation pins PEGO to a revision; `PEGO_BIN` can
-be set to a local compatible PEGO executable.
+regenerates the Design Records introduction and checks that the generated
+Markdown has no diff, runs every `examples/*/main.go` program, tests and vets
+the site module, builds the documentation site (including its local-link
+checks), and finishes with `git diff --check`. Parser generation pins PEGO to
+a revision; `PEGO_BIN` can be set to a local compatible PEGO executable.
+
+To regenerate the complete Design Records introduction after changing a
+record, run this from the repository root:
+
+```sh
+sh hack/generate-design-index.sh
+```
+
+The generator reads each numbered record's level-one title and adjacent
+`Status`, `Author`, and `Date` metadata. It omits the `000-template.md`; see
+[site maintenance](site.md#generated-design-records-introduction) for the
+required Markdown form. Check only the generated artifact with:
+
+```sh
+git -c core.fsmonitor=false diff --exit-code -- docs/design/README.md
+```
 
 The GitHub Actions workflow in `.github/workflows/check.yml` runs the same
 script on pushes and pull requests. It uses the Go 1.27.1 toolchain and only
@@ -31,8 +48,8 @@ sh hack/check-fuzz.sh
 ```
 
 `check.sh` enforces Go formatting, runs native race tests and vet, verifies
-generated parser freshness, runs all examples, checks and builds the site, and
-checks the diff. The
+generated parser and Design Records index freshness, runs all examples, checks
+and builds the site, and checks the diff. The
 WebAssembly script runs package tests through Node's `js/wasm` executor. The
 fuzz script runs all eight bounded parser, compiler, runtime, SQL Build, and
 playground bridge fuzz targets for 15 seconds each with two workers by default.
