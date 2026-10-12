@@ -102,7 +102,10 @@ func (c *Call) active() error {
 }
 
 // Parameter binds a supported HFF scalar using the dialect's validated driver
-// encoding and returns an expression scoped to this Call.
+// encoding and returns an expression scoped to this Call. PostgreSQL accepts
+// null, bool, int, finite float, string, and bytes. Bytes are bound as immutable
+// hexadecimal text and decoded to bytea; Query.Args never exposes a mutable
+// byte slice. Strings must be valid UTF-8 without NUL.
 func (c *Call) Parameter(value hff.Value) (Expression, error) {
 	if c == nil {
 		return Expression{}, configuration("nil SQL extension Call")
@@ -320,6 +323,8 @@ func sqlType(kind hff.TypeKind) string {
 		return "double precision"
 	case hff.StringType:
 		return "text"
+	case hff.BytesType:
+		return "bytea"
 	}
 	return "text"
 }

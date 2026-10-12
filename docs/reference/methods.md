@@ -55,6 +55,11 @@ Numeric rounding preserves int64 versus float64 subtype. See
 | `bytes:len() -> number` | Byte count. |
 | `bytes:base64() -> string` | Encode standard padded base64. |
 
+The PostgreSQL backend supports scalar Bytes values backed by `bytea`, including
+`len()`, `base64()`, equality, and decoding with `string:frombase64()`. It does
+not materialize Bytes inside JSON/JSONB collections; see the
+[PostgreSQL bytea guide](../backends/postgresql/README.md#bytes-and-base64).
+
 Invalid conversions and invalid regular expressions yield null. The HFF regex
 reference is RE2 except `\\C`, which is rejected. Base64 decoding rejects
 URL-safe or unpadded forms, embedded line breaks, and non-canonical pad bits.

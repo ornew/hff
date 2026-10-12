@@ -4,6 +4,7 @@ package sql_test
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -112,6 +113,10 @@ func sqlFixtureValue(t testing.TB, value hff.Value, typ string) string {
 	t.Helper()
 	if value.Kind() == hff.NullKind {
 		return "NULL::" + typ
+	}
+	if value.Kind() == hff.BytesKind {
+		data, _ := value.AsBytes()
+		return "decode(" + sqlFixtureString(hex.EncodeToString(data)) + ",'hex')"
 	}
 	var arg any
 	switch value.Kind() {

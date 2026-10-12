@@ -62,6 +62,7 @@ func TestStructuredPredicateRejectsInvalidTypes(t *testing.T) {
 		hffsql.Equal(hffsql.ColumnValue(hffsql.Column("id"), schema.IntType), hffsql.Literal(hff.String("1"))),
 		hffsql.AsPredicate(hffsql.ColumnValue(hffsql.Column("id"), schema.IntType)),
 		hffsql.IsNull(hffsql.Scalar{}), hffsql.And(), hffsql.Or(),
+		hffsql.IsNull(hffsql.ColumnValue(hffsql.Column("data"), schema.BytesType)),
 	} {
 		binding := hffsql.BindStruct(hff.Path{"profile"}, predicate, hffsql.Boolean(false), hffsql.Bind(hff.Path{"name"}, hffsql.Column("name")))
 		if _, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(binding)); err == nil {

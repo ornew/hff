@@ -494,6 +494,13 @@ are not restored by type tags. Dynamic serialization is limited to JSON-native
 values whose numeric representation is recoverable; it does not make arbitrary
 `Any` values serializable.
 
+`string.frombase64()` is an explicit conversion for string fields and
+recoverable JSON string values. It produces a scalar Bytes expression without
+metadata. This does not make Bytes a JSON-native type: JSON collection
+construction and stored JSON/JSONB Bytes values remain unsupported. See the
+[PostgreSQL bytea support](README.md#bytes-and-base64) for the native column
+methods and null rules.
+
 Nested callbacks can capture outer callback values and schema fields, with
 lexical shadowing:
 
@@ -808,16 +815,19 @@ a source-located `hff.BackendError` from `Build`:
   when both integer and float candidates remain possible or an operation needs
   a numeric distinction lost during JSONB normalization.
 - Dynamic string methods other than `len()`, `lower()`, `upper()`, `bool()`,
-  `number()`, `fromjson()`, `startswith()`, `endswith()`,
+  `number()`, `fromjson()`, `frombase64()`, `startswith()`, `endswith()`,
   String/List `contains()`, and String/List `concat()` described above.
 - Other dynamic operations whose result cannot be resolved from schema
   candidates, a supported type guard, or a statically typed string/numeric
   index.
 - Dynamic folds whose seed or callback-result representations cannot be
   determined from the schema and available JSONB metadata.
-- Conversions to bytes/timestamps/durations, float64
-  serialization when JSONB has lost required numeric representation, and
-  operations requiring a runtime type not fixed by the schema or metadata.
+- Bytes values inside JSON arrays, objects, or callback-produced collections;
+  `frombase64()` can produce a scalar Bytes value, but the SQL JSON collection
+  representation does not materialize Bytes. Timestamp and duration
+  conversions also remain unsupported. Float64 serialization when JSONB has
+  lost required numeric representation and operations requiring a runtime
+  type not fixed by schema or metadata remain unsupported.
 
 Unsupported behavior is rejected rather than delegated to local evaluation.
 The [method reference](../../reference/methods.md) lists built-in signatures;

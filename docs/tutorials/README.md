@@ -17,8 +17,8 @@ For a quick browser experiment, try the [Playground](../playground.md).
 5. [Bind a Go record type](05-go-bindings.md): infer an HFF schema and build a
    typed local filter from an application record type.
 6. [Bind PostgreSQL data to HFF records](06-postgresql-bindings.md): map
-   related database rows to an HFF list and execute the generated predicate
-   with caller-owned SQL.
+   related database rows to an HFF list, bind native `bytea` values, and
+   execute generated predicates with caller-owned SQL.
 
 Run each complete example from the repository root:
 
@@ -29,6 +29,7 @@ go run ./examples/extensions
 go run ./examples/sql-extensions
 go run ./examples/go-binding
 go run ./examples/sql-relations
+go run ./examples/sql-bytes
 ```
 
 For feature explanations, continue with the [guides](../guides/README.md).

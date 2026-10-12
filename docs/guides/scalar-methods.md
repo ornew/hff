@@ -37,6 +37,11 @@ conversions yield null.
 value. `bytes:base64()` encodes bytes with the standard alphabet and required
 padding. URL-safe and unpadded forms, embedded CR/LF, and non-canonical pad bits
 are rejected; an invalid decode returns null. Null inputs propagate as null.
+The PostgreSQL backend supports `bytes:len()` and `bytes:base64()` for native
+`bytea` and computed Bytes values, plus `string:frombase64()` for supported
+string receivers. Its SQL profile reports that Bytes can be bound as `bytea`;
+JSON collections cannot store Bytes values. See the
+[PostgreSQL bytea guide](../backends/postgresql/README.md#bytes-and-base64).
 
 Assuming `encoded` is a string field, these predicates check the decoded byte
 length and a decode/encode round trip:

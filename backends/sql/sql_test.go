@@ -268,7 +268,7 @@ func TestRequiredNestedPathsAndUnrepresentableParents(t *testing.T) {
 func TestDeferredSQLTypesAndMethodsRejectAtBuild(t *testing.T) {
 	ctx := context.Background()
 	for _, typ := range []hff.Type{
-		schema.BytesType, schema.TimestampType, schema.DurationType, schema.ListOf(schema.IntType),
+		schema.TimestampType, schema.DurationType, schema.ListOf(schema.IntType),
 		schema.MapOf(schema.StringType), schema.Struct(schema.String("name")), schema.AnyType, schema.Union(schema.StringType, schema.IntType),
 	} {
 		e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("x", typ))), engine.WithCapabilities(capabilities.Standard()))
@@ -287,7 +287,7 @@ func TestDeferredSQLTypesAndMethodsRejectAtBuild(t *testing.T) {
 	}
 	for _, source := range []string{
 		`name:matches("A")`, `name!~"A"`,
-		`name:frombase64`, `name:timestamp`, `name:duration`,
+		`name:timestamp`, `name:duration`,
 	} {
 		_, err := hffsql.Build(ctx, compile(t, source), hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
 		detail := requireCode(t, err, hff.BackendError)

@@ -215,3 +215,95 @@ database:
 ```sh
 go run ./examples/sql-relations
 ```
+
+## Filter native `bytea` values
+
+The same scalar binding pattern maps a logical HFF `Bytes` field to a
+PostgreSQL `bytea` column. `bytes:len()` counts bytes, `bytes:base64()` encodes
+the value, and `string:frombase64()` strictly decodes standard padded base64.
+The decoded result can be compared directly with a bound `bytea` field.
+
+```sql
+CREATE TABLE binary_assets (
+    id bigint PRIMARY KEY,
+    payload bytea NOT NULL,
+    encoded text NOT NULL
+);
+
+INSERT INTO binary_assets VALUES
+    (1, decode('01020304', 'hex'), 'AQIDBA=='),
+    (2, decode('010203', 'hex'), 'AQIDBA=='),
+    (3, decode('01020304', 'hex'), 'AQIDBA');
+```
+
+Compile a filter over the stored bytes and their textual encoding:
+
+```go
+func filterBinaryAssets(db *sql.DB) ([]int64, error) {
+    ctx := context.Background()
+    e, err := engine.New(
+        engine.WithSchema(schema.Struct(
+            schema.Bytes("payload"),
+            schema.String("encoded"),
+        )),
+        engine.WithCapabilities(capabilities.Standard()),
+    )
+    if err != nil {
+        return nil, err
+    }
+
+    program, err := e.Compile(ctx,
+        `payload:len=4 payload:base64=encoded encoded:frombase64=payload`,
+    )
+    if err != nil {
+        return nil, err
+    }
+
+    query, err := hffsql.Build(ctx, program,
+        hffsql.WithDialect(hffsql.PostgreSQL),
+        hffsql.WithBindings(
+            hffsql.Bind(hff.Path{"payload"}, hffsql.Column("binary_assets", "payload")),
+            hffsql.Bind(hff.Path{"encoded"}, hffsql.Column("binary_assets", "encoded")),
+        ),
+    )
+    if err != nil {
+        return nil, err
+    }
+
+    rows, err := db.QueryContext(ctx,
+        `SELECT binary_assets.id FROM binary_assets WHERE `+query.Where(),
+        query.Args()...,
+    )
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+    var ids []int64
+    for rows.Next() {
+        var id int64
+        if err := rows.Scan(&id); err != nil {
+            return nil, err
+        }
+        ids = append(ids, id)
+    }
+    if err := rows.Err(); err != nil {
+        return nil, err
+    }
+    return ids, nil // Contains only row 1 for the sample data above.
+}
+```
+
+This function uses the imports and HFF APIs shown at the start of the tutorial;
+the caller supplies an initialized database handle. Only row 1 matches. Row 2
+has the wrong byte length, and row 3 has unpadded, invalid base64. Invalid
+decoding yields null, so it does not match the byte comparison.
+
+To build the same predicate without a database connection, run
+`go run ./examples/sql-bytes`. It prints whether predicate construction
+succeeded and how many bound parameters it produced.
+
+PostgreSQL `bytea` is the supported stored representation for HFF Bytes.
+JSON and JSONB strings can be decoded explicitly with `frombase64()`, but JSON
+collections cannot store HFF Bytes values. The backend builds a predicate and
+does not execute it or inspect table types; the application passes `Where()`
+and `Args()` to its database driver.

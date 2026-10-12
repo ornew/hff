@@ -42,6 +42,12 @@ func (b *builder) serialize(n hff.Node, value expression, name string) (expressi
 				return expression{}, b.failure(n, "JSONB cannot preserve signed zero for float serialization")
 			}
 			code = b.floatText(value.code)
+		case hff.BytesType:
+			code = postgresBase64(value.code)
+			if name == "json" {
+				code = "to_json(" + code + ")::text"
+			}
+			code = "COALESCE(" + code + ",'null')"
 		case hff.StringType:
 			code = value.code
 			if name == "json" {

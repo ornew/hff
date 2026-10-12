@@ -122,7 +122,7 @@ func (b *builder) predicateScalar(value Scalar) (expression, error) {
 		return expression{}, configuration("invalid SQL scalar type")
 	}
 	kind, ok := scalarKind(value.typ)
-	if !ok {
+	if !ok || kind == hff.BytesType {
 		return expression{}, configuration("SQL predicate requires a supported scalar type")
 	}
 	if value.column != nil {

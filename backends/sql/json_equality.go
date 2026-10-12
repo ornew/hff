@@ -29,6 +29,9 @@ func (b *builder) jsonLiteral(n hff.Node) (expression, error) {
 			}
 			args = append(args, key.code)
 		}
+		if v.kind == hff.BytesType {
+			return expression{}, b.failure(child, "PostgreSQL JSON collections do not yet preserve bytes values")
+		}
 		values = append(values, v)
 		code := v.code
 		if v.kind == hff.NullType {

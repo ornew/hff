@@ -44,6 +44,7 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 			{Name: "unicode.casing", Value: "locale-independent simple Unicode mappings are bound by the translator; database lower/upper rules are not used"},
 			{Name: "number.parsing", Value: "number() requires PostgreSQL 16+ input validation; JSON number spelling, int64 bounds, and finite binary64 results are checked"},
 			{Name: "json.parsing", Value: "fromjson requires PostgreSQL 16+ JSON validation; caller guarantees decoded JSON strings and keys contain no NUL"},
+			{Name: "bytes", Value: "native bytea and computed bytes are supported; JSON collection storage of bytes is unavailable"},
 			{Name: "regex", Value: "RE2-compatible regex translation is not supported by this implementation"},
 			{Name: "extensions.contract", Value: "translators use typed expressions and parameter binding; caller guarantees trusted SQL templates and database function behavior"},
 		},
@@ -73,7 +74,7 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 func profileSQLMethod(id string) bool {
 	switch id {
 	case "any.type", "any.json", "any.string", "any.in", "any.exists",
-		"number.round", "number.ceil", "number.floor", "bool.and", "bool.or", "bool.not", "string.bool", "string.number", "string.fromjson", "string.lower", "string.upper", "string.len", "string.contains", "string.startswith", "string.endswith", "string.concat",
+		"bytes.len", "bytes.base64", "string.frombase64", "number.round", "number.ceil", "number.floor", "bool.and", "bool.or", "bool.not", "string.bool", "string.number", "string.fromjson", "string.lower", "string.upper", "string.len", "string.contains", "string.startswith", "string.endswith", "string.concat",
 		"list.size", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr",
 		"object.size", "object.has", "object.get", "object.keys", "object.values", "object.items":
 		return true

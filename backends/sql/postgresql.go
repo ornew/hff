@@ -2,6 +2,7 @@ package sql
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"strings"
@@ -59,7 +60,7 @@ func scalarKind(typ hff.Type) (hff.TypeKind, bool) {
 		return kind, true
 	}
 	switch typ.Kind() {
-	case hff.NullType, hff.BoolType, hff.IntType, hff.FloatType, hff.StringType:
+	case hff.NullType, hff.BoolType, hff.IntType, hff.FloatType, hff.StringType, hff.BytesType:
 		return typ.Kind(), true
 	default:
 		return hff.InvalidType, false
@@ -443,6 +444,8 @@ func truth(value expression) string {
 		test = "(json_array_length(" + value.code + "::json)>0)"
 	case hff.StructType, hff.MapType:
 		test = "EXISTS(SELECT 1 FROM json_object_keys(" + value.code + "::json))"
+	case hff.BytesType:
+		test = "(octet_length(" + value.code + ")>0)"
 	case hff.StringType:
 		test = "(" + value.code + " COLLATE \"C\" <> '' COLLATE \"C\")"
 	}
@@ -485,6 +488,10 @@ func (b *builder) parameter(n hff.Node, value hff.Value) (expression, error) {
 		arg = s
 		typ = "text"
 		kind = hff.StringType
+	case hff.BytesKind:
+		bytes, _ := value.AsBytes()
+		b.args = append(b.args, hex.EncodeToString(bytes))
+		return expression{fmt.Sprintf("decode($%d::text,'hex')", len(b.args)), "TRUE", hff.BytesType}, nil
 	default:
 		return expression{}, b.failure(n, "unsupported SQL parameter type")
 	}
@@ -610,7 +617,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		return b.jsonFold(n, name)
 	}
 	switch name {
-	case "lower", "upper", "round", "ceil", "floor", "bool", "number", "fromjson", "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
+	case "base64", "frombase64", "lower", "upper", "round", "ceil", "floor", "bool", "number", "fromjson", "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
 	default:
 		return expression{}, b.failure(n, "PostgreSQL does not yet support method "+name)
 	}
@@ -624,6 +631,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		values[i] = value
 	}
 	receiver := values[0]
+	if name == "base64" || name == "frombase64" || (name == "len" && receiver.kind == hff.BytesType) {
+		return b.bytesCall(n, name, receiver)
+	}
 	if name == "round" || name == "ceil" || name == "floor" {
 		return b.numericRounding(n, name, receiver)
 	}
@@ -678,6 +688,8 @@ func (b *builder) call(n hff.Node) (expression, error) {
 			typ = "number"
 		case hff.StringType:
 			typ = "string"
+		case hff.BytesType:
+			typ = "bytes"
 		}
 		return expression{"(CASE WHEN " + receiver.code + " IS NULL THEN 'null' ELSE '" + typ + "' END)", receiver.present, hff.StringType}, nil
 	}

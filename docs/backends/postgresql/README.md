@@ -94,8 +94,8 @@ many-to-many result, provide a database view that presents the desired rows or
 bind the junction relation and a nested relation explicitly.
 
 The [binding tutorial](../../tutorials/06-postgresql-bindings.md) walks through
-a parent table and child rows. The representation-specific guides explain
-each binding's missing/null/empty rules.
+a parent table and child rows, and includes a native `bytea` example. The
+representation-specific guides explain each binding's missing/null/empty rules.
 
 In addition to scalar columns, the backend supports a schema-typed JSON/JSONB
 profile. JSONB bindings can use a separate version-1 JSON Pointer sidecar to
@@ -111,10 +111,10 @@ See [PostgreSQL translation optimizations](optimizations.md) for SQL-shape
 choices, semantic boundaries, and reproducible translation and database
 measurements.
 
-The initial builder supports nullable scalar columns whose HFF type is one of
-null, boolean, int64, finite float64, or string. Required struct parents may be
-traversed to a scalar leaf. Comparisons support homogeneous scalar types and
-mixed int64/float64 ordering without rounding the integer through float64;
+The builder supports nullable scalar columns whose HFF type is one of null,
+boolean, int64, finite float64, string, or bytes (`bytea`). Required struct
+parents may be traversed to a scalar leaf. Comparisons support homogeneous
+scalar types and mixed int64/float64 ordering without rounding the integer through float64;
 string ordering uses PostgreSQL's `C` collation. Boolean literals and operators,
 implicit AND, explicit null comparisons, numeric unary negation, postfix guards
 at scalar leaves, scalar type guards, `exists()`, and `type()` are supported.
@@ -126,8 +126,9 @@ values support `bool()` and `number()`; `number()` requires PostgreSQL 16 or
 later. They also support `fromjson()` on PostgreSQL 16 and later; see the JSON
 guide for parsing rules and its NUL precondition.
 String methods currently supported are `len()`, `lower()`, `upper()`,
-`contains()`, `startswith()`, `endswith()`, and `concat()`; boolean `not()`,
-`and()`, and `or()` are supported.
+`contains()`, `startswith()`, `endswith()`, `concat()`, and `frombase64()`;
+boolean `not()`, `and()`, and `or()` are supported.
+
 Numeric `round()`, `ceil()`, and `floor()` are supported and preserve the
 integer or float subtype.
 The generic scalar `in()` method is supported for membership among its
@@ -135,6 +136,21 @@ arguments. For JSON-backed lists, the backend also supports `contains()`,
 `unique()`, `sort()`, `concat(list)`, `any()`, `all()`, `map()`, and
 `flatmap()`; callbacks may use scalar `in()`. See the
 [JSON guide](json.md) for equality capabilities and collection semantics.
+
+### Bytes and base64
+
+For native `bytea` or computed Bytes values, `len()` counts bytes and
+`base64()` returns canonical padded base64. `frombase64()` converts a
+schema-known string or supported dynamic JSON string to Bytes; invalid or
+non-canonical input returns null. Bytes remain scalar values: JSON collection
+construction and stored JSON/JSONB Bytes representations are unsupported.
+Bytes equality is supported; empty bytes are false in boolean context,
+`type()` returns `"bytes"`, `string()` returns unquoted base64, and `json()`
+returns a JSON string containing base64.
+
+Bytes receivers and needles are not supported by `in()`.
+
+### Numeric arithmetic
 
 Integer and floating-point arithmetic follow HFF's numeric rules:
 
@@ -173,20 +189,20 @@ with that bigint value before considering the fractional part. It never converts
 the int64 operand to float64, which would lose precision near 2^53 and above.
 
 Mapped database columns must use schema-compatible PostgreSQL types: `bigint`,
-`double precision`, `boolean`, or `text`. Float values must be finite. Text must
-be valid UTF-8 without NUL. Identifier components must contain 1–63 UTF-8 bytes
+`double precision`, `boolean`, `text`, or `bytea`. Float values must be finite.
+Text must be valid UTF-8 without NUL. Identifier components must contain 1–63 UTF-8 bytes
 and no NUL; PostgreSQL identifiers that would be truncated are rejected.
 The database must use UTF-8 encoding for HFF string ordering with `C` collation
 to agree with HFF's Unicode codepoint ordering. `Build` does not inspect the
 database schema or data: the service must ensure the bound columns have the
 declared HFF types and nullability, and that stored values meet these encoding
-and finiteness constraints.
+and finiteness constraints. Bytes fields must bind to PostgreSQL `bytea`.
 
 An unsupported operation or type returns a source-located `hff.BackendError`
 from `Build`. For scalar bindings, the current subset rejects regex, collection
 operations, `Any` and non-null mixed unions, conversions outside the JSON
-guide's `bool()`, `number()`, and `fromjson()` profile, and guarded access
-through nullable parents.
+guide's `bool()`, `number()`, `fromjson()`, and `frombase64()` profile, and
+guarded access through nullable parents.
 JSON bindings support the
 schema-known access and inspection described in the [JSON guide](json.md).
 JSONB metadata supports selected numeric type
@@ -197,9 +213,10 @@ unsupported. JSON list/object structural equality, list
 available for schema-known values when their required capabilities are enabled;
 `map()` and `flatmap()` are supported when callback result types are known.
 Folds are supported for known accumulator types; see the JSON guide for their
-type and null rules. Other collection transformations and conversions to
-bytes/timestamps/durations, float64 serialization when JSONB
-has lost required numeric representation, and other unsupported types remain
+type and null rules. Bytes values cannot be materialized inside JSON/JSONB
+collections; `frombase64()` can instead produce a scalar Bytes result from a
+string. Timestamp/duration conversions, float64 serialization when JSONB has
+lost required numeric representation, and other unsupported types remain
 unsupported.
 Unsupported operations do not fall back to local evaluation.
 PostgreSQL is the only currently supported SQL dialect.
@@ -294,7 +311,9 @@ also includes the program's effective capability policy, compile limits, and
 registered SQL method declarations. Neither profile inspects the database or
 infers its version, collation, regex, or time-zone data versions. The
 PostgreSQL profile reports the Go Unicode table version used for
-locale-independent simple `lower()`/`upper()` mappings.
+locale-independent simple `lower()`/`upper()` mappings. Its `bytes` detail
+reports native `bytea` and computed Bytes support, and that JSON collection
+storage of Bytes is unavailable.
 
 ```go
 profile, err := hffsql.Profile(hffsql.PostgreSQL)
