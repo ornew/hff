@@ -125,8 +125,9 @@ numeric metadata described in that guide. String and recoverable dynamic JSON
 values support `bool()` and `number()`; `number()` requires PostgreSQL 16 or
 later. They also support `fromjson()` on PostgreSQL 16 and later; see the JSON
 guide for parsing rules and its NUL precondition.
-String methods currently supported are `len()`, `contains()`, `startswith()`,
-`endswith()`, and `concat()`; boolean `not()`, `and()`, and `or()` are supported.
+String methods currently supported are `len()`, `lower()`, `upper()`,
+`contains()`, `startswith()`, `endswith()`, and `concat()`; boolean `not()`,
+`and()`, and `or()` are supported.
 Numeric `round()`, `ceil()`, and `floor()` are supported and preserve the
 integer or float subtype.
 The generic scalar `in()` method is supported for membership among its
@@ -291,7 +292,9 @@ composite types available.
 without connecting to a database. After a successful `Build`, `query.Profile()`
 also includes the program's effective capability policy, compile limits, and
 registered SQL method declarations. Neither profile inspects the database or
-infers its version, collation, Unicode, regex, or time-zone data versions.
+infers its version, collation, regex, or time-zone data versions. The
+PostgreSQL profile reports the Go Unicode table version used for
+locale-independent simple `lower()`/`upper()` mappings.
 
 ```go
 profile, err := hffsql.Profile(hffsql.PostgreSQL)

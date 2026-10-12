@@ -315,7 +315,7 @@ func (b *builder) jsonCall(n hff.Node, name string, values []expression, format 
 	}
 	r := values[0]
 	present := ordinaryPresence(values)
-	if r.kind == hff.AnyType && (name == "len" || name == "startswith" || name == "endswith") {
+	if r.kind == hff.AnyType && (name == "lower" || name == "upper" || name == "len" || name == "startswith" || name == "endswith") {
 		return b.dynamicJSONStringCall(n, name, values)
 	}
 	if r.kind == hff.AnyType && (name == "not" || name == "and" || name == "or") {

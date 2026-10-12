@@ -610,7 +610,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		return b.jsonFold(n, name)
 	}
 	switch name {
-	case "round", "ceil", "floor", "bool", "number", "fromjson", "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
+	case "lower", "upper", "round", "ceil", "floor", "bool", "number", "fromjson", "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
 	default:
 		return expression{}, b.failure(n, "PostgreSQL does not yet support method "+name)
 	}
@@ -694,7 +694,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 	if receiver.kind == hff.BoolType {
 		return b.booleanCall(n, name, values)
 	}
-	if name == "len" || name == "startswith" || name == "endswith" {
+	if name == "lower" || name == "upper" || name == "len" || name == "startswith" || name == "endswith" {
 		for _, value := range values {
 			if value.kind == hff.AnyType {
 				return b.dynamicJSONStringCall(n, name, values)

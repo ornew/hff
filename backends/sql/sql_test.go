@@ -219,7 +219,7 @@ func TestIdentifiersAndLiteralPaths(t *testing.T) {
 }
 
 func TestUnsupportedSQLHasSourceLocation(t *testing.T) {
-	for _, source := range []string{`name~"a"`, `name:lower="a"`, `name:upper="A"`, `name="\u0000"`} {
+	for _, source := range []string{`name~"a"`, `name="\u0000"`} {
 		p := compile(t, source)
 		_, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
 		detail := requireCode(t, err, hff.BackendError)

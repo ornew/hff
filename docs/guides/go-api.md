@@ -240,8 +240,10 @@ Backend feature support is a separate statement and does not grant permission.
 Registered method declarations in `Methods()` likewise do not enable those
 methods.
 
-Profiles do not infer database, collation, Unicode, regex, or time-zone data
-versions from ambient state. A missing version is unknown. Guarantees list only
+Profiles do not infer database, collation, regex, or time-zone data versions
+from ambient state. A backend may report a separately versioned data table,
+such as the Go Unicode tables used for PostgreSQL case conversion. A missing
+version is unknown. Guarantees list only
 behavior the backend reports; absence is not a promise. In particular, a SQL
 profile does not claim that PostgreSQL enforces local evaluation budgets or
 HFF evaluation order. `Build` remains authoritative for a specific program,

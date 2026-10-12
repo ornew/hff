@@ -3,6 +3,7 @@ package sql_test
 import (
 	"context"
 	"testing"
+	"unicode"
 
 	"github.com/ornew/hff"
 	hffsql "github.com/ornew/hff/backends/sql"
@@ -16,8 +17,11 @@ func TestSQLProfilesDoNotInventDatabaseGuarantees(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !base.Valid() || len(base.Versions()) != 0 || len(base.Guarantees()) != 0 || base.Capabilities().Specified() {
+	if !base.Valid() || len(base.Versions()) != 1 || len(base.Guarantees()) != 0 || base.Capabilities().Specified() {
 		t.Fatal("static translation profile fabricated database state or policy")
+	}
+	if version := base.Versions()[0]; version.Component != "unicode" || version.Version != unicode.Version {
+		t.Fatal("translator Unicode compatibility version missing")
 	}
 	for _, id := range capabilities.Standard().IDs() {
 		if _, known := base.Feature(id); !known {

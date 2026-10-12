@@ -2,14 +2,15 @@ package sql
 
 import (
 	"strings"
+	"unicode"
 
 	"github.com/ornew/hff"
 	"github.com/ornew/hff/capabilities"
 )
 
 // Profile describes statically known translation support for a dialect without
-// connecting to a database. Runtime database, collation, Unicode, regex, and
-// time-zone versions remain unknown.
+// connecting to a database. Unicode casing uses the reported Go table version;
+// database, collation, regex, and time-zone versions remain unknown.
 func Profile(dialect Dialect) (hff.Profile, error) {
 	config, err := sqlProfileConfig(dialect)
 	if err != nil {
@@ -33,12 +34,14 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 		return hff.ProfileConfig{}, configuration("explicit supported SQL dialect required")
 	}
 	config := hff.ProfileConfig{
-		Backend: "sql/postgresql",
+		Backend:  "sql/postgresql",
+		Versions: []hff.CompatibilityVersion{{Component: "unicode", Version: unicode.Version}},
 		Details: []hff.ProfileDetail{
 			{Name: "execution", Value: "caller owns database execution, input/schema validity, and database timeout configuration"},
 			{Name: "limits", Value: "translation cannot enforce HFF step, generated-value, or JSON-depth budgets in the database"},
 			{Name: "evaluation.order", Value: "SQL preserves supported expression results; database planning may reorder work and does not guarantee HFF evaluation steps"},
 			{Name: "bindings", Value: "explicit scalar, JSON/JSONB, composite, flattened struct, or relation bindings; version-1 JSONB numeric metadata supplements schema; caller guarantees stored metadata consistency; unrecoverable representations are rejected"},
+			{Name: "unicode.casing", Value: "locale-independent simple Unicode mappings are bound by the translator; database lower/upper rules are not used"},
 			{Name: "number.parsing", Value: "number() requires PostgreSQL 16+ input validation; JSON number spelling, int64 bounds, and finite binary64 results are checked"},
 			{Name: "json.parsing", Value: "fromjson requires PostgreSQL 16+ JSON validation; caller guarantees decoded JSON strings and keys contain no NUL"},
 			{Name: "regex", Value: "RE2-compatible regex translation is not supported by this implementation"},
@@ -70,7 +73,7 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 func profileSQLMethod(id string) bool {
 	switch id {
 	case "any.type", "any.json", "any.string", "any.in", "any.exists",
-		"number.round", "number.ceil", "number.floor", "bool.and", "bool.or", "bool.not", "string.bool", "string.number", "string.fromjson", "string.len", "string.contains", "string.startswith", "string.endswith", "string.concat",
+		"number.round", "number.ceil", "number.floor", "bool.and", "bool.or", "bool.not", "string.bool", "string.number", "string.fromjson", "string.lower", "string.upper", "string.len", "string.contains", "string.startswith", "string.endswith", "string.concat",
 		"list.size", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr",
 		"object.size", "object.has", "object.get", "object.keys", "object.values", "object.items":
 		return true

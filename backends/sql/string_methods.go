@@ -19,6 +19,20 @@ func (b *builder) stringCall(n hff.Node, name string, values []expression) (expr
 	}
 	code := receiver.code
 	switch name {
+	case "lower", "upper":
+		from, to := simpleLower.from, simpleLower.to
+		if name == "upper" {
+			from, to = simpleUpper.from, simpleUpper.to
+		}
+		f, err := b.parameter(n, hff.String(from))
+		if err != nil {
+			return expression{}, err
+		}
+		t, err := b.parameter(n, hff.String(to))
+		if err != nil {
+			return expression{}, err
+		}
+		return expression{"translate(" + code + ", " + f.code + ", " + t.code + ")", present, hff.StringType}, nil
 	case "len":
 		return expression{"char_length(" + code + ")::bigint", present, hff.IntType}, nil
 	case "concat":

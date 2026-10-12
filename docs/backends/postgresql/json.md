@@ -153,6 +153,28 @@ metadata rules above. `number()` requires PostgreSQL 16 or later for
 backend was tested with PostgreSQL 18.6. See the
 [PostgreSQL 16 input-validation functions](https://www.postgresql.org/docs/16/functions-info.html).
 
+### Unicode `lower()` and `upper()`
+
+`lower()` and `upper()` use locale-independent Unicode simple mappings. They
+do not normalize text or apply multi-code-point case expansions, so other
+characters remain unchanged when no simple mapping exists. A null or
+non-String dynamic receiver returns ordinary null; no-value propagates. This
+applies to bound SQL strings and recoverable runtime JSON strings; the
+translator uses the Go Unicode tables reported by the PostgreSQL compatibility
+profile rather than PostgreSQL's locale-sensitive casing rules. For example:
+
+```hff
+name:lower="alice"
+name:upper="ALICE"
+payload.name:lower="alice"
+```
+
+Values must still satisfy the backend's UTF-8 text constraint and contain no
+NUL. A dynamic JSONB callback that materializes a list of `Any` values may
+require numeric metadata to recover possible numeric elements even when the
+callback applies `lower()` and returns strings. A direct `lower()` call on a
+recoverable JSON string does not require that metadata.
+
 ### Numeric arithmetic
 
 Schema-known scalar `Float` values support `+`, `-`, `*`, and `/`; mixed
@@ -751,7 +773,8 @@ a source-located `hff.BackendError` from `Build`:
   collection are supported as described above. JSONB needs numeric metadata
   when both integer and float candidates remain possible or an operation needs
   a numeric distinction lost during JSONB normalization.
-- Dynamic string methods other than `len()`, `startswith()`, `endswith()`,
+- Dynamic string methods other than `len()`, `lower()`, `upper()`, `bool()`,
+  `number()`, `fromjson()`, `startswith()`, `endswith()`,
   String/List `contains()`, and String/List `concat()` described above.
 - Other dynamic operations whose result cannot be resolved from schema
   candidates, a supported type guard, or a statically typed string/numeric
