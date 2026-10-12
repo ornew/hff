@@ -12,6 +12,7 @@ for rationale. Query semantics remain defined by the
 |:--|:--|
 | `github.com/ornew/hff` | Immutable values, types, limits, errors, and compiled-plan inspection. |
 | `github.com/ornew/hff/schema` | Struct, map, and primitive schema constructors. |
+| `github.com/ornew/hff/adapters/govalue` | Optional schema-checked conversion from Go values. |
 | `github.com/ornew/hff/capabilities` | Standard and custom capability sets. |
 | `github.com/ornew/hff/engine` | Engine configuration, validation, and query compilation. |
 | `github.com/ornew/hff/backends/local` | Reusable local filters and matching. |
@@ -66,6 +67,11 @@ The `schema` package provides constructors such as `schema.String`,
 such as `Kind`, `AsString`, `AsInt`, `Lookup`, `At`, and `Equal` to inspect
 them. `Input.Value()` returns the validated immutable value and
 `Input.Compatible(type)` checks exact schema compatibility.
+
+For optional reflection-based Go-to-HFF conversion, use
+[`adapters/govalue`](../guides/go-values.md). It requires an explicit HFF
+schema and explicit mappings for Go structs; it does not replace the explicit
+`Value` API or infer schema from Go types.
 
 ## Build and run a local filter
 
