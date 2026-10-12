@@ -34,8 +34,9 @@ sh site/build.sh -serve localhost:8080
 
 The wrapper uses the repository's pinned Nanosite revision and configuration.
 The second command builds, then serves the generated site. Stop it with
-Ctrl-C. Re-run the command after editing Markdown; the server does not
-automatically rebuild.
+Ctrl-C. The server does not watch source files: after editing Markdown, stop
+the server, rerun the command to rebuild and serve, then reload the page in the
+browser.
 
 The output defaults to `site/dist/`. It is generated and ignored by Git. Open
 `site/dist/index.html` directly or serve the directory with any static server.
