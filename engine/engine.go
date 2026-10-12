@@ -1,4 +1,8 @@
 // Package engine configures common HFF compilation and validates host records.
+// An Engine snapshots a schema, capability policy, method declarations, and
+// limits. Compile produces a reusable Program; a backend builds that Program
+// for evaluation. Validate creates an immutable Input reusable by a backend's
+// MatchInput method when the schema contracts match.
 package engine
 
 import (
@@ -10,31 +14,52 @@ import (
 	"github.com/ornew/hff/internal/core"
 )
 
+// Config is the complete configuration accepted by WithConfig. New validates
+// and snapshots the schema, declarations, capabilities, and limits. A valid
+// struct or map root schema and an explicitly selected capability policy are
+// required.
 type Config struct {
-	Schema          hff.Type
-	Capabilities    capabilities.Set
-	Limits          hff.Limits
+	// Schema is the required root struct or map schema.
+	Schema hff.Type
+	// Capabilities is the explicit permission set used by Compile.
+	Capabilities capabilities.Set
+	// Limits selects compiler and input-validation ceilings; zero fields default.
+	Limits hff.Limits
+	// UnlimitedLimits explicitly disables configured limits.
 	UnlimitedLimits bool
-	Methods         []hff.MethodDeclaration
+	// Methods declares extension signatures; implementations belong to backends.
+	Methods []hff.MethodDeclaration
 }
 
-// Option is opaque and applied left to right by New.
+// Option changes one Engine setting. New applies options from left to right.
 type Option struct{ apply func(*Config) error }
 
+// WithSchema sets the root input schema. New requires a valid struct or map.
 func WithSchema(t hff.Type) Option { return Option{func(c *Config) error { c.Schema = t; return nil }} }
+
+// WithCapabilities sets the explicit capability policy used during compilation.
 func WithCapabilities(s capabilities.Set) Option {
 	return Option{func(c *Config) error { c.Capabilities = s; return nil }}
 }
+
+// WithMethods replaces the extension declarations in the configuration.
 func WithMethods(methods ...hff.MethodDeclaration) Option {
 	owned := append([]hff.MethodDeclaration(nil), methods...)
 	return Option{func(c *Config) error { c.Methods = append([]hff.MethodDeclaration(nil), owned...); return nil }}
 }
+
+// WithLimits replaces limits and disables UnlimitedLimits.
 func WithLimits(l hff.Limits) Option {
 	return Option{func(c *Config) error { c.Limits = l; c.UnlimitedLimits = false; return nil }}
 }
+
+// WithUnlimitedLimits explicitly disables limits resolved by this Engine.
 func WithUnlimitedLimits() Option {
 	return Option{func(c *Config) error { c.UnlimitedLimits = true; return nil }}
 }
+
+// WithConfig copies a complete configuration. Later options override fields
+// set by this option; a nil config is a ConfigurationError.
 func WithConfig(config *Config) Option {
 	return Option{func(c *Config) error {
 		if config == nil {
@@ -48,6 +73,9 @@ func WithConfig(config *Config) Option {
 // Engine is immutable and supports concurrent calls.
 type Engine struct{ config Config }
 
+// New validates options, schema, capabilities, extension declarations, and
+// limits. The returned Engine snapshots its configuration and supports
+// concurrent Compile and Validate calls.
 func New(options ...Option) (*Engine, error) {
 	var c Config
 	for _, option := range options {
@@ -87,12 +115,19 @@ func New(options ...Option) (*Engine, error) {
 	}
 	return &Engine{config: c}, nil
 }
-func (e *Engine) Schema() hff.Type               { return e.config.Schema }
+
+// Schema returns the immutable root input schema.
+func (e *Engine) Schema() hff.Type { return e.config.Schema }
+
+// Capabilities returns the selected compilation policy.
 func (e *Engine) Capabilities() capabilities.Set { return e.config.Capabilities }
-func (e *Engine) Limits() hff.Limits             { return e.config.Limits }
+
+// Limits returns resolved common compiler and input-validation limits.
+func (e *Engine) Limits() hff.Limits { return e.config.Limits }
 
 // Compile checks syntax, types, and capabilities and produces a reusable plan.
-// It does not construct a local evaluator or a backend query.
+// It returns typed syntax, type, capability, limit, or cancellation errors. It
+// does not construct a local evaluator or a backend query.
 func (e *Engine) Compile(ctx context.Context, source string) (hff.Program, error) {
 	p, err := compiler.Compile(ctx, source, compiler.Config{
 		Schema: core.Type(e.config.Schema), Capabilities: e.config.Capabilities,
@@ -100,6 +135,11 @@ func (e *Engine) Compile(ctx context.Context, source string) (hff.Program, error
 	})
 	return hff.Program(p), err
 }
+
+// Validate validates a complete host record against this Engine's schema and
+// input limits. It returns an immutable Input suitable for repeated matching
+// by a backend whose Program uses the same schema contract. Invalid records,
+// cancellation, and exceeded limits return typed errors with no partial Input.
 func (e *Engine) Validate(ctx context.Context, record hff.Value) (hff.Input, error) {
 	return hff.ValidateInput(ctx, e.config.Schema, record, hff.ValidationConfig{Limits: e.config.Limits, Unlimited: e.config.UnlimitedLimits})
 }

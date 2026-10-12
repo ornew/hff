@@ -388,6 +388,7 @@ func TestMovedPagesHaveLocalRedirectsAndStayOutOfSearch(t *testing.T) {
 	write(t, repo, "docs/backends/local/extensions.md", "# Extensions\n")
 	write(t, repo, "docs/backends/postgresql/README.md", "# PostgreSQL\n")
 	write(t, repo, "docs/reference/program-ir.md", "# Program reference\n")
+	write(t, repo, "docs/guides/go-api.md", "# Go API Guide\n")
 	out := filepath.Join(t.TempDir(), "output")
 	if _, err := build(repo, out); err != nil {
 		t.Fatal(err)
@@ -398,6 +399,7 @@ func TestMovedPagesHaveLocalRedirectsAndStayOutOfSearch(t *testing.T) {
 		"docs/guides/extensions.html":       "../backends/local/extensions.html",
 		"docs/guides/sql.html":              "../backends/postgresql/index.html",
 		"docs/guides/program-ir.html":       "../reference/program-ir.html",
+		"docs/reference/go-api.html":        "../guides/go-api.html",
 	}
 	for old, target := range redirects {
 		if body := read(t, out, old); !strings.Contains(body, target) {

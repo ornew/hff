@@ -1,10 +1,9 @@
-# Go API Reference
+# Using the Go API
 
-This page lists the public construction path and stable package entry points.
-See [pkg.go.dev](https://pkg.go.dev/github.com/ornew/hff) for the complete
-exported Go documentation and the accepted [API design record](../design/004-go-api.md)
-for rationale. Query semantics remain defined by the
-[language specification](../../spec/README.md).
+This guide shows how the public Go packages fit together in a service. For
+generated package documentation, see the [Go API reference](../reference/go/)
+or [pkg.go.dev](https://pkg.go.dev/github.com/ornew/hff). Query semantics are
+defined by the [language specification](../../spec/README.md).
 
 ## Main packages
 
@@ -75,10 +74,11 @@ if err != nil {
 ```
 
 The `schema` package provides constructors such as `schema.String`,
-`schema.Int`, `schema.Bool`, `schema.Number`, `schema.List`, `schema.Map`, and
+`schema.Int`, `schema.Float`, `schema.Bool`, `schema.List`, `schema.Map`, and
 `schema.Struct`. `hff.Value` and `hff.Type` are immutable. Use `Value` accessors
-such as `Kind`, `AsString`, `AsInt`, `Lookup`, `At`, and `Equal` to inspect
-them. `Input.Value()` returns the validated immutable value and
+such as `Kind`, `AsString`, `AsInt`, and `Lookup` to inspect values.
+`AsList` returns a copy of list elements for indexed access; `Type.Equal`
+compares type descriptors. `Input.Value()` returns the validated immutable value and
 `Input.Compatible(type)` checks exact schema compatibility.
 
 For optional reflection-based Go-to-HFF conversion, use
@@ -137,6 +137,46 @@ hffsql.BindJSON(
 See the [PostgreSQL JSON binding guide](../backends/postgresql/json.md) for the
 supported schema profile, collection access and equality behavior, and storage
 requirements.
+
+## Map HFF paths to PostgreSQL storage
+
+An HFF `Path` names schema fields. A `ColumnRef` names separately quoted SQL
+identifier components. For example, `hff.Path{"profile", "name"}` is a nested
+HFF field path; `hffsql.Column("records", "profile")` is the physical
+identifier `"records"."profile"`. A dotted string inside one component is
+literal, not split into a path. See the
+[PostgreSQL binding tutorial](../tutorials/06-postgresql-bindings.md) for a
+worked record-to-table mapping.
+
+| API | Physical shape | State represented |
+| --- | --- | --- |
+| `Bind(path, Column(...))` | One scalar SQL column | SQL `NULL` is explicit null; an optional field still needs an enclosing structure when missing must differ from null. |
+| `BindJSON(path, column, JSON/JSONB)` | One JSON document | Schema-known nested objects/lists/maps, including missing object keys and JSON null. |
+| `BindComposite(path, column)` | One native PostgreSQL composite | SQL-null row differs from a present row with null attributes; attributes themselves are always present. |
+| `BindStruct(path, present, null, fields...)` | Struct spread across columns | Caller supplies parent presence and null predicates; child SQL nulls are explicit null fields. |
+| `BindRelation(path, relation)` | Correlated child rows | A list; no matching rows are empty by default. Missing/null list states require explicit state predicates. |
+
+For `BindStruct`, child paths are one field component relative to the bound
+struct. For `BindRelation`, the item binding has an empty `hff.Path{}` root;
+its child paths are relative to one row of the related source. `WithRelationSource`
+selects one table or view, while `WithCorrelation` supplies a predicate that
+relates that row to the outer record. Prefer the typed `SQLPredicate`
+constructors; raw `TrustedSQL` is an escape hatch for fixed developer-authored
+PostgreSQL text. It is not parsed or proven safe, deterministic, or equivalent
+to HFF. Never put user or query data in raw text, and ensure raw state or
+correlation expressions are deterministic and side-effect-free. The API does
+not infer a foreign key or generate a join. `WithUniqueOrder` is required only
+when the HFF consumer can observe the list's order.
+
+`Build` validates the HFF binding and returns `Query.Where()` plus the ordered
+`Query.Args()`. It does not inspect the physical schema, open a connection,
+execute the statement, or validate stored rows. The service must use the
+predicate in its own statement and pass arguments separately to its database
+driver. The SQL predicate constructors quote identifiers and bind literal
+values. `TrustedSQL` accepts raw PostgreSQL text; HFF does not parse it, prove
+its Boolean semantics or purity, or sanitize it. Its `ColumnRef` parameters
+support identifier alias bookkeeping only. Never concatenate user input into
+trusted SQL.
 
 For a struct stored in separate columns, `hffsql.BindStruct` requires trusted
 parent-present and parent-null expressions, plus relative child bindings. A
@@ -224,7 +264,7 @@ built local filter and a translated PostgreSQL query.
 
 ## Related lookup pages
 
-- [Built-in method signatures](methods.md)
-- [Program and Node inspection](program-ir.md)
+- [Built-in method signatures](../reference/methods.md)
+- [Typed IR Reference](../reference/program-ir.md)
 - [Specification](../../spec/README.md)
 - [Backend options and support matrices](../backends/README.md)

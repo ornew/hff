@@ -13,19 +13,34 @@ import (
 // Config controls per-operation validation and evaluation limits.
 // Zero limit fields select finite defaults. UnlimitedLimits is explicit.
 type Config struct {
-	Limits          hff.Limits
+	// Limits selects validation and evaluation ceilings. Zero fields resolve to
+	// the Program's limits where available, then to finite defaults.
+	Limits hff.Limits
+	// UnlimitedLimits explicitly disables limits selected by this configuration.
 	UnlimitedLimits bool
-	TimeZones       *TimeZoneProfile
-	Methods         []MethodImplementation
+	// TimeZones supplies versioned TZif data for named zones. Build snapshots it.
+	TimeZones *TimeZoneProfile
+	// Methods supplies local implementations for declared extension signatures.
+	Methods []MethodImplementation
 }
+
+// Option changes one local Build setting. Options apply left to right.
 type Option struct{ apply func(*Config) error }
 
+// WithLimits replaces local validation/evaluation limits and clears the
+// unlimited setting. It does not change the Program's compilation limits.
 func WithLimits(l hff.Limits) Option {
 	return Option{func(c *Config) error { c.Limits = l; c.UnlimitedLimits = false; return nil }}
 }
+
+// WithUnlimitedLimits explicitly disables local validation and evaluation
+// limits. Compilation limits remain those captured in the Program.
 func WithUnlimitedLimits() Option {
 	return Option{func(c *Config) error { c.UnlimitedLimits = true; return nil }}
 }
+
+// WithConfig copies the supplied configuration into the Build options. A nil
+// configuration is rejected; later options override its fields.
 func WithConfig(config *Config) Option {
 	return Option{func(c *Config) error {
 		if config == nil {
@@ -47,8 +62,10 @@ type Filter struct {
 	methods   map[string]MethodImplementation
 }
 
-// Build validates local support without evaluating a record.
-// Options apply left to right; later options replace earlier settings.
+// Build validates local support without evaluating a record and returns an
+// immutable Filter safe for concurrent calls. It snapshots zone data and
+// method implementations. Options apply left to right; later options replace
+// earlier settings. Build performs no record validation or matching.
 func Build(ctx context.Context, program hff.Program, options ...Option) (*Filter, error) {
 	if ctx == nil {
 		return nil, configuration("nil context")
@@ -125,8 +142,9 @@ func cancelled(ctx context.Context) error {
 	return core.CheckContext(ctx)
 }
 
-// Match validates the complete record before evaluating the filter.
-// A completed null/no-value predicate is false; cancellation and limits are errors.
+// Match validates the complete record before evaluating the filter, including
+// fields the query does not read. A completed null/no-value predicate is false;
+// cancellation, invalid input, and exceeded limits are errors.
 func (f *Filter) Match(ctx context.Context, record hff.Value) (bool, error) {
 	if f == nil || !f.program.Valid() {
 		return false, configuration("invalid Filter")
@@ -138,7 +156,9 @@ func (f *Filter) Match(ctx context.Context, record hff.Value) (bool, error) {
 	return f.match(ctx, input.Value())
 }
 
-// MatchInput reuses validation only for an exactly matching schema contract.
+// MatchInput evaluates an immutable Input without repeating its recursive
+// validation. The Input must carry the exact Program schema contract; ordinary
+// query work and runtime limits still apply.
 func (f *Filter) MatchInput(ctx context.Context, input hff.Input) (bool, error) {
 	if f == nil || !f.program.Valid() {
 		return false, configuration("invalid Filter")

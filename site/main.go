@@ -27,6 +27,8 @@ var assets embed.FS
 type heading struct{ ID, Title string }
 type page struct {
 	Source, URL, Title string
+	NavTitle           string
+	NoSource           bool
 	Body               template.HTML
 	Headings           []heading
 	doc                ast.Node

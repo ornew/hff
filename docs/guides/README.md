@@ -10,6 +10,8 @@ and API contracts are collected in the [Reference](../reference/README.md).
 - [Configure an engine and validate records](getting-started.md)
 - [Compile a query](compiling.md)
 - [Schemas and immutable values](schemas-and-values.md)
+- [Using the Go API](go-api.md): compose schemas, engine compilation, local
+  filters, adapters, and SQL translation in a service.
 - [Converting Go values](go-values.md): explicitly map Go records to an HFF
   schema without changing HFF's value or type semantics.
 - [Scalar and string methods](scalar-methods.md)

@@ -6,27 +6,44 @@ import (
 	"sort"
 )
 
+// ID is a stable capability identifier.
 type ID string
 
 const (
-	Logical            ID = "operator:logical"
-	Comparison         ID = "operator:comparison"
-	Arithmetic         ID = "operator:arithmetic"
-	Access             ID = "access:field"
-	Index              ID = "access:index"
-	Guard              ID = "access:guard"
-	TypeGuard          ID = "access:type-guard"
-	Collections        ID = "literal:collection"
-	Callbacks          ID = "expression:callback"
-	NestedCallbacks    ID = "expression:nested-callback"
-	ListEquality       ID = "comparison:list-equality"
-	ObjectEquality     ID = "comparison:object-equality"
+	// Logical permits Boolean query composition and truth evaluation.
+	Logical ID = "operator:logical"
+	// Comparison permits value and null comparisons.
+	Comparison ID = "operator:comparison"
+	// Arithmetic permits arithmetic operators.
+	Arithmetic ID = "operator:arithmetic"
+	// Access permits field access.
+	Access ID = "access:field"
+	// Index permits list and map indexing.
+	Index ID = "access:index"
+	// Guard permits postfix no-value guards.
+	Guard ID = "access:guard"
+	// TypeGuard permits runtime type narrowing.
+	TypeGuard ID = "access:type-guard"
+	// Collections permits list and object literals.
+	Collections ID = "literal:collection"
+	// Callbacks permits callback expressions.
+	Callbacks ID = "expression:callback"
+	// NestedCallbacks permits nested callbacks and requires Callbacks.
+	NestedCallbacks ID = "expression:nested-callback"
+	// ListEquality permits structural list comparisons.
+	ListEquality ID = "comparison:list-equality"
+	// ObjectEquality permits structural object comparisons.
+	ObjectEquality ID = "comparison:object-equality"
+	// StructuralEquality is a group alias for both structural equality IDs.
 	StructuralEquality ID = "group:structural-equality"
-	Regex              ID = "group:regex"
-	RegexOperators     ID = "operator:regex"
+	// Regex is a group alias for RegexOperators and string.matches.
+	Regex ID = "group:regex"
+	// RegexOperators permits regex match operators.
+	RegexOperators ID = "operator:regex"
 )
 
-// Method identifies a built-in or declared extension, e.g. Method("string.matches").
+// Method identifies a built-in method or declared extension, for example
+// Method("string.matches"). An extension uses its declaration ID.
 func Method(name string) ID { return ID("method:" + name) }
 
 var builtins = map[ID][]ID{}
@@ -49,13 +66,22 @@ func init() {
 	}
 }
 
-// Set's zero value means unspecified. None is an explicitly empty policy.
+// Set is an immutable capability policy. Its zero value means unspecified;
+// select None or Standard (or derive a policy with Allow and Without) before
+// passing it to engine.New. It is a compile-time permission set, not a runtime
+// backend implementation or service authorization policy.
 type Set struct {
 	specified bool
 	ids       map[ID]bool
 }
 
+// None returns an explicitly empty policy; it differs from the zero Set, which
+// is unspecified and rejected by engine.New.
 func None() Set { return Set{specified: true, ids: map[ID]bool{}} }
+
+// Standard returns the built-in policy, including structural equality and
+// built-in methods. It does not enable extension IDs; each extension needs an
+// explicit Allow(Method(id)) and a matching Engine declaration.
 func Standard() Set {
 	s := None()
 	for id := range builtins {
@@ -63,6 +89,9 @@ func Standard() Set {
 	}
 	return s
 }
+
+// Specified reports whether a policy was explicitly selected rather than left
+// at the zero value.
 func (s Set) Specified() bool { return s.specified }
 func expand(id ID) []ID {
 	if id == StructuralEquality {
@@ -80,6 +109,9 @@ func (s Set) clone() Set {
 	}
 	return out
 }
+
+// Allow returns a copy with the requested IDs enabled. Group aliases expand to
+// their member IDs; Check still validates dependencies.
 func (s Set) Allow(ids ...ID) Set {
 	out := s.clone()
 	for _, id := range ids {
@@ -89,6 +121,8 @@ func (s Set) Allow(ids ...ID) Set {
 	}
 	return out
 }
+
+// Without returns a copy with the requested IDs removed.
 func (s Set) Without(ids ...ID) Set {
 	out := s.clone()
 	for _, id := range ids {
@@ -98,6 +132,8 @@ func (s Set) Without(ids ...ID) Set {
 	}
 	return out
 }
+
+// Has reports whether id, including all IDs in a group alias, is enabled.
 func (s Set) Has(id ID) bool {
 	for _, item := range expand(id) {
 		if !s.ids[item] {
@@ -106,6 +142,8 @@ func (s Set) Has(id ID) bool {
 	}
 	return true
 }
+
+// IDs returns a copy of the enabled IDs in lexical order.
 func (s Set) IDs() []ID {
 	out := make([]ID, 0, len(s.ids))
 	for id := range s.ids {

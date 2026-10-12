@@ -29,7 +29,7 @@ Compilation parses the complete query, resolves schema references and method
 signatures, checks types and enabled capabilities, and enforces the rule that a
 filter must depend on service data. The method registry includes configured
 extension declarations. Local implementations are registered when building a
-filter; see the [local extension guide](../backends/local/extensions.md). See [the program guide](../reference/program-ir.md)
+filter; see the [local extension guide](../backends/local/extensions.md). See [the Typed IR Reference](../reference/program-ir.md)
 for the immutable IR and its source spans.
 
 Compilation honors context cancellation during preflight checks, generated

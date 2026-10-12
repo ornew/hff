@@ -8,14 +8,21 @@ import (
 )
 
 // TimeZoneProfile supplies explicitly versioned TZif data for named zones.
-// Aliases point directly to a Zones key or UTC; aliases cannot form chains.
-// Build snapshots and parses the profile. Match never loads OS zone data.
+// Version identifies the caller's data snapshot; HFF does not infer a version.
+// Zones maps IANA-style names to TZif bytes. Aliases point directly to a Zones
+// key or UTC and cannot form chains. Build copies and parses the profile;
+// matching never loads host operating-system zone data.
 type TimeZoneProfile struct {
+	// Version is a nonempty caller-supplied identifier for this TZif snapshot.
 	Version string
-	Zones   map[string][]byte
+	// Zones maps accepted zone names to their TZif file contents.
+	Zones map[string][]byte
+	// Aliases maps additional names directly to a zone in Zones or to UTC.
 	Aliases map[string]string
 }
 
+// WithTimeZones supplies a versioned named-zone snapshot for local Build.
+// UTC and fixed offsets are built in; a nil profile is a configuration error.
 func WithTimeZones(profile *TimeZoneProfile) Option {
 	return Option{func(c *Config) error {
 		if profile == nil {
@@ -31,7 +38,7 @@ type zoneSnapshot struct {
 	names   map[string]*time.Location
 }
 
-// TimeZoneVersion reports the supplied data version. Empty means only the
+// TimeZoneVersion reports the version supplied to Build. Empty means only the
 // built-in UTC and fixed-offset zones are available.
 func (f *Filter) TimeZoneVersion() string {
 	if f == nil {

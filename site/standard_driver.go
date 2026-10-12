@@ -32,8 +32,11 @@ func build(repo, out string) (int, error) {
 		Protected: []string{"README.md", "docs", "spec", "site", "playground", ".git"}, AllowedOutput: []string{"site/dist"},
 		TemplateFuncs: template.FuncMap{"rel": relative},
 		Prepare: func(ctx *sitegen.Context) error {
+			if err := addGoReference(ctx); err != nil {
+				return err
+			}
 			for _, source := range ctx.Pages {
-				p := &page{Source: source.Source, URL: source.Output, Title: source.Title, doc: source.Document, src: source.Body, anchors: source.Anchors, Home: source.Source == "README.md", Playground: source.Source == "docs/playground.md"}
+				p := &page{Source: source.Source, URL: source.Output, Title: source.Title, NavTitle: source.NavTitle, NoSource: source.NoSource, doc: source.Document, src: source.Body, anchors: source.Anchors, Home: source.Source == "README.md", Playground: source.Source == "docs/playground.md"}
 				for _, h := range source.Headings {
 					if h.Level == 1 && p.HomeAnchor == "" {
 						p.HomeAnchor = h.ID

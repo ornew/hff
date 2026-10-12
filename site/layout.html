@@ -35,7 +35,7 @@
   <div class="doc-shell{{if .Current.Playground}} playground-shell{{end}}">
     <nav id="documentation-sidebar" class="sidebar" aria-label="Documentation">{{template "doclinks" .}}</nav>
     <main id="content" tabindex="-1"><article class="prose">{{.Current.Body}}</article>{{if .Current.Playground}}{{template "playground" .}}{{end}}
-      <footer class="doc-footer"><a class="source-link" href="https://github.com/ornew/hff/blob/main/{{.Current.Source}}">View source on GitHub ↗</a>
+      <footer class="doc-footer">{{if not .Current.NoSource}}<a class="source-link" href="https://github.com/ornew/hff/blob/main/{{.Current.Source}}">View source on GitHub ↗</a>{{end}}
         <nav class="pager" aria-label="Adjacent pages">{{with .Prev}}<a href="{{rel $.Current.URL .URL}}"><small>Previous</small>{{.Title}}</a>{{end}}{{with .Next}}<a href="{{rel $.Current.URL .URL}}"><small>Next</small>{{.Title}}</a>{{end}}</nav>
       </footer>
     </main>
@@ -60,7 +60,7 @@
 </html>
 {{define "doclinks"}}{{range .Sections}}
 {{if .Collapsible}}<details class="nav-section" {{if .Active}}open{{end}}><summary class="nav-heading"><h2>{{.Name}}</h2></summary>{{else}}<section class="nav-section"><h2 class="nav-heading">{{.Name}}</h2>{{end}}
-{{range .Pages}}<a href="{{rel $.Current.URL .URL}}" {{if eq .URL $.Current.URL}}aria-current="page"{{end}}>{{if eq .Source "README.md"}}Home{{else if eq .Source "spec/README.md"}}Introduction{{else if eq .Source "docs/design/README.md"}}Introduction{{else if eq .Source "docs/backends/README.md"}}Introduction{{else}}{{.Title}}{{end}}</a>{{end}}
-{{range .Children}}<details class="nav-subsection" {{if .Active}}open{{end}}><summary>{{.Name}}</summary>{{range .Pages}}<a href="{{rel $.Current.URL .URL}}" {{if eq .URL $.Current.URL}}aria-current="page"{{end}}>{{if or (eq .Source "docs/backends/local/README.md") (eq .Source "docs/backends/postgresql/README.md")}}Introduction{{else}}{{.Title}}{{end}}</a>{{end}}</details>{{end}}
+{{range .Pages}}<a href="{{rel $.Current.URL .URL}}" {{if eq .URL $.Current.URL}}aria-current="page"{{end}}>{{if eq .Source "README.md"}}Home{{else if eq .Source "spec/README.md"}}Introduction{{else if eq .Source "docs/design/README.md"}}Introduction{{else if eq .Source "docs/backends/README.md"}}Introduction{{else}}{{if .NavTitle}}{{.NavTitle}}{{else}}{{.Title}}{{end}}{{end}}</a>{{end}}
+{{range .Children}}<details class="nav-subsection" {{if .Active}}open{{end}}><summary>{{.Name}}</summary>{{range .Pages}}<a href="{{rel $.Current.URL .URL}}" {{if eq .URL $.Current.URL}}aria-current="page"{{end}}>{{if or (eq .Source "docs/backends/local/README.md") (eq .Source "docs/backends/postgresql/README.md")}}Introduction{{else}}{{if .NavTitle}}{{.NavTitle}}{{else}}{{.Title}}{{end}}{{end}}</a>{{end}}</details>{{end}}
 {{if .Collapsible}}</details>{{else}}</section>{{end}}
 {{end}}{{end}}

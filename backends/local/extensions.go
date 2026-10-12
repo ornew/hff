@@ -13,25 +13,36 @@ import (
 	"github.com/ornew/hff/internal/plan"
 )
 
-// MethodFunc implements a pure, concurrent-safe extension. Ordinary data failures
-// return Null(), nil. Work and produced values beyond BaseCost must be charged.
+// MethodFunc implements one declared local extension. Implementations must be
+// deterministic, side-effect-free, safe for concurrent calls, and cooperate
+// with Context and budget charging. Return hff.Null(), nil for an ordinary data
+// failure. ChargeSteps and ChargeGeneratedValues for variable work or output
+// beyond the declaration's BaseCost; ignored charge errors still abort the call.
 type MethodFunc func(call *Call, receiver hff.Value, args []hff.Value) (hff.Value, error)
 
+// MethodImplementation pairs an immutable declaration with its local function.
+// Use Implement to construct one and pass it with WithMethods to Build.
 type MethodImplementation struct {
 	declaration hff.MethodDeclaration
 	function    MethodFunc
 }
 
+// Implement pairs a declaration with the local implementation for that exact
+// contract. Build rejects missing, duplicate, or contract-mismatched methods.
 func Implement(declaration hff.MethodDeclaration, function MethodFunc) MethodImplementation {
 	return MethodImplementation{declaration, function}
 }
+
+// WithMethods replaces implementations configured for local Build. The slice
+// is copied; the functions themselves must be safe for concurrent calls.
 func WithMethods(methods ...MethodImplementation) Option {
 	owned := append([]MethodImplementation(nil), methods...)
 	return Option{func(c *Config) error { c.Methods = append([]MethodImplementation(nil), owned...); return nil }}
 }
 
-// Call provides cooperative cancellation and budget accounting. Charging is safe
-// concurrently during an invocation; the Call must not be retained for later work.
+// Call provides the invocation context and additional budget accounting to a
+// local extension. Charge methods may be called concurrently while the
+// invocation is active; do not retain Call or use it after the function returns.
 type Call struct {
 	mu      sync.Mutex
 	ctx     context.Context
@@ -39,13 +50,21 @@ type Call struct {
 	failure error
 }
 
+// Context returns the context for this invocation, or nil for a nil Call.
 func (c *Call) Context() context.Context {
 	if c == nil {
 		return nil
 	}
 	return c.ctx
 }
-func (c *Call) ChargeSteps(n int) error           { return c.charge(n, false) }
+
+// ChargeSteps accounts for additional implementation work beyond BaseCost.
+// A negative charge or an exceeded limit fails the whole Match, even if the
+// extension ignores the returned error.
+func (c *Call) ChargeSteps(n int) error { return c.charge(n, false) }
+
+// ChargeGeneratedValues accounts for values produced or traversed by variable
+// extension work. A failed charge aborts the whole Match even if ignored.
 func (c *Call) ChargeGeneratedValues(n int) error { return c.charge(n, true) }
 func (c *Call) charge(n int, generated bool) error {
 	if c == nil {

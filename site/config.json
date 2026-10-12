@@ -44,9 +44,15 @@
     "spec/methods.md",
     "spec/capabilities.md",
     "docs/tutorials/README.md",
+    "docs/tutorials/01-first-filter.md",
+    "docs/tutorials/02-service-integration.md",
+    "docs/tutorials/03-extension-methods.md",
+    "docs/tutorials/04-postgresql-translator.md",
     "docs/tutorials/05-go-bindings.md",
+    "docs/tutorials/06-postgresql-bindings.md",
     "docs/guides/README.md",
     "docs/guides/getting-started.md",
+    "docs/guides/go-api.md",
     "docs/guides/compiling.md",
     "docs/guides/schemas-and-values.md",
     "docs/guides/scalar-methods.md",
@@ -57,8 +63,15 @@
     "docs/cookbook/README.md",
     "docs/reference/README.md",
     "docs/reference/methods.md",
-    "docs/reference/go-api.md",
     "docs/reference/program-ir.md",
+    "docs/reference/go/README.md",
+    "docs/reference/go/hff/README.md",
+    "docs/reference/go/engine/README.md",
+    "docs/reference/go/schema/README.md",
+    "docs/reference/go/capabilities/README.md",
+    "docs/reference/go/backends/local/README.md",
+    "docs/reference/go/backends/sql/README.md",
+    "docs/reference/go/adapters/govalue/README.md",
     "docs/backends/README.md",
     "docs/backends/local/README.md",
     "docs/backends/local/configuration.md",
@@ -136,7 +149,16 @@
       "match": [
         "docs/reference/**"
       ],
-      "collapsed": false
+      "collapsed": false,
+      "children": [
+        {
+          "title": "Go Reference",
+          "match": [
+            "docs/reference/go/**"
+          ],
+          "collapsed": true
+        }
+      ]
     },
     {
       "title": "Specification",
@@ -202,7 +224,8 @@
     "/docs/guides/configuration.html": "/docs/backends/local/configuration.html",
     "/docs/guides/extensions.html": "/docs/backends/local/extensions.html",
     "/docs/guides/sql.html": "/docs/backends/postgresql/",
-    "/docs/guides/program-ir.html": "/docs/reference/program-ir.html"
+    "/docs/guides/program-ir.html": "/docs/reference/program-ir.html",
+    "/docs/reference/go-api.html": "/docs/guides/go-api.html"
   },
   "redirectRules": false,
   "redirectTemplate": "site/redirect.html"

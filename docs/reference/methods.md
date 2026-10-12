@@ -154,4 +154,4 @@ range. Days and weeks are not supported. See
 - [Capability IDs and selection](../../spec/capabilities.md)
 - [Local backend support and configuration](../backends/local/README.md)
 - [PostgreSQL backend support](../backends/postgresql/README.md)
-- [Compiled Program and Node accessors](program-ir.md)
+- [Typed IR Reference](program-ir.md)

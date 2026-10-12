@@ -1,10 +1,10 @@
-# Program and Node Reference
+# Typed IR Reference
 
-HFF is designed to compile a query once into an immutable, backend-independent
-program. Local and SQL builders can inspect that program without depending on
-parser nodes. The typed plan, public `Program` and `Node` inspection contracts,
-and common `engine.Compile` entry point are implemented. A syntax tree cannot be
-evaluated or translated to SQL.
+HFF compiles each query into an immutable, backend-independent typed program.
+This reference describes the `Program` entry point and the node tree's types,
+source spans, guards, callbacks, and payload accessors. Backends inspect this
+IR without depending on parser nodes; a syntax tree cannot be evaluated or
+translated to SQL.
 
 Only HFF's compiler constructs valid programs and nodes. A node is an opaque
 handle; callers cannot mutate compiler storage. Programs and their values are
@@ -12,35 +12,19 @@ safe to reuse concurrently.
 
 ## Program and node accessors
 
-The public inspection surface is:
+The generated Go Reference lists the exact signatures and source comments for
+[`Program`](go/hff/#Program), [`Node`](go/hff/#Node),
+[`Method`](go/hff/#Method), and [`Binding`](go/hff/#Binding). Use this page to
+interpret those accessors as a semantic tree:
 
-```go
-func (p Program) Valid() bool
-func (p Program) Root() Node
-func (p Program) Source() string
-func (p Program) Schema() Type
-func (p Program) Capabilities() capabilities.Set
-func (p Program) Limits() Limits
-func (p Program) UnlimitedLimits() bool
-
-func (n Node) Valid() bool
-func (n Node) Kind() NodeKind
-func (n Node) Type() Type
-func (n Node) Span() Span
-func (n Node) MayNoValue() bool
-func (n Node) ChildCount() int
-func (n Node) Child(i int) (Node, bool)
-func (n Node) Literal() (Value, bool)
-func (n Node) Path() (Path, bool)
-func (n Node) Field() (string, bool)
-func (n Node) Operator() (Operator, bool)
-func (n Node) Constraint() (Type, bool)
-func (n Node) Method() (Method, bool)
-func (n Node) Binding() (Binding, bool)
-func (n Node) Parameters() ([]Binding, bool)
-func (n Node) Captures() ([]Binding, bool)
-func (n Node) Keys() ([]string, bool)
-```
+| Purpose | Accessors |
+| --- | --- |
+| Enter the compiled tree and inspect its configuration | `Program.Root()`, `Source()`, `Schema()`, `Capabilities()`, `Limits()`, `UnlimitedLimits()` |
+| Identify a node's operation and result | `Node.Valid()`, `Kind()`, `Type()`, `Span()`, `MayNoValue()` |
+| Traverse children in evaluation order | `ChildCount()`, `Child(i)` |
+| Read literal, path, field, and operator payloads | `Literal()`, `Path()`, `Field()`, `Operator()` |
+| Inspect a resolved call or a type guard | `Method()`, `Constraint()` |
+| Inspect lexical scope and object entries | `Binding()`, `Parameters()`, `Captures()`, `Keys()` |
 
 The zero Program and Node are invalid. A valid empty query has a MatchAll root.
 `Child` returns false for an invalid index. A payload accessor returns false for

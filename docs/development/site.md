@@ -84,6 +84,15 @@ alone, run:
 git -c core.fsmonitor=false diff --exit-code -- docs/design/README.md
 ```
 
+## Generated Go API reference
+
+The site generates the package pages under `/docs/reference/go/` from the
+build-selected Go source and examples listed in `site/go_reference.go`. Public
+Go documentation comments are the source of truth; do not hand-author generated
+package or symbol pages. When adding or removing a public package, update
+`referencePackages` and the Go-reference navigation/fixture coverage, then run
+the site tests and build to verify the generated pages and links.
+
 ## Rendering and link checks
 
 The site includes a README-derived landing page, top navigation, and a sidebar

@@ -7,11 +7,11 @@ and compiled-plan accessors. Normative language rules live in the separate
 - [Method catalog](methods.md): signatures and concise descriptions grouped by
   receiver. The complete normative contracts remain in the
   [language method specification](../../spec/methods.md).
-- [Go API](go-api.md): constructors and main entry points for values, schemas,
-  capabilities, compilation, local filters, and SQL artifacts. See also the
-  generated [pkg.go.dev reference](https://pkg.go.dev/github.com/ornew/hff).
-- [Program and node inspection](program-ir.md): immutable IR accessors, kinds,
-  payloads, child order, and stable binding IDs.
+- [Generated Go API reference](go/): package documentation generated from
+  the public Go source, with package and declaration links. The released
+  module is also documented at [pkg.go.dev](https://pkg.go.dev/github.com/ornew/hff).
+- [Typed IR Reference](program-ir.md): the `Program` entry point and node
+  types, spans, guards, callback bindings, payloads, and child order.
 
 For explanations and examples, use the [functional guides](../guides/README.md).
 For backend support and configuration, see [Backends](../backends/README.md).
