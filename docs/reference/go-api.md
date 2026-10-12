@@ -163,8 +163,16 @@ if version, known := profile.Version("tz"); known {
 copies. A missing feature or version is unknown; `UnknownSupport` is not
 reported as supported. Each stage-limit accessor returns `(Limits, bool)`: a
 false boolean means unknown or outside that backend's responsibility, while a
-true boolean with a zero limit field means the ceiling is explicitly
-unbounded. The capability set reports service policy only when specified.
+true boolean with a zero *applicable* limit field means that ceiling is
+explicitly unbounded. Other fields in a stage's `Limits` value are unused:
+
+| Stage | Applicable fields |
+|:--|:--|
+| Compile | `MaxQueryBytes`, `MaxSyntaxDepth`, `MaxCallbackDepth`, `MaxCompileSteps` |
+| Input | `MaxInputDepth`, `MaxInputValues` |
+| Runtime | `MaxSteps`, `MaxGeneratedValues`, `MaxJSONDepth` |
+
+The capability set reports service policy only when specified.
 Backend feature support is a separate statement and does not grant permission.
 Registered method declarations in `Methods()` likewise do not enable those
 methods.
