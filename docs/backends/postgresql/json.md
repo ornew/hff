@@ -215,6 +215,13 @@ preserves HFF results at ties, subnormal boundaries, signed zero, and overflow.
 See [design record 015](../../design/015-postgresql-float-arithmetic.md) for
 the numerical rationale and tested boundaries.
 
+When the same Float operand expression is referenced more than once in a
+projection scope, PostgreSQL lowering can reuse its original SQL expression
+and exact decomposition. This does not change numeric results or promise
+physical evaluation order; single-use expressions retain the cache's Build
+overhead. See the [measured Float operand reuse](../../optimizations/008-postgresql-float-decomposition-reuse.md)
+record for the scoped workloads and controls.
+
 ### Numeric rounding methods
 
 `round()`, `ceil()`, and `floor()` are supported for schema-known `Int` and

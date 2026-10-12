@@ -86,6 +86,16 @@ was a byte-identical SQL control, not evidence of a database speed change. See
 [Float Build fragments](../../optimizations/006-postgresql-float-build-fragments.md)
 for the scoped measurements and limitations.
 
+### Reuse repeated Float arithmetic operands
+
+Within an existing projection scope, repeated references to the same Float SQL
+operand can reuse its original expression and exact numeric decomposition.
+The cache preserves first-use order and resets at scope boundaries. Single-use
+expressions pay cache-allocation overhead; the measured result is specific to
+the tested repeated query and does not establish a database speedup for other
+workloads. See [Float operand reuse](../../optimizations/008-postgresql-float-decomposition-reuse.md)
+for the Build and PostgreSQL measurements.
+
 ### Specialize recoverable JSON equality by declared root type
 
 When both operands have definite roots in the same structured category, the

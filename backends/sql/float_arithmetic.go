@@ -43,6 +43,37 @@ func (b *builder) floatNumeric(value string) string {
 	return "(SELECT (CASE WHEN get_byte(" + bytes + ",0)>=128 THEN -1 ELSE 1 END)*" + exact + " FROM LATERAL (SELECT float8send(" + value + ") AS bytes OFFSET 0) AS " + bits + ")"
 }
 
+// floatOperands reuses exact decomposition within the current projection
+// scope. Presence remains owned by each operation. Original Float values keep
+// their sign bits, and fresh operands retain the ordinary projection order.
+func (b *builder) floatOperands(left, right string) (string, string, string, string) {
+	operands := [2]struct{ source, value, exact string }{{source: left}, {source: right}}
+	if b.sharedPaths == nil {
+		b.sharedPaths = make(map[string]expression)
+	}
+	for i := range operands {
+		operand := &operands[i]
+		key := "float-arithmetic:" + operand.source + ":value"
+		if cached, ok := b.sharedPaths[key]; ok {
+			operand.value = cached.code
+		} else {
+			operand.value = b.project(operand.source)
+			b.sharedPaths[key] = expression{operand.value, "TRUE", hff.FloatType}
+		}
+	}
+	for i := range operands {
+		operand := &operands[i]
+		key := "float-arithmetic:" + operand.source + ":exact"
+		if cached, ok := b.sharedPaths[key]; ok {
+			operand.exact = cached.code
+		} else {
+			operand.exact = b.project(b.floatNumeric(operand.value))
+			b.sharedPaths[key] = expression{operand.exact, "TRUE", hff.FloatType}
+		}
+	}
+	return operands[0].value, operands[1].value, operands[0].exact, operands[1].exact
+}
+
 func floatSign(value string) string { return "(get_byte(float8send(" + value + "),0)>=128)" }
 
 func (b *builder) floatArithmetic(n hff.Node, left, right expression, op hff.Operator) (expression, error) {
@@ -57,8 +88,7 @@ func (b *builder) floatArithmetic(n hff.Node, left, right expression, op hff.Ope
 	if right.kind == hff.IntType {
 		r = "(" + r + "::double precision)"
 	}
-	l, r = b.project(l), b.project(r)
-	ln, rn := b.project(b.floatNumeric(l)), b.project(b.floatNumeric(r))
+	l, r, ln, rn := b.floatOperands(l, r)
 	negative := "(" + floatSign(l) + " <> " + floatSign(r) + ")"
 	if op == hff.Divide {
 		return expression{b.floatQuotient(ln, rn, negative), present, hff.FloatType}, nil

@@ -55,8 +55,12 @@ func TestPostgreSQLFloatArithmetic(t *testing.T) {
 	}
 	var script strings.Builder
 	var labels []string
-	for index, op := range []string{"+", "-", "*", "/"} {
-		source := "(left" + op + "right):string=expected"
+	for index, op := range []string{"+", "-", "*", "/", "+", "-", "*", "/"} {
+		operand := "right"
+		if index >= 4 {
+			operand = "left"
+		}
+		source := "(left" + op + operand + "):string=expected"
 		program, err := e.Compile(ctx, source)
 		if err != nil {
 			t.Fatal(err)
@@ -75,6 +79,9 @@ func TestPostgreSQLFloatArithmetic(t *testing.T) {
 		}
 		var rows []string
 		for _, pair := range pairs {
+			if operand == "left" {
+				pair[1] = pair[0]
+			}
 			var value float64
 			switch op {
 			case "+":
