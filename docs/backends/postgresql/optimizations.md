@@ -77,6 +77,15 @@ relation bindings still restore the full document. This reduces recursive
 expansion work without pruning values or changing the metadata contract. The
 measured profiles and tradeoffs are in [JSONB leaf expansion](../../optimizations/005-postgresql-jsonb-leaf-expansion.md).
 
+### Reuse fixed Float SQL fragments during Build
+
+Checked and unchecked Float SQL wrappers are immutable package-level fragments;
+each Build supplies only the receiver SQL. Build measurements showed lower
+allocation counts with unchanged SQL and parameters. The database benchmark
+was a byte-identical SQL control, not evidence of a database speed change. See
+[Float Build fragments](../../optimizations/006-postgresql-float-build-fragments.md)
+for the scoped measurements and limitations.
+
 ### Reuse parsed JSON within a projection scope
 
 Repeated `fromjson()` calls on the same projected receiver can reuse the
