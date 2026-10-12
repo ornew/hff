@@ -11,13 +11,13 @@ import (
 	"github.com/ornew/hff/schema"
 )
 
-func TestDynamicArithmeticRequiresNumericRepresentation(t *testing.T) {
+func TestDynamicOperationsRequireNumericRepresentation(t *testing.T) {
 	ctx := context.Background()
 	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Any("data"))), engine.WithCapabilities(capabilities.Standard()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, source := range []string{`data+1>0`, `data/2=2.5`, `data%2=1`, `-data<0`} {
+	for _, source := range []string{`data+1>0`, `data/2=2.5`, `data%2=1`, `-data<0`, `data:json:len>0`, `data:string:len>0`, `data:[list[any]]:json:len>0`} {
 		p, err := e.Compile(ctx, source)
 		if err != nil {
 			t.Fatal(err)

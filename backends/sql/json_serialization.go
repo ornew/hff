@@ -14,9 +14,21 @@ func (b *builder) serialize(n hff.Node, value expression, name string) (expressi
 			return expression{}, b.failure(n, "JSONB cannot preserve signed zero for float serialization")
 		}
 		var err error
-		code, err = b.serializeJSON(n, value.code, format, receiver.Type())
+		stored := b.jsonStoredType(receiver)
+		if needsDynamicJSONEquality(stored) {
+			var normalized string
+			normalized, err = b.comparisonDocument(receiver, value.code, format, stored)
+			if err == nil {
+				code = b.canonicalJSON(b.project(normalized))
+			}
+		} else {
+			code, err = b.serializeJSON(n, value.code, format, stored)
+		}
 		if err != nil {
 			return expression{}, err
+		}
+		if name == "string" {
+			code = "(CASE WHEN " + string(format) + "_typeof(" + value.code + ")='string' THEN (" + value.code + " #>> '{}'::text[]) ELSE " + code + " END)"
 		}
 	} else {
 		switch value.kind {

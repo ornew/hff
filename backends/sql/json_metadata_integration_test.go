@@ -149,6 +149,8 @@ func TestPostgreSQLDynamicJSONGuards(t *testing.T) {
 	supported["flatmap_preserves_order"] = true
 	supported["concat_preserves_order"] = true
 	supported["object_enumeration_key_order"] = true
+	supported["json_null_is_observable"] = true
+	supported["json_guard_stays_absent"] = true
 	supported["fold_argument_order"] = true
 	supported["map_preserves_null_and_order"] = true
 	supported["decisive_or_skips_budgeted_callback"] = true

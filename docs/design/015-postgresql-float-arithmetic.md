@@ -35,9 +35,8 @@ specifies.
 
 - Float remainder; HFF remainder is int64-only.
 - A performance guarantee for the exact arithmetic SQL expressions.
-- Extending JSON/JSONB serialization of dynamic `Int|Float` results. Such a
-  union result still requires a representation the current serializer can
-  recover.
+- Designing canonical JSON serialization. That representation contract and
+  its PostgreSQL lowering are recorded separately.
 
 ## Design
 
@@ -77,8 +76,9 @@ native JSON number spelling, and, for JSONB, the configured numeric metadata.
 Integer-only dynamic operands use the checked int64 lowering; other supported
 numeric combinations use the exact float path. JSONB metadata is needed when
 storage has erased an integer/float or value distinction that the operation
-observes. This does not make every dynamic result serializable: dynamic
-`Int|Float` results passed to `json()` or `string()` remain unsupported.
+observes. Dynamic serialization follows the separate [canonical JSON
+serialization record](016-postgresql-json-serialization.md) and requires a
+recoverable JSON representation.
 
 ### Compatibility and backend support
 
@@ -121,7 +121,6 @@ enumeration of binary64 inputs.
 ## Limitations and open questions
 
 The SQL expression is a correctness-first lowering, not a latency or SQL-size
-guarantee. Dynamic `Int|Float` results cannot yet be serialized by `json()` or
-`string()`, and JSONB cannot recover distinctions that neither its stored
-value nor configured metadata records. These are separate representation
-limitations from the arithmetic result itself.
+guarantee. JSONB cannot recover distinctions that neither its stored value nor
+configured metadata records. Canonical serialization has its own supported
+types and representation limits, described in the separate design record.

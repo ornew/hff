@@ -45,7 +45,7 @@ func TestPostgreSQLDynamicJSONArithmetic(t *testing.T) {
 	}
 	sources := []string{}
 	for _, op := range []string{"+", "-", "*", "/", "%"} {
-		for _, suffix := range []string{`:type="null"`, `:type="number"`, `=2.5`, `=7`, `=-3`, `=1`, `=0`, `=9007199254740992`} {
+		for _, suffix := range []string{`:type="null"`, `:type="number"`, `:json="2.5"`, `:string="7"`, `=2.5`, `=7`, `=-3`, `=1`, `=0`, `=9007199254740992`} {
 			sources = append(sources, "(left"+op+"right)"+suffix)
 		}
 		sources = append(sources, "(left"+op+`right!):type="null"`)

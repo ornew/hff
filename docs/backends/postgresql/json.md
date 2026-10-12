@@ -131,9 +131,10 @@ numeric metadata described below when a dynamic operation needs it. Metadata
 also preserves a value such as negative zero when the operation or a later
 serialization can observe its sign. Schema-known operations only require
 metadata for distinctions the stored representation has lost and the
-operation needs to recover. Arithmetic results from an `Int|Float` union
-cannot currently be passed to dynamic `json()` or `string()` serialization;
-that result representation remains unsupported.
+operation needs to recover. Recovered JSON-native values and supported
+arithmetic results can be serialized through `json()` or `string()` when their
+numeric representation is available; see the
+[canonical serialization design](../../design/016-postgresql-json-serialization.md).
 
 Float decoding checks the decimal spelling before the double-precision cast. A
 finite spelling below the binary64 range, such as
@@ -324,13 +325,14 @@ evaluation order or local `MaxSteps`/`MaxGeneratedValues` enforcement; unsupport
 explicit execution-budget requirements are rejected by `Build`.
 
 For schema-known scalar columns and JSON/JSONB values, `json()` and
-`string()` support null, bool, int64, string, and finite float64 values,
-including recursive lists, maps, and structs containing those types when their
-numeric representation is available. `json()` emits compact JSON;
-`string()` leaves strings unquoted and uses compact JSON for collections.
-Object keys are sorted with PostgreSQL's `C` collation, arrays retain element
-order, and stored nulls remain JSON nulls. A null receiver returns the text
-`"null"`; no-value propagates. For example:
+`string()` support null, bool, int64, string, and finite float64 values.
+Recovered JSON-native `Any` and union values are also supported, including
+recursive lists, maps, and structs whose numeric kinds can be determined from
+the schema, native JSON spelling, or JSONB metadata. `json()` emits compact
+JSON; `string()` leaves a root string unquoted and uses compact JSON for
+collections. Object keys are sorted with PostgreSQL's `C` collation, arrays
+retain element order, and stored nulls remain JSON nulls. A null receiver
+returns the text `"null"`; no-value propagates. For example:
 
 ```hff
 profile.scores:json="[80,90]"
@@ -344,6 +346,15 @@ reconstructs the exact IEEE value and searches decimal precisions from one to
 seventeen using nearest, ties-to-even rounding; this correctness-first SQL
 lowering is a baseline, not a performance guarantee.
 
+For dynamic JSON values, the backend first resolves recoverable schema and
+numeric metadata, then serializes the normalized JSON-native result. This
+preserves integer-versus-float kinds inside unions and nested collections,
+including arithmetic results. The SQL serializer does not promise enforcement
+of the local runtime's `MaxJSONDepth`; database execution limits and
+service-level input bounds remain the caller's responsibility. See the
+[serialization design](../../design/016-postgresql-json-serialization.md) for
+the canonical lowering and its scope.
+
 JSONB can discard integer-versus-float spelling and the sign of zero. Without
 metadata, operations requiring those distinctions remain rejected, including
 when a callback returns a stored JSONB float. With supported numeric metadata,
@@ -352,7 +363,9 @@ lowering. Native JSON continues to use its stored numeric spelling. Dynamic
 representations still require schema or metadata information sufficient for
 the particular operation; `Any` is not a general escape from type recovery.
 Current metadata supports numeric types only: bytes, timestamps, and durations
-are not restored by type tags, and `fromjson()` remains unsupported.
+are not restored by type tags, and `fromjson()` remains unsupported. Dynamic
+serialization is limited to JSON-native values whose numeric representation
+is recoverable; it does not make arbitrary `Any` values serializable.
 
 Nested callbacks can capture outer callback values and schema fields, with
 lexical shadowing:
@@ -639,7 +652,13 @@ profile.scores:concat([100])=[80,90,100]
 profile.scores:any(score=>score:in(80,90))
 profile.scores:map(score=>score+1)=[81,91]
 profile.scores:flatmap(score=>[score,score])=[80,80,90,90]
+(payload.amount+tax):json="2.5"
+data:[list]:map(item=>item):json="[1,1.0]"
 ```
+
+The last two queries compare serialized dynamic arithmetic and callback
+results. For JSONB, provide metadata when storage erased a numeric distinction
+needed to determine the output's integer or float kind.
 
 The following operations remain unsupported for JSON-backed values and return
 a source-located `hff.BackendError` from `Build`:
