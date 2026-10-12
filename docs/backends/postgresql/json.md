@@ -262,6 +262,56 @@ error; dynamic truth checks treat that decoded zero as false. JSONB can discard
 the sign of zero, so use metadata when a later operation must observe that
 sign.
 
+### Parse computed durations
+
+PostgreSQL supports `duration()` on a text column or a recoverable JSON string.
+It produces a computed HFF Duration represented internally as signed int64
+nanoseconds, without defining a stored Duration binding or JSON/JSONB
+materialization. The local duration syntax and range rules in the
+[temporal guide](../../guides/temporal.md#parse-and-measure-durations) also
+apply to this conversion.
+
+```sql
+CREATE TABLE jobs (id bigint PRIMARY KEY, elapsed_text text NOT NULL);
+INSERT INTO jobs VALUES (1, '45s'), (2, '1m30s'), (3, 'invalid');
+```
+
+With `elapsed` declared as a string and bound to `jobs.elapsed_text`, this
+predicate matches only row 2:
+
+```hff
+elapsed:duration:seconds>=60
+```
+
+Computed durations can also be tested against Duration candidates with `in()`:
+
+```hff
+elapsed:duration:in("1m":duration,"1h":duration)
+```
+
+The [runnable SQL duration example](https://github.com/ornew/hff/tree/main/examples/sql-durations)
+shows the schema and binding and builds the parameterized predicate without
+connecting to a database. The caller places `Where()` and `Args()` into its own
+query to execute it.
+
+The parser sums decimal components exactly before checking integral-nanosecond
+precision and int64 bounds. Long fractional spellings are not truncated to a
+fixed decimal scale. Invalid syntax, sub-nanosecond totals, and overflow
+produce ordinary null. A null or non-String dynamic receiver also produces
+ordinary null; no-value propagates. Computed Duration values support truth,
+equality and ordering comparisons, type checks, and canonical `string()` and
+`json()` conversion. `nanoseconds()` returns int64; other unit methods first
+convert the nanosecond count to float64 and then divide by the unit expressed
+as float64. `in()` accepts computed Duration and null candidates; known
+non-Duration candidate types simply do not match. If a dynamic candidate's
+schema can include Duration but its runtime type cannot be recovered,
+`Build` rejects the plan. A reached no-value candidate propagates even when
+another candidate has a different known type. PostgreSQL does not enforce the
+local parser's `MaxSteps` budget; database timeouts and input-size limits
+remain the caller's responsibility.
+
+### Schema-known collection access
+
 Known-schema field access is supported for nested struct/map fields. List
 indexing accepts negative indexes from the end and integer-valued floating
 indexes. A fractional or out-of-range index produces a null result. Missing
@@ -666,17 +716,20 @@ calls available.
 ### String methods on dynamic JSON values
 
 The backend supports `len()`, `startswith()`, and `endswith()` when a JSON
-receiver or one of these methods' string arguments has a dynamic `Any` or
-union representation. A runtime string is extracted and passed to the ordinary
+receiver or one of these methods' string arguments has a dynamic `Any` or union
+representation. A runtime string is extracted and passed to the ordinary
 string operation; a non-string runtime value becomes ordinary HFF null. This
 works both for a dynamic receiver and for a known string receiver with a
-dynamic JSON argument:
+dynamic JSON argument. It also dispatches `duration()` on a dynamic JSON
+receiver when its runtime value is a string; see
+[computed durations](#parse-computed-durations).
 
 ```hff
 data:len=5
 data:startswith("Al")
 data:endswith("ice")
 name:startswith(data)
+(data:duration):type="duration"
 (data:len):type="null"
 ```
 
@@ -686,7 +739,8 @@ no-value. For methods with an argument, an ordinary null receiver or a
 non-string dynamic receiver produces null and suppresses a later no-value
 argument under the normal receiver-first evaluation rule. A non-string dynamic
 argument produces null when the receiver is a string. `contains()` also has
-dynamic String/List dispatch, described below. Dynamic `concat()` is described
+dynamic String/List dispatch, described below. The computed Duration rules are
+described [above](#parse-computed-durations). Dynamic `concat()` is described
 in the next section.
 
 ### `contains()` on dynamic strings and lists
@@ -841,7 +895,8 @@ a source-located `hff.BackendError` from `Build`:
   when both integer and float candidates remain possible or an operation needs
   a numeric distinction lost during JSONB normalization.
 - Dynamic string methods other than `len()`, `lower()`, `upper()`, `bool()`,
-  `number()`, `fromjson()`, `frombase64()`, `startswith()`, `endswith()`,
+  `number()`, `duration()`, `fromjson()`, `frombase64()`, `startswith()`,
+  `endswith()`,
   String/List `contains()`, and String/List `concat()` described above.
 - Other dynamic operations whose result cannot be resolved from schema
   candidates, a supported type guard, or a statically typed string/numeric
@@ -850,8 +905,9 @@ a source-located `hff.BackendError` from `Build`:
   determined from the schema and available JSONB metadata.
 - Bytes values inside JSON arrays, objects, or callback-produced collections;
   `frombase64()` can produce a scalar Bytes value, but the SQL JSON collection
-  representation does not materialize Bytes. Timestamp and duration
-  conversions also remain unsupported. Float64 serialization when JSONB has
+  representation does not materialize Bytes. Timestamp conversions remain
+  unsupported, and computed Duration values cannot be stored in native or JSON
+  bindings. Float64 serialization when JSONB has
   lost required numeric representation and operations requiring a runtime
   type not fixed by schema or metadata remain unsupported.
 

@@ -5,6 +5,15 @@ import "github.com/ornew/hff"
 // jsonDecodeProjected decodes JSON already projected in the current SQL scope.
 // Keeping the projection outside this helper permits reuse of validated parses.
 func (b *builder) jsonDecodeProjected(n hff.Node, code string, format JSONFormat, typ hff.Type, present string) (expression, error) {
+	if typ.Kind() == hff.UnionType {
+		for _, member := range typ.Members() {
+			if member.Kind() == hff.DurationType {
+				// Duration storage has no declared decoding contract. Treating
+				// its physical JSON string or number as Any loses the HFF type.
+				return expression{}, b.failure(n, "JSON decoding cannot recover a stored Duration scalar")
+			}
+		}
+	}
 	kind, ok := jsonKind(typ)
 	if !ok {
 		if typ.Kind() != hff.AnyType && typ.Kind() != hff.UnionType {

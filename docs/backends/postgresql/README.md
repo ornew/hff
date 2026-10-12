@@ -231,7 +231,8 @@ An unsupported operation or type returns a source-located `hff.BackendError`
 from `Build`. For scalar bindings, the current subset rejects regex patterns
 outside the literal subset above, collection
 operations, `Any` and non-null mixed unions, conversions outside the JSON
-guide's `bool()`, `number()`, `fromjson()`, and `frombase64()` profile, and
+guide's `bool()`, `number()`, `duration()`, `fromjson()`, and `frombase64()`
+profile, and
 guarded access through nullable parents.
 JSON bindings support the
 schema-known access and inspection described in the [JSON guide](json.md).
@@ -247,9 +248,10 @@ list-union values; see the JSON guide for its conditions.
 Folds are supported for known accumulator types; see the JSON guide for their
 type and null rules. Bytes values cannot be materialized inside JSON/JSONB
 collections; `frombase64()` can instead produce a scalar Bytes result from a
-string. Timestamp/duration conversions, float64 serialization when JSONB has
-lost required numeric representation, and other unsupported types remain
-unsupported.
+string. `duration()` parses strings into computed durations, but stored Duration
+bindings and JSON/JSONB Duration materialization remain unavailable. Timestamp
+conversions, float64 serialization when JSONB has lost required numeric
+representation, and other unsupported types remain unsupported.
 Unsupported operations do not fall back to local evaluation.
 PostgreSQL is the only currently supported SQL dialect.
 
@@ -347,7 +349,8 @@ locale-independent simple `lower()`/`upper()` mappings and the Go `regexp`
 parser version used to validate and translate literal patterns. The actual
 PostgreSQL regex engine and version remain unknown. Its `bytes` detail reports
 native `bytea` and computed Bytes support, and that JSON collection storage of
-Bytes is unavailable.
+Bytes is unavailable. The `duration` detail reports computed parsing and unit
+operations, while native and JSON Duration storage bindings are unavailable.
 
 ```go
 profile, err := hffsql.Profile(hffsql.PostgreSQL)

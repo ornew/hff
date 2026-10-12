@@ -40,6 +40,21 @@ hours, minutes, seconds, milliseconds, and microseconds return float64. Adding
 a duration to a timestamp uses fixed elapsed time, not calendar arithmetic; an
 out-of-range result yields null.
 
+### PostgreSQL computed durations
+
+The PostgreSQL backend can parse a text column into a computed Duration and
+use its unit methods in a predicate. For example,
+`elapsed:duration:seconds>=60` accepts a text value of at least one minute.
+The [SQL duration example](https://github.com/ornew/hff/tree/main/examples/sql-durations)
+shows the schema, binding, and parameterized predicate construction. It builds
+the query without connecting to a database. Run it from the repository root
+with `go run ./examples/sql-durations`; it prints that the predicate was built
+and reports one bound parameter. PostgreSQL durations are computed
+values, not stored Duration bindings; JSON and JSONB Duration materialization is
+also unavailable. The backend does not enforce the local parser's `MaxSteps`
+budget, so database timeouts and input-size controls remain the caller's
+responsibility.
+
 ## Supply versioned time-zone data
 
 UTC and fixed offsets such as `+09:00` work without a profile. Named IANA or

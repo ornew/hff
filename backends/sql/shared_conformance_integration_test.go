@@ -30,6 +30,7 @@ func TestPostgreSQLSharedScalarConformance(t *testing.T) {
 		"nullable_guards_keep_presence": true,
 		"empty_filter":                  true, "and_before_or": true, "grouped_or": true,
 		"implicit_truthiness": true, "fractional_integer_division": true,
+		"duration_compound_fraction": true, "zero_duration_is_falsy": true,
 		"overflow_is_null": true, "regex_partial_match": true,
 		"invalid_regex_does_not_match_negation": true, "unicode_code_points": true,
 	}

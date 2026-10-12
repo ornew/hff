@@ -29,8 +29,12 @@ func (b *builder) jsonLiteral(n hff.Node) (expression, error) {
 			}
 			args = append(args, key.code)
 		}
-		if v.kind == hff.BytesType {
-			return expression{}, b.failure(child, "PostgreSQL JSON collections do not yet preserve bytes values")
+		if v.kind == hff.BytesType || v.kind == hff.DurationType {
+			kind := "bytes"
+			if v.kind == hff.DurationType {
+				kind = "duration"
+			}
+			return expression{}, b.failure(child, "PostgreSQL JSON collections do not yet preserve "+kind+" values")
 		}
 		values = append(values, v)
 		code := v.code

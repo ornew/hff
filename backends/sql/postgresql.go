@@ -312,7 +312,7 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 			}
 		}
 		value.present = both(value.present, test)
-		kind, ok := scalarKind(n.Type())
+		kind, ok := computedScalarKind(n.Type())
 		if !ok {
 			return expression{}, b.failure(n, "SQL type guards require a supported scalar result")
 		}
@@ -321,7 +321,7 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 			// explicitly permitted); do not cast an incompatible SQL value.
 			value.code = "NULL"
 			switch kind {
-			case hff.IntType:
+			case hff.IntType, hff.DurationType:
 				value.code = "NULL::bigint"
 			case hff.FloatType:
 				value.code = "NULL::double precision"
@@ -438,7 +438,7 @@ func truth(value expression) string {
 		test = "FALSE"
 	case hff.BoolType:
 		test = value.code
-	case hff.IntType, hff.FloatType:
+	case hff.IntType, hff.FloatType, hff.DurationType:
 		test = "(" + value.code + " <> 0)"
 	case hff.ListType:
 		test = "(json_array_length(" + value.code + "::json)>0)"
@@ -620,7 +620,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		return b.jsonFold(n, name)
 	}
 	switch name {
-	case "matches", "base64", "frombase64", "lower", "upper", "round", "ceil", "floor", "bool", "number", "fromjson", "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
+	case "duration", "hours", "minutes", "seconds", "milliseconds", "microseconds", "nanoseconds", "matches", "base64", "frombase64", "lower", "upper", "round", "ceil", "floor", "bool", "number", "fromjson", "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
 	default:
 		return expression{}, b.failure(n, "PostgreSQL does not yet support method "+name)
 	}
@@ -634,6 +634,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		values[i] = value
 	}
 	receiver := values[0]
+	if name == "duration" || name == "hours" || name == "minutes" || name == "seconds" || name == "milliseconds" || name == "microseconds" || name == "nanoseconds" {
+		return b.durationCall(n, name, receiver)
+	}
 	if name == "sort" {
 		return b.jsonSort(n, receiver)
 	}
@@ -680,6 +683,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		return b.serialize(n, receiver, name)
 	}
 	if name == "in" {
+		if receiver.kind == hff.DurationType {
+			return b.durationIn(n, values)
+		}
 		return b.jsonIn(n, values)
 	}
 	if format, structured := b.jsonValues[receiver.code]; structured {
@@ -699,6 +705,8 @@ func (b *builder) call(n hff.Node) (expression, error) {
 			typ = "string"
 		case hff.BytesType:
 			typ = "bytes"
+		case hff.DurationType:
+			typ = "duration"
 		}
 		return expression{"(CASE WHEN " + receiver.code + " IS NULL THEN 'null' ELSE '" + typ + "' END)", receiver.present, hff.StringType}, nil
 	}
