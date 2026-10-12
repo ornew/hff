@@ -125,9 +125,34 @@ numeric metadata described in that guide. String and recoverable dynamic JSON
 values support `bool()` and `number()`; `number()` requires PostgreSQL 16 or
 later. They also support `fromjson()` on PostgreSQL 16 and later; see the JSON
 guide for parsing rules and its NUL precondition.
-String methods currently supported are `len()`, `lower()`, `upper()`,
-`contains()`, `startswith()`, `endswith()`, `concat()`, and `frombase64()`;
-boolean `not()`, `and()`, and `or()` are supported.
+Supported string methods include `len()`, `matches()` for the regex subset
+below, `lower()`, `upper()`, `contains()`, `startswith()`, `endswith()`,
+`concat()`, and `frombase64()`; boolean `not()`, `and()`, and `or()` are
+supported.
+
+### Regular expressions
+
+PostgreSQL 15 and later supports `~`, `!~`, and `string:matches()` when the
+pattern is a literal in a conservative RE2 subset. It includes non-NUL ASCII
+literals and character classes whose parsed ranges contain only non-NUL ASCII
+(including `\d`, `\s`, and `\w`), alternation, concatenation, captures, `*`,
+`+`, `?`, repeats whose explicit bounds are at most 255 (including an open
+upper bound), and absolute text anchors (`^`, `$`, `\A`, `\z`). Ordinary
+negated or Unicode classes usually introduce unsupported ranges.
+
+Patterns are not sent through as-is: the builder translates this subset to
+PostgreSQL's regular-expression syntax. A well-formed RE2 pattern outside the
+subset, or a non-literal pattern, returns a source-located `BackendError` from
+`Build` when the backend must translate and evaluate the regex operation.
+Unsupported constructs include `.`, case folding, multiline anchors, word
+boundaries, and quantified anchors. Malformed patterns evaluate to null under
+both `~` and `!~`; the operator does not turn an invalid pattern into true.
+Null or no-value operator operands produce false, while `matches()` propagates
+null or no-value. Prefix `!` follows ordinary HFF boolean semantics on the
+method result. See the
+[scalar-method guide](../../guides/scalar-methods.md#regular-expression-support)
+for examples and the distinction between `matches()` null propagation and
+operator predicate behavior.
 
 Numeric `round()`, `ceil()`, and `floor()` are supported and preserve the
 integer or float subtype.
@@ -199,7 +224,8 @@ declared HFF types and nullability, and that stored values meet these encoding
 and finiteness constraints. Bytes fields must bind to PostgreSQL `bytea`.
 
 An unsupported operation or type returns a source-located `hff.BackendError`
-from `Build`. For scalar bindings, the current subset rejects regex, collection
+from `Build`. For scalar bindings, the current subset rejects regex patterns
+outside the literal subset above, collection
 operations, `Any` and non-null mixed unions, conversions outside the JSON
 guide's `bool()`, `number()`, `fromjson()`, and `frombase64()` profile, and
 guarded access through nullable parents.
@@ -311,9 +337,11 @@ also includes the program's effective capability policy, compile limits, and
 registered SQL method declarations. Neither profile inspects the database or
 infers its version, collation, regex, or time-zone data versions. The
 PostgreSQL profile reports the Go Unicode table version used for
-locale-independent simple `lower()`/`upper()` mappings. Its `bytes` detail
-reports native `bytea` and computed Bytes support, and that JSON collection
-storage of Bytes is unavailable.
+locale-independent simple `lower()`/`upper()` mappings and the Go `regexp`
+parser version used to validate and translate literal patterns. The actual
+PostgreSQL regex engine and version remain unknown. Its `bytes` detail reports
+native `bytea` and computed Bytes support, and that JSON collection storage of
+Bytes is unavailable.
 
 ```go
 profile, err := hffsql.Profile(hffsql.PostgreSQL)

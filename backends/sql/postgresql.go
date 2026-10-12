@@ -502,7 +502,7 @@ func (b *builder) parameter(n hff.Node, value hff.Value) (expression, error) {
 func (b *builder) binary(n hff.Node) (expression, error) {
 	op, _ := n.Operator()
 	switch op {
-	case hff.Equal, hff.NotEqual, hff.Less, hff.LessEqual, hff.Greater, hff.GreaterEqual:
+	case hff.Match, hff.NotMatch, hff.Equal, hff.NotEqual, hff.Less, hff.LessEqual, hff.Greater, hff.GreaterEqual:
 	case hff.Add, hff.Subtract, hff.Multiply, hff.Divide, hff.Remainder:
 	default:
 		return expression{}, b.failure(n, "PostgreSQL does not yet support operator "+string(op))
@@ -516,6 +516,9 @@ func (b *builder) binary(n hff.Node) (expression, error) {
 	right, err := b.expression(r)
 	if err != nil {
 		return expression{}, err
+	}
+	if op == hff.Match || op == hff.NotMatch {
+		return b.regexCall(n, op, left, right)
 	}
 	if op == hff.Add || op == hff.Subtract || op == hff.Multiply || op == hff.Divide || op == hff.Remainder {
 		return b.arithmetic(n, left, right, op)
@@ -617,7 +620,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		return b.jsonFold(n, name)
 	}
 	switch name {
-	case "base64", "frombase64", "lower", "upper", "round", "ceil", "floor", "bool", "number", "fromjson", "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
+	case "matches", "base64", "frombase64", "lower", "upper", "round", "ceil", "floor", "bool", "number", "fromjson", "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
 	default:
 		return expression{}, b.failure(n, "PostgreSQL does not yet support method "+name)
 	}
@@ -631,6 +634,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		values[i] = value
 	}
 	receiver := values[0]
+	if name == "matches" {
+		return b.regexCall(n, "", receiver, values[1])
+	}
 	if name == "base64" || name == "frombase64" || (name == "len" && receiver.kind == hff.BytesType) {
 		return b.bytesCall(n, name, receiver)
 	}

@@ -31,6 +31,31 @@ subtype. `string:bool()` accepts exactly `true` or `false`, and `string:number()
 accepts JSON number spelling; neither trims whitespace. Invalid patterns or
 conversions yield null.
 
+## Regular-expression support
+
+The local backend follows HFF's RE2 contract. PostgreSQL 15 and later supports
+a smaller, literal-pattern subset for `~`, `!~`, and `string:matches()`:
+
+```hff
+name~"^A"
+name:matches("^A")
+name!~"^A"
+```
+
+The PostgreSQL subset accepts non-NUL ASCII literals and character classes
+whose parsed ranges contain only non-NUL ASCII (including `\d`, `\s`, and
+`\w`), alternation, concatenation, captures, `*`, `+`, `?`, repeats whose
+explicit bounds are at most 255, and absolute text anchors. Dot, case folding,
+multiline anchors, word boundaries, quantified anchors, and non-literal
+patterns are rejected by `Build` when the regex must be translated. Ordinary
+negated or Unicode classes usually introduce unsupported ranges. A valid
+RE2 pattern outside that subset is a backend error. A malformed pattern yields
+null under both `~` and `!~`; the operator does not turn an invalid pattern
+into true. Null or no-value operator operands produce false, while
+`matches()` propagates null or no-value. Prefix `!` follows ordinary HFF
+boolean semantics on the method result. See the
+[PostgreSQL regex subset](../backends/postgresql/README.md#regular-expressions).
+
 ## Base64 and byte values
 
 `string:frombase64()` decodes standard padded base64 into an immutable bytes

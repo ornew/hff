@@ -2,6 +2,7 @@ package sql_test
 
 import (
 	"context"
+	"runtime"
 	"testing"
 	"unicode"
 
@@ -17,18 +18,21 @@ func TestSQLProfilesDoNotInventDatabaseGuarantees(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !base.Valid() || len(base.Versions()) != 1 || len(base.Guarantees()) != 0 || base.Capabilities().Specified() {
+	if !base.Valid() || len(base.Versions()) != 2 || len(base.Guarantees()) != 0 || base.Capabilities().Specified() {
 		t.Fatal("static translation profile fabricated database state or policy")
 	}
-	if version := base.Versions()[0]; version.Component != "unicode" || version.Version != unicode.Version {
+	if version := base.Versions()[1]; version.Component != "unicode" || version.Version != unicode.Version {
 		t.Fatal("translator Unicode compatibility version missing")
+	}
+	if version := base.Versions()[0]; version.Component != "regex.parser" || version.Version != "Go regexp "+runtime.Version() {
+		t.Fatal("translator regex parser version missing")
 	}
 	for _, id := range capabilities.Standard().IDs() {
 		if _, known := base.Feature(id); !known {
 			t.Fatalf("missing SQL support entry: %s", id)
 		}
 	}
-	for _, id := range []capabilities.ID{capabilities.RegexOperators, capabilities.Method("string.matches"), capabilities.Method("timestamp.year")} {
+	for _, id := range []capabilities.ID{capabilities.Method("timestamp.year")} {
 		if support, _ := base.Feature(id); support.Level != hff.Unsupported {
 			t.Fatalf("unimplemented SQL feature advertised: %s", id)
 		}

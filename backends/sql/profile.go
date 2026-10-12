@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"runtime"
 	"strings"
 	"unicode"
 
@@ -9,8 +10,9 @@ import (
 )
 
 // Profile describes statically known translation support for a dialect without
-// connecting to a database. Unicode casing uses the reported Go table version;
-// database, collation, regex, and time-zone versions remain unknown.
+// connecting to a database. Unicode casing and regex parsing report their Go
+// implementation versions; database, collation, database regex engine, and
+// time-zone versions remain unknown.
 func Profile(dialect Dialect) (hff.Profile, error) {
 	config, err := sqlProfileConfig(dialect)
 	if err != nil {
@@ -35,7 +37,7 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 	}
 	config := hff.ProfileConfig{
 		Backend:  "sql/postgresql",
-		Versions: []hff.CompatibilityVersion{{Component: "unicode", Version: unicode.Version}},
+		Versions: []hff.CompatibilityVersion{{Component: "unicode", Version: unicode.Version}, {Component: "regex.parser", Version: "Go regexp " + runtime.Version()}},
 		Details: []hff.ProfileDetail{
 			{Name: "execution", Value: "caller owns database execution, input/schema validity, and database timeout configuration"},
 			{Name: "limits", Value: "translation cannot enforce HFF step, generated-value, or JSON-depth budgets in the database"},
@@ -45,15 +47,15 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 			{Name: "number.parsing", Value: "number() requires PostgreSQL 16+ input validation; JSON number spelling, int64 bounds, and finite binary64 results are checked"},
 			{Name: "json.parsing", Value: "fromjson requires PostgreSQL 16+ JSON validation; caller guarantees decoded JSON strings and keys contain no NUL"},
 			{Name: "bytes", Value: "native bytea and computed bytes are supported; JSON collection storage of bytes is unavailable"},
-			{Name: "regex", Value: "RE2-compatible regex translation is not supported by this implementation"},
+			{Name: "regex", Value: "literal non-NUL ASCII RE2 subset translated to PostgreSQL 15+ ARE; dynamic patterns, case folding, line anchors, Unicode classes, dot and quantified anchors are unavailable"},
 			{Name: "extensions.contract", Value: "translators use typed expressions and parameter binding; caller guarantees trusted SQL templates and database function behavior"},
 		},
 	}
 	for _, id := range capabilities.Standard().IDs() {
 		feature := hff.FeatureSupport{ID: id, Level: hff.Conditional,
 			Conditions: "Build checks supported types, operator semantics, and explicit schema-to-column bindings"}
-		if id == capabilities.RegexOperators {
-			feature.Level, feature.Conditions = hff.Unsupported, "RE2-compatible translation is unavailable"
+		if id == capabilities.RegexOperators || id == capabilities.Method("string.matches") {
+			feature.Conditions += "; PostgreSQL 15+; literal non-NUL ASCII RE2 subset only"
 		}
 		if name, method := strings.CutPrefix(string(id), "method:"); method && !profileSQLMethod(name) {
 			feature.Level, feature.Conditions = hff.Unsupported, "method translation is unavailable"
@@ -74,7 +76,7 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 func profileSQLMethod(id string) bool {
 	switch id {
 	case "any.type", "any.json", "any.string", "any.in", "any.exists",
-		"bytes.len", "bytes.base64", "string.frombase64", "number.round", "number.ceil", "number.floor", "bool.and", "bool.or", "bool.not", "string.bool", "string.number", "string.fromjson", "string.lower", "string.upper", "string.len", "string.contains", "string.startswith", "string.endswith", "string.concat",
+		"bytes.len", "bytes.base64", "string.frombase64", "number.round", "number.ceil", "number.floor", "bool.and", "bool.or", "bool.not", "string.bool", "string.number", "string.fromjson", "string.matches", "string.lower", "string.upper", "string.len", "string.contains", "string.startswith", "string.endswith", "string.concat",
 		"list.size", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr",
 		"object.size", "object.has", "object.get", "object.keys", "object.values", "object.items":
 		return true

@@ -307,3 +307,50 @@ JSON and JSONB strings can be decoded explicitly with `frombase64()`, but JSON
 collections cannot store HFF Bytes values. The backend builds a predicate and
 does not execute it or inspect table types; the application passes `Where()`
 and `Args()` to its database driver.
+
+## Filter with a literal regular expression
+
+The PostgreSQL backend can translate a literal pattern such as `^A` on
+PostgreSQL 15 and later. This table shows how the HFF predicate corresponds to
+the physical text column:
+
+```sql
+CREATE TABLE contacts (
+    id bigint PRIMARY KEY,
+    name text NOT NULL
+);
+
+INSERT INTO contacts VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Ava');
+```
+
+Compile and build `name~"^A"` with the same schema and binding pattern used
+above:
+
+```go
+e, err := engine.New(
+    engine.WithSchema(schema.Struct(schema.String("name"))),
+    engine.WithCapabilities(capabilities.Standard()),
+)
+if err != nil {
+    return err
+}
+program, err := e.Compile(ctx, `name~"^A"`)
+if err != nil {
+    return err
+}
+query, err := hffsql.Build(ctx, program,
+    hffsql.WithDialect(hffsql.PostgreSQL),
+    hffsql.WithBindings(hffsql.Bind(
+        hff.Path{"name"}, hffsql.Column("contacts", "name"),
+    )),
+)
+if err != nil {
+    return err
+}
+```
+
+Use `query.Where()` and `query.Args()` in the caller's `SELECT`; the sample
+predicate selects contacts 1 and 3. The backend accepts only the documented
+literal RE2 subset. A non-literal or well-formed but unsupported pattern fails
+at `Build`; a malformed pattern evaluates to null. See the
+[regex subset and limitations](../backends/postgresql/README.md#regular-expressions).

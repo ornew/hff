@@ -4,7 +4,6 @@ package sql_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -72,13 +71,6 @@ func TestPostgreSQLSharedScalarConformance(t *testing.T) {
 				bindings = append(bindings, binding)
 			}
 			q, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings...))
-			if tc.Name == "regex_partial_match" || tc.Name == "invalid_regex_does_not_match_negation" {
-				var detail *hff.Error
-				if !errors.As(err, &detail) || detail.Code != hff.BackendError {
-					t.Fatalf("%s: expected unsupported regex, got %v", tc.Name, err)
-				}
-				continue
-			}
 			if err != nil {
 				t.Fatal(tc.Name, err)
 			}

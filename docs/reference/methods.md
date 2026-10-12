@@ -59,6 +59,8 @@ The PostgreSQL backend supports scalar Bytes values backed by `bytea`, including
 `len()`, `base64()`, equality, and decoding with `string:frombase64()`. It does
 not materialize Bytes inside JSON/JSONB collections; see the
 [PostgreSQL bytea guide](../backends/postgresql/README.md#bytes-and-base64).
+PostgreSQL 15 and later also supports `string:matches()` for literal patterns
+in the documented [RE2 subset](../backends/postgresql/README.md#regular-expressions).
 
 Invalid conversions and invalid regular expressions yield null. The HFF regex
 reference is RE2 except `\\C`, which is rejected. Base64 decoding rejects
