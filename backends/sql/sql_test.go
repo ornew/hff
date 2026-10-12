@@ -288,7 +288,6 @@ func TestDeferredSQLTypesAndMethodsRejectAtBuild(t *testing.T) {
 	for _, source := range []string{
 		`name:matches("A")`, `name!~"A"`,
 		`name:frombase64`, `name:timestamp`, `name:duration`,
-		`factor:round=1`, `age:round=1`, `age:floor=1`, `factor:ceil=1`,
 	} {
 		_, err := hffsql.Build(ctx, compile(t, source), hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
 		detail := requireCode(t, err, hff.BackendError)

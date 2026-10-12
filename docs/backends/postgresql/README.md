@@ -127,6 +127,8 @@ later. They also support `fromjson()` on PostgreSQL 16 and later; see the JSON
 guide for parsing rules and its NUL precondition.
 String methods currently supported are `len()`, `contains()`, `startswith()`,
 `endswith()`, and `concat()`; boolean `not()`, `and()`, and `or()` are supported.
+Numeric `round()`, `ceil()`, and `floor()` are supported and preserve the
+integer or float subtype.
 The generic scalar `in()` method is supported for membership among its
 arguments. For JSON-backed lists, the backend also supports `contains()`,
 `unique()`, `sort()`, `concat(list)`, `any()`, `all()`, `map()`, and
@@ -158,6 +160,11 @@ remainder is unsupported. PostgreSQL lowering preserves these results without
 relying on the database's floating-point arithmetic for final rounding; see
 the [numeric JSON guide](json.md#numeric-arithmetic) and
 [design record 015](../../design/015-postgresql-float-arithmetic.md).
+
+Numeric `round()` rounds halfway values away from zero; `ceil()` and `floor()`
+round toward positive and negative infinity. These methods preserve the input
+numeric subtype. For JSONB values, an ambiguous integer/float subtype requires
+the metadata described in the JSON guide.
 
 For mixed numeric ordering, the builder partitions float values around the
 int64 range, floors only in the safely castable range, and compares the integer

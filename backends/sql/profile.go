@@ -70,7 +70,7 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 func profileSQLMethod(id string) bool {
 	switch id {
 	case "any.type", "any.json", "any.string", "any.in", "any.exists",
-		"bool.and", "bool.or", "bool.not", "string.bool", "string.number", "string.fromjson", "string.len", "string.contains", "string.startswith", "string.endswith", "string.concat",
+		"number.round", "number.ceil", "number.floor", "bool.and", "bool.or", "bool.not", "string.bool", "string.number", "string.fromjson", "string.len", "string.contains", "string.startswith", "string.endswith", "string.concat",
 		"list.size", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr",
 		"object.size", "object.has", "object.get", "object.keys", "object.values", "object.items":
 		return true

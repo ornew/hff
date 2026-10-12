@@ -184,6 +184,28 @@ preserves HFF results at ties, subnormal boundaries, signed zero, and overflow.
 See [design record 015](../../design/015-postgresql-float-arithmetic.md) for
 the numerical rationale and tested boundaries.
 
+### Numeric rounding methods
+
+`round()`, `ceil()`, and `floor()` are supported for schema-known `Int` and
+`Float` values and for JSON `Any` or unions when the runtime numeric subtype is
+recoverable. Integer receivers keep their int64 value and subtype. Float
+receivers keep float64, including signed zero; `round()` rounds halfway cases
+away from zero (`2.5` to `3.0`, `-2.5` to `-3.0`), while `ceil()` and `floor()`
+round toward positive and negative infinity respectively. Null or
+non-numeric runtime receivers produce ordinary null, and no-value propagates.
+
+```hff
+amount:round=3.0
+amount:ceil=4.0
+amount:floor=-3.0
+payload.value:number:round=3.0
+```
+
+For JSONB, metadata is required when storage erased whether an ambiguous value
+was `Int` or `Float`; a declared numeric type resolves that subtype choice.
+Schema does not restore representation details that storage erased, such as a
+negative-zero sign when later serialization or another operation observes it.
+
 Native JSON retains numeric spelling that can distinguish integer and float
 values for dynamic operations. JSONB may erase that distinction; provide the
 numeric metadata described below when a dynamic operation needs it. Metadata
