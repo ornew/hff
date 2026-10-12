@@ -16,6 +16,9 @@ For a quick browser experiment, try the [Playground](../playground.md).
    execution guarantees without opening a database connection.
 5. [Bind a Go record type](05-go-bindings.md): infer an HFF schema and build a
    typed local filter from an application record type.
+6. [Bind PostgreSQL data to HFF records](06-postgresql-bindings.md): map
+   related database rows to an HFF list and execute the generated predicate
+   with caller-owned SQL.
 
 Run each complete example from the repository root:
 
@@ -25,6 +28,7 @@ go run ./examples/tutorial-service
 go run ./examples/extensions
 go run ./examples/sql-extensions
 go run ./examples/go-binding
+go run ./examples/sql-relations
 ```
 
 For feature explanations, continue with the [guides](../guides/README.md).

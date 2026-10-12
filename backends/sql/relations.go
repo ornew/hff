@@ -6,8 +6,10 @@ import (
 	"github.com/ornew/hff"
 )
 
-// Relation describes a caller-owned correlated row source. Construction and
-// translation perform no database I/O. Every source row is one list item.
+// Relation describes a caller-owned PostgreSQL row source correlated to the
+// enclosing query. Each selected source row represents one HFF list item.
+// Construction and Build perform no database I/O; the caller owns the table,
+// data/schema validity, database execution, and query timeouts.
 type Relation struct {
 	config relationConfig
 	valid  bool
@@ -21,44 +23,73 @@ type relationConfig struct {
 	item          Binding
 	order         []RelationOrder
 }
+
+// RelationOption configures a Relation. NewRelation applies options in order.
 type RelationOption struct{ apply func(*relationConfig) error }
 
+// WithRelationSource selects a literal table identifier and local SQL alias.
+// The alias is visible to the correlation and item bindings.
 func WithRelationSource(table ColumnRef, alias string) RelationOption {
 	return RelationOption{func(c *relationConfig) error { c.table = Column(table.parts...); c.alias = alias; return nil }}
 }
+
+// WithCorrelation supplies the predicate that relates source rows to the
+// enclosing record. Build lowers it to a correlated PostgreSQL condition.
+// Prefer typed SQLPredicate constructors; the condition must accurately and
+// deterministically express the intended relationship.
 func WithCorrelation(predicate SQLPredicate) RelationOption {
 	return RelationOption{func(c *relationConfig) error { c.correlation = predicate; return nil }}
 }
 
-// WithRelationState distinguishes a missing or null list from an empty row
-// source. Without it, a relation is present and non-null, including no rows.
+// WithRelationState supplies explicit predicates for a relation's logical list
+// presence and null state. Without it, the list is present and non-null even
+// when the row source has no matching rows (an empty list). The caller owns the
+// truth and deterministic behavior of these predicates.
 func WithRelationState(present, null SQLPredicate) RelationOption {
 	return RelationOption{func(c *relationConfig) error { c.present = present; c.null = null; return nil }}
 }
 
-// The item binding uses an empty path, relative to each related row.
+// WithRelationItem declares the exact HFF element type and maps each source row
+// to one item. The Binding path must be empty because it is relative to that
+// row; use BindStruct for a flattened struct item or another binding for its
+// physical representation.
 func WithRelationItem(typ hff.Type, item Binding) RelationOption {
 	return RelationOption{func(c *relationConfig) error { c.typ = typ; c.item = item; return nil }}
 }
 
-// RelationOrder is an immutable typed column ordering. PostgreSQL's native
-// scalar ordering is used; the caller guarantees the full tuple is unique.
+// RelationOrder is one component of an immutable typed row ordering. PostgreSQL
+// scalar ordering is used. The caller guarantees the complete order tuple is
+// unique whenever the HFF operation depends on stable element order.
 type RelationOrder struct {
 	column                 ColumnRef
 	typ                    hff.Type
 	descending, nullsFirst bool
 }
 
+// Ascending orders a relation by the given typed SQL column in ascending order.
 func Ascending(column ColumnRef, typ hff.Type) RelationOrder {
 	return RelationOrder{column: Column(column.parts...), typ: typ}
 }
+
+// Descending orders a relation by the given typed SQL column in descending order.
 func Descending(column ColumnRef, typ hff.Type) RelationOrder {
 	return RelationOrder{column: Column(column.parts...), typ: typ, descending: true}
 }
+
+// NullsFirst returns an ordering with null values before non-null values.
 func NullsFirst(order RelationOrder) RelationOrder { order.nullsFirst = true; return order }
+
+// WithUniqueOrder configures the order tuple that the caller guarantees is
+// unique. Order is required only for operations whose results depend on item
+// order, such as indexing, stable sort ties, order-observed map results, or folds.
 func WithUniqueOrder(order ...RelationOrder) RelationOption {
 	return RelationOption{func(c *relationConfig) error { c.order = append([]RelationOrder(nil), order...); return nil }}
 }
+
+// NewRelation validates and snapshots a caller-owned relation description.
+// Source, correlation, and an item binding are required. State defaults to a
+// present non-null list; order is optional unless a used operation depends on
+// order. Identifiers are validated here, but table contents are not inspected.
 func NewRelation(options ...RelationOption) (Relation, error) {
 	c := relationConfig{present: TrustedSQL("true"), null: TrustedSQL("false")}
 	for _, option := range options {
@@ -78,7 +109,7 @@ func NewRelation(options ...RelationOption) (Relation, error) {
 	if c.typ.Kind() == hff.InvalidType || len(c.item.path) != 0 {
 		return Relation{}, configuration("relation requires an explicit item type and an empty relative item path")
 	}
-	if strings.TrimSpace(c.correlation.code) == "" {
+	if c.correlation.node == nil && strings.TrimSpace(c.correlation.code) == "" {
 		return Relation{}, configuration("relation requires a trusted correlation predicate")
 	}
 	for _, order := range c.order {
@@ -92,6 +123,8 @@ func NewRelation(options ...RelationOption) (Relation, error) {
 	}
 	return Relation{config: c, valid: true}, nil
 }
+
+// BindRelation binds an HFF list path to a configured correlated row source.
 func BindRelation(path hff.Path, relation Relation) Binding {
 	return Binding{path: append(hff.Path(nil), path...), relation: &relation}
 }
@@ -180,8 +213,8 @@ func (b *builder) relationJSON(n hff.Node, binding Binding) (string, error) {
 	if len(orders) > 0 && !b.relationOrderBlind(n, binding) {
 		ordered = " ORDER BY " + strings.Join(orders, ",")
 	}
-	rows := "(SELECT COALESCE(json_agg(" + item + ordered + "),'[]'::json) FROM " + table + " AS " + alias + " WHERE (" + c.correlation.code + "))"
-	return "(CASE WHEN (" + c.present.code + ") IS NOT TRUE OR (" + c.null.code + ") IS TRUE THEN NULL::json ELSE " + rows + " END)", nil
+	rows := "(SELECT COALESCE(json_agg(" + item + ordered + "),'[]'::json) FROM " + table + " AS " + alias + " WHERE (" + b.predicateCode(c.correlation) + "))"
+	return "(CASE WHEN (" + b.predicateCode(c.present) + ") IS NOT TRUE OR (" + b.predicateCode(c.null) + ") IS TRUE THEN NULL::json ELSE " + rows + " END)", nil
 }
 
 // Only consumers with an order-independent result can observe unordered lists.

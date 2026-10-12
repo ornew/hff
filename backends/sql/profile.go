@@ -7,8 +7,9 @@ import (
 	"github.com/ornew/hff/capabilities"
 )
 
-// Profile describes translation support without connecting to a database.
-// Database, collation, Unicode, regex, and time-zone versions remain unknown.
+// Profile describes statically known translation support for a dialect without
+// connecting to a database. Runtime database, collation, Unicode, regex, and
+// time-zone versions remain unknown.
 func Profile(dialect Dialect) (hff.Profile, error) {
 	config, err := sqlProfileConfig(dialect)
 	if err != nil {
@@ -17,8 +18,9 @@ func Profile(dialect Dialect) (hff.Profile, error) {
 	return hff.NewProfile(config)
 }
 
-// Profile returns the built query's translation contract. It does not inspect
-// the executing database or turn caller-owned data guarantees into HFF checks.
+// Profile returns the built query's translation contract, including its
+// compile policy, limits, and registered translations. It does not inspect the
+// executing database or turn caller-owned storage guarantees into HFF checks.
 func (q *Query) Profile() hff.Profile {
 	if q == nil {
 		return hff.Profile{}

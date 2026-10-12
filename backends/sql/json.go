@@ -11,13 +11,16 @@ import (
 type JSONFormat string
 
 const (
-	JSON  JSONFormat = "json"
+	// JSON selects PostgreSQL's native json physical representation.
+	JSON JSONFormat = "json"
+	// JSONB selects PostgreSQL's jsonb physical representation.
 	JSONB JSONFormat = "jsonb"
 )
 
-// BindJSON maps an HFF value to one native JSON document. Its schema determines
-// scalar subtypes; the caller must store values that satisfy that schema. Build
-// rejects operations for which the physical representation is insufficient.
+// BindJSON maps one HFF schema path to a PostgreSQL json or jsonb column. The
+// declared HFF schema supplies scalar subtypes; the caller must store documents
+// valid for that schema and selected format. Build rejects operations whose
+// distinctions cannot be recovered from the stored representation.
 func BindJSON(path hff.Path, column ColumnRef, format JSONFormat) Binding {
 	b := Bind(path, column)
 	b.format = format

@@ -47,12 +47,18 @@ rows, err := db.QueryContext(ctx,
     `SELECT records.id FROM records WHERE `+query.Where(), query.Args()...)
 ```
 
-`Path` and `Column` take identifier components, not SQL fragments. A schema
-field literally named `service.name` is bound with `hff.Path{"service.name"}`;
-nested fields use multiple path components. Each column component is quoted
-separately. Every referenced field must have a binding. A path can pass through
-required struct fields, but not through an optional or nullable parent because
-a flattened column cannot preserve the parent's missing/null state.
+`hff.Path` names fields in the logical HFF record; `Column` names components of
+the physical PostgreSQL identifier. They are different namespaces. A field
+literally named `service.name` is `hff.Path{"service.name"}`; a nested field
+uses `hff.Path{"service", "name"}`. `Column("people", "name")` means the
+quoted identifier `"people"."name"`, not SQL text. A dot inside one component
+is part of that identifier. Every field the query can read must have a
+binding. `Bind` can traverse required struct fields, but cannot represent a
+missing or null parent. A JSON object can represent a missing key; a flattened
+struct needs explicit parent-state predicates. A composite distinguishes a
+SQL-null row from a present row, but its attributes cannot be missing. A
+relation is always a list and needs explicit state predicates only when
+missing or null list states are required.
 
 You can also pass `hffsql.WithConfig(&hffsql.Config{Dialect: hffsql.PostgreSQL,
 Bindings: bindings})`; functional options apply from left to right, so a later
@@ -66,6 +72,30 @@ contract. Compose it into a statement owned by the service and pass the
 parameters to the database API; do not interpolate query values into SQL text.
 
 ## Supported PostgreSQL subset
+
+Choose a physical binding from the way the application stores each HFF value:
+
+| Physical storage | Binding | What it maps |
+| --- | --- | --- |
+| Scalar SQL column | `Bind(path, Column(...))` | One HFF scalar field to one column. SQL `NULL` is an explicit HFF null. |
+| JSON/JSONB column | `BindJSON(path, column, JSON/JSONB)` | One complete schema-known HFF object, map, or list value. Descendant paths are read inside that document. |
+| Native composite column | `BindComposite(path, column)` | One HFF struct to a PostgreSQL composite. A SQL-null row is null; its attributes are always present. |
+| Struct spread across columns | `BindStruct(path, present, null, fields...)` | One HFF object with caller-supplied parent state and per-field bindings. |
+| Related rows | `BindRelation(path, relation)` | An HFF list whose items come from one caller-selected correlated row source. |
+
+These bindings are not interchangeable. A one-to-one value can be a composite
+or a flattened struct; `BindRelation` always represents a list, even if the
+database currently has at most one matching row. A one-to-many relation maps
+one parent key to zero or more rows. Nested one-to-many values use a nested
+`BindRelation` for a field of the item type. The current relation source is
+one table or view plus a caller-authored `SQLPredicate` correlation: HFF does not infer
+foreign keys, generate joins, or discover many-to-many paths. To expose a
+many-to-many result, provide a database view that presents the desired rows or
+bind the junction relation and a nested relation explicitly.
+
+The [binding tutorial](../../tutorials/06-postgresql-bindings.md) walks through
+a parent table and child rows. The representation-specific guides explain
+each binding's missing/null/empty rules.
 
 In addition to scalar columns, the backend supports an initial schema-typed
 JSON/JSONB profile. See [PostgreSQL JSON and JSONB bindings](json.md) for its

@@ -2,21 +2,40 @@ package sql
 
 import "github.com/ornew/hff"
 
-// ExecutionLimits requests per-record HFF evaluation budgets. Zero requests no
-// guarantee; negative values are invalid. These are not database timeouts.
-type ExecutionLimits struct{ MaxSteps, MaxGeneratedValues int }
+// ExecutionLimits requests per-record HFF evaluation budgets from a backend.
+// Zero requests no guarantee; negative values are invalid. These are HFF
+// budgets, not PostgreSQL statement timeouts.
+type ExecutionLimits struct {
+	// MaxSteps requests a maximum HFF runtime work count.
+	MaxSteps int
+	// MaxGeneratedValues requests a maximum count of generated HFF values.
+	MaxGeneratedValues int
+}
 
-// Guarantees describes budgets a dialect can enforce during database execution.
-// A false field means Build rejects a positive request for that budget.
-type Guarantees struct{ MaxSteps, MaxGeneratedValues bool }
+// Guarantees reports whether a backend can enforce the requested HFF budgets.
+type Guarantees struct {
+	// MaxSteps reports enforcement of per-record HFF runtime steps.
+	MaxSteps bool
+	// MaxGeneratedValues reports enforcement of generated HFF value count.
+	MaxGeneratedValues bool
+}
 
+// ExecutionGuarantees reports runtime-budget support for a dialect without
+// building a particular Program or contacting a database.
 func ExecutionGuarantees(dialect Dialect) (Guarantees, error) {
 	if dialect != PostgreSQL {
 		return Guarantees{}, configuration("explicit supported SQL dialect required")
 	}
 	return Guarantees{}, nil
 }
+
+// Guarantees reports budgets enforceable by this Query's backend. PostgreSQL
+// currently reports neither HFF step nor generated-value budget enforcement.
 func (q *Query) Guarantees() Guarantees { return Guarantees{} }
+
+// WithExecutionLimits requests backend-enforced HFF runtime budgets during SQL
+// execution. PostgreSQL rejects positive requests because it cannot enforce
+// them; configure database execution limits through the caller instead.
 func WithExecutionLimits(limits ExecutionLimits) Option {
 	return Option{func(c *Config) error { c.ExecutionLimits = limits; return nil }}
 }

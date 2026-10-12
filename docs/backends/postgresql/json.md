@@ -12,6 +12,24 @@ Declare the JSON document's HFF shape in the engine schema. A single non-null
 type family may also be nullable; dynamic `Any` and unions with multiple
 non-null families cannot be mapped faithfully from a JSON column.
 
+For example, the HFF path `profile` can be stored as one physical JSONB
+column. These rows have the database shape used below:
+
+```sql
+CREATE TABLE records (
+    id bigint PRIMARY KEY,
+    profile jsonb NOT NULL
+);
+INSERT INTO records VALUES
+    (1, '{"name":"Ada","scores":[80,90]}'::jsonb),
+    (2, '{"name":null,"scores":[]}'::jsonb);
+```
+
+The first JSON document is reconstructed as the HFF value
+`{"profile":{"name":"Ada","scores":[80,90]}}`. The database column is
+bound at the root HFF path `profile`; `profile.name` and `profile.scores` are
+then fields inside that same document, not separate column bindings.
+
 ```go
 profileType := schema.Struct(
     schema.Nullable(schema.String("name")),
@@ -49,11 +67,13 @@ rows, err := db.QueryContext(ctx,
 
 Use `hffsql.JSON` or `hffsql.JSONB` to state the physical PostgreSQL column
 type. Ordinary scalar bindings continue to use `Bind`; JSON bindings use
-`BindJSON(path, column, format)`. The path identifies the schema value stored
-in that column. Its nested struct fields and list/map contents are accessed
-inside the JSON document. Do not bind both a JSON ancestor and one of its
-descendant paths, and do not map two schema paths to one physical column using
-conflicting formats; `Build` rejects these conflicting mappings.
+`BindJSON(path, column, format)`. The path identifies the complete schema
+value stored in that column. Its nested struct fields and list/map contents
+are accessed inside the JSON document. Do not bind both a JSON ancestor and
+one of its descendant paths, and do not map two schema paths to one physical
+column using conflicting formats; `Build` rejects these conflicting
+mappings. `Column("records", "profile")` names two separately quoted SQL
+identifier components; it is not raw SQL text or an HFF path.
 
 The query values remain bound parameters. `Where()` and `Args()` are the
 database-facing artifact; the application owns execution, connections,

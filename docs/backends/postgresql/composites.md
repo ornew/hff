@@ -18,8 +18,8 @@ personType := schema.Struct(schema.Nullable(schema.String("name")))
 e, err := engine.New(
     engine.WithSchema(schema.Struct(
         schema.Nullable(schema.Field("profile", schema.Struct(
-            schema.Int("age"),
-            schema.List("people", schema.NullableType(personType)),
+            schema.Nullable(schema.Int("age")),
+            schema.Nullable(schema.List("people", schema.NullableType(personType))),
         ))),
     )),
     engine.WithCapabilities(capabilities.Standard()),
@@ -54,6 +54,27 @@ CREATE TYPE hff_person AS (name text);
 CREATE TYPE hff_profile AS (age bigint, people hff_person[]);
 CREATE TABLE records (id bigint, profile hff_profile);
 ```
+
+Insert a SQL-null parent and a non-null composite parent to see the physical
+distinction:
+
+```sql
+INSERT INTO records VALUES
+    (1, NULL),
+    (2, ROW(42, ARRAY[ROW('Alice')::hff_person, NULL::hff_person])::hff_profile),
+    (3, ROW(NULL, NULL)::hff_profile),
+    (4, ROW(0, ARRAY[]::hff_person[])::hff_profile);
+```
+
+For row 2, the reconstructed HFF value is
+`{"profile":{"age":42,"people":[{"name":"Alice"},null]}}`; row 3 has a
+present profile with both attributes null, and row 4 has a present profile
+with an empty `people` list. Row 1 has a null profile. The filter above selects
+row 2; rows 1, 3, and 4 do not match. The `profile` field in
+this example is required but nullable, as declared in the schema, so it cannot
+represent a missing profile. If the HFF field is optional, a native composite
+still cannot distinguish absence from a present composite; use `BindStruct` or
+another representation with an explicit presence channel.
 
 The [runnable composite example](https://github.com/ornew/hff/tree/main/examples/sql-composite)
 builds this predicate without database I/O:

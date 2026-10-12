@@ -11,6 +11,8 @@ import (
 )
 
 type builder struct {
+	predicateFailure      error
+	predicates            map[*predicateNode]string
 	ctx                   context.Context
 	program               hff.Program
 	bindings              map[string]string

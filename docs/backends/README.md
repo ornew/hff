@@ -9,6 +9,8 @@ must fail explicitly rather than being silently omitted.
   values, configure local limits, and register local extension evaluators.
 - [PostgreSQL backend](postgresql/README.md): build parameterized predicates,
   inspect backend guarantees, and register PostgreSQL method translators.
+  Start with the [PostgreSQL binding tutorial](../tutorials/06-postgresql-bindings.md)
+  to connect a logical HFF record to relational rows.
   PostgreSQL-specific guides cover [JSON/JSONB](postgresql/json.md) and
   [native composite bindings](postgresql/composites.md),
   [flattened structs](postgresql/flattened-structures.md), and

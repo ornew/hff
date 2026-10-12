@@ -12,17 +12,24 @@ import (
 	"github.com/ornew/hff/internal/core"
 )
 
-// Dialect identifies an SQL translation contract. Build requires an explicit dialect.
+// Dialect identifies the SQL translation contract. Build requires an explicit
+// dialect; this package currently implements PostgreSQL only.
 type Dialect string
 
+// PostgreSQL selects the PostgreSQL translation contract.
 const PostgreSQL Dialect = "postgresql"
 
-// ColumnRef is a sequence of literal SQL identifiers, never an SQL expression.
+// ColumnRef is a sequence of literal SQL identifier components, never an SQL
+// expression. Components are quoted separately by Build.
 type ColumnRef struct{ parts []string }
 
+// Column constructs a reference from literal identifier components, such as
+// Column("orders", "tenant_id"). It does not accept SQL expressions.
 func Column(parts ...string) ColumnRef { return ColumnRef{append([]string(nil), parts...)} }
 
-// Binding maps a literal schema path to a database column.
+// Binding maps one literal HFF schema path to a physical SQL representation.
+// Construct bindings with Bind, BindJSON, BindComposite, BindStruct, or
+// BindRelation, then pass them to Build through WithBindings.
 type Binding struct {
 	path      hff.Path
 	column    ColumnRef
@@ -32,27 +39,45 @@ type Binding struct {
 	relation  *Relation
 }
 
+// Bind maps a scalar HFF path to a SQL column. Path components are literal
+// field names, not dotted text; the caller guarantees column type and data
+// satisfy the declared HFF schema.
 func Bind(path hff.Path, column ColumnRef) Binding {
 	return Binding{path: append(hff.Path(nil), path...), column: Column(column.parts...)}
 }
 
+// Config is the SQL Build configuration. An explicit dialect is required;
+// bindings must cover every schema path used by the Program. Method
+// implementations add SQL translations for declared extension methods.
 type Config struct {
-	Dialect         Dialect
-	Bindings        []Binding
-	Methods         []MethodImplementation
+	// Dialect is required and must currently be PostgreSQL.
+	Dialect Dialect
+	// Bindings maps the HFF schema paths used by the Program to SQL storage.
+	Bindings []Binding
+	// Methods contains SQL translators for declared extension methods.
+	Methods []MethodImplementation
+	// ExecutionLimits requests HFF runtime budgets; positive PostgreSQL requests
+	// fail because the database translator cannot enforce them.
 	ExecutionLimits ExecutionLimits
 }
 
+// Option changes one SQL Build setting. Options apply from left to right.
 type Option struct{ apply func(*Config) error }
 
+// WithDialect selects the required SQL dialect. PostgreSQL is currently the
+// only supported dialect.
 func WithDialect(dialect Dialect) Option {
 	return Option{func(c *Config) error { c.Dialect = dialect; return nil }}
 }
 
+// WithBindings replaces the schema-to-column mappings used by Build. The slice
+// is copied; each path and physical representation is explicit.
 func WithBindings(bindings ...Binding) Option {
 	return Option{func(c *Config) error { c.Bindings = append([]Binding(nil), bindings...); return nil }}
 }
 
+// WithConfig copies a complete SQL configuration. Nil is rejected, and later
+// options replace settings copied from this value.
 func WithConfig(config *Config) Option {
 	return Option{func(c *Config) error {
 		if config == nil {
@@ -65,13 +90,17 @@ func WithConfig(config *Config) Option {
 	}}
 }
 
-// Query owns a reusable WHERE expression and driver parameters. It performs no I/O.
+// Query owns a reusable PostgreSQL WHERE predicate and its ordered driver
+// parameters. It performs no database I/O, chooses no tables, and does not
+// execute a query; the caller integrates Where and Args into its own SQL.
 type Query struct {
 	where   string
 	args    []any
 	profile hff.Profile
 }
 
+// Where returns the generated Boolean SQL expression without a WHERE keyword.
+// A nil Query returns an empty string.
 func (q *Query) Where() string {
 	if q == nil {
 		return ""
@@ -79,7 +108,8 @@ func (q *Query) Where() string {
 	return q.where
 }
 
-// Args returns a fresh slice. Current parameter encodings are immutable scalars.
+// Args returns a fresh, ordered slice of driver arguments corresponding to the
+// placeholders in Where. Current encodings are immutable scalars.
 func (q *Query) Args() []any {
 	if q == nil {
 		return nil
@@ -87,8 +117,11 @@ func (q *Query) Args() []any {
 	return append([]any(nil), q.args...)
 }
 
-// Build validates support and translates the common typed plan. Options apply
-// left to right, with later settings replacing earlier settings.
+// Build checks whether PostgreSQL can preserve the Program's supported
+// semantics and translates it to a reusable Query. It performs no database
+// access or record validation. Query values remain bound arguments rather than
+// interpolated SQL. Options apply left to right; unsupported operations return
+// source-located BackendErrors.
 func Build(ctx context.Context, program hff.Program, options ...Option) (*Query, error) {
 	if ctx == nil {
 		return nil, configuration("nil context")
@@ -221,6 +254,9 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 	root, err := b.expression(program.Root())
 	if err != nil {
 		return nil, err
+	}
+	if b.predicateFailure != nil {
+		return nil, b.predicateFailure
 	}
 	where := truth(root)
 	if len(b.steps) > 0 {

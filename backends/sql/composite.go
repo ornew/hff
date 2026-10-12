@@ -6,12 +6,13 @@ import (
 	"github.com/ornew/hff"
 )
 
-// BindComposite maps a struct to a native PostgreSQL composite column. SQL
-// attribute names match schema field names. Composite fields are always present;
-// a null attribute is an explicit null, not an absent optional field. The caller
-// must store values satisfying the schema and the supported physical types,
-// including one-dimensional arrays for list attributes. Build does not inspect
-// the database. Array lower bounds do not affect HFF's zero-based indexing.
+// BindComposite maps a struct path to one native PostgreSQL composite column.
+// SQL attribute names must match HFF schema field names. Composite attributes
+// are always present: an SQL NULL attribute is an explicit HFF null, not an
+// absent optional field. The caller must store schema-compatible data using
+// supported physical types, including one-dimensional SQL arrays for list
+// fields. Build does not inspect the database or verify actual array rank.
+// PostgreSQL array lower bounds do not change HFF's zero-based indexing.
 func BindComposite(path hff.Path, column ColumnRef) Binding {
 	result := Bind(path, column)
 	result.composite = true

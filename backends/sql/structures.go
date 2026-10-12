@@ -7,14 +7,22 @@ import (
 	"github.com/ornew/hff"
 )
 
-// SQLPredicate is a caller-owned, trusted Boolean SQL expression. It is not
-// parsed from HFF and must never interpolate untrusted query text or values.
-// References name identifiers that must be reserved against generated aliases.
+// SQLPredicate is an immutable PostgreSQL Boolean expression used for explicit
+// parent-state and relation conditions. Prefer typed constructors such as
+// Equal, IsNull, And, and AsPredicate: they quote identifiers and bind literal
+// values. TrustedSQL is an escape hatch for developer-authored SQL and is not
+// parsed or proven equivalent to HFF by this package.
 type SQLPredicate struct {
 	code       string
 	references []ColumnRef
+	node       *predicateNode
 }
 
+// TrustedSQL wraps a developer-authored PostgreSQL Boolean expression. It is
+// not parsed, type-checked, sanitized, or proven deterministic or
+// side-effect-free. Use only fixed trusted source text, never query or record
+// data. Supply referenced identifiers as ColumnRefs for alias tracking; this
+// does not validate that the text uses those references or is a predicate.
 func TrustedSQL(code string, references ...ColumnRef) SQLPredicate {
 	return SQLPredicate{code: code, references: append([]ColumnRef(nil), references...)}
 }
@@ -24,11 +32,15 @@ type structBinding struct {
 	fields        []Binding
 }
 
-// BindStruct maps a struct to separate columns with explicit parent state.
-// Field binding paths are one literal name relative to this struct. Nested
-// BindStruct calls provide independent parent states for nested structures.
-// Optional unbound fields are absent; required fields must have bindings.
-// A scalar SQL NULL is an explicit null, never an omitted field.
+// BindStruct maps one HFF struct at path to separate columns and explicit
+// parent-state predicates. present is true when the logical object exists;
+// null is true when that present object is logically null. Neither state is
+// inferred from child columns. Each child Binding path is exactly one literal
+// field name relative to this struct; nest BindStruct for nested parent states.
+// Unbound optional fields are absent, while required fields need a binding. A
+// bound scalar SQL NULL means an explicit null field, never omission. The caller
+// owns the truth and deterministic behavior of both predicates and the
+// schema/data contract.
 func BindStruct(path hff.Path, present, null SQLPredicate, fields ...Binding) Binding {
 	return Binding{path: append(hff.Path(nil), path...), structure: &structBinding{
 		present: present, null: null, fields: append([]Binding(nil), fields...),
@@ -41,6 +53,13 @@ func structSchema(typ hff.Type) (hff.Type, bool) {
 }
 
 func (b *builder) checkPredicate(predicate SQLPredicate) error {
+	if predicate.node != nil {
+		validation := *b
+		validation.args = nil
+		validation.predicates = nil
+		_, err := validation.compilePredicate(predicate)
+		return err
+	}
 	if strings.TrimSpace(predicate.code) == "" || !utf8.ValidString(predicate.code) || strings.ContainsRune(predicate.code, 0) {
 		return configuration("struct presence and null expressions must be nonempty trusted Boolean SQL")
 	}
@@ -178,10 +197,10 @@ func (b *builder) structJSON(n hff.Node, binding Binding, typ hff.Type) (string,
 		}
 		member := "to_json(" + key.code + ")::text || ':' || COALESCE((" + value + ")::text,'null')"
 		if child.structure != nil {
-			member = "CASE WHEN (" + child.structure.present.code + ") IS TRUE THEN " + member + " ELSE NULL END"
+			member = "CASE WHEN (" + b.predicateCode(child.structure.present) + ") IS TRUE THEN " + member + " ELSE NULL END"
 		}
 		if child.relation != nil {
-			member = "CASE WHEN (" + child.relation.config.present.code + ") IS TRUE THEN " + member + " ELSE NULL END"
+			member = "CASE WHEN (" + b.predicateCode(child.relation.config.present) + ") IS TRUE THEN " + member + " ELSE NULL END"
 		}
 
 		members = append(members, member)
@@ -190,7 +209,7 @@ func (b *builder) structJSON(n hff.Node, binding Binding, typ hff.Type) (string,
 	if len(members) > 0 {
 		object = "(('{' || concat_ws(','," + strings.Join(members, ",") + ") || '}')::json)"
 	}
-	return "(CASE WHEN (" + binding.structure.present.code + ") IS NOT TRUE OR (" + binding.structure.null.code + ") IS TRUE THEN NULL::json ELSE " + object + " END)", nil
+	return "(CASE WHEN (" + b.predicateCode(binding.structure.present) + ") IS NOT TRUE OR (" + b.predicateCode(binding.structure.null) + ") IS TRUE THEN NULL::json ELSE " + object + " END)", nil
 }
 
 // Parent materialization must retain JSONB float-loss provenance, even though
@@ -277,12 +296,12 @@ func (b *builder) structPath(n hff.Node) (expression, bool, error) {
 	for _, candidate := range candidates {
 		mapping := candidate.mapping
 		fields := candidate.fields
-		var absent []string
+		var states []*structBinding
 		for offset, name := range fields {
 			if mapping.structure == nil {
 				return expression{}, false, nil
 			}
-			absent = append(absent, "("+mapping.structure.present.code+") IS NOT TRUE", "("+mapping.structure.null.code+") IS TRUE")
+			states = append(states, mapping.structure)
 			child, exists := structFieldBinding(mapping, name)
 			if !exists {
 				value, err := b.jsonDecode(n, "NULL::json", JSON, n.Type(), "TRUE")
@@ -291,6 +310,10 @@ func (b *builder) structPath(n hff.Node) (expression, bool, error) {
 			mapping = child
 			if offset < len(fields)-1 {
 				continue
+			}
+			var absent []string
+			for _, state := range states {
+				absent = append(absent, "("+b.predicateCode(state.present)+") IS NOT TRUE", "("+b.predicateCode(state.null)+") IS TRUE")
 			}
 			condition := strings.Join(absent, " OR ")
 			if mapping.structure == nil && mapping.relation == nil && mapping.format == "" {

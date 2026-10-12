@@ -51,7 +51,7 @@ requirements.
 
 A plain relation path consumed by `any()` or `all()` can lower to correlated
 `EXISTS` or `NOT EXISTS` directly, without first aggregating all related rows
-into a JSON list. The caller's trusted correlation stays in the subquery's
+into a JSON list. The caller's correlation predicate stays in the subquery's
 `WHERE` clause. For flattened relation items, only callback-observed fields
 need to be projected; a whole item is built only when the callback observes
 that value. Guards, computed relation lists, or alias collisions can require

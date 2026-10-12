@@ -39,12 +39,12 @@ func (b *builder) relationPredicate(n hff.Node, name string) (expression, bool, 
 		return expression{}, true, b.failure(n, "collection predicate requires one callback parameter")
 	}
 	// Field selection through flattened ancestors must retain their states.
-	absent := []string{"(" + c.present.code + ") IS NOT TRUE", "(" + c.null.code + ") IS TRUE"}
+	absent := []string{"(" + b.predicateCode(c.present) + ") IS NOT TRUE", "(" + b.predicateCode(c.null) + ") IS TRUE"}
 	parent := receiver
 	for parent.Kind() == hff.FieldNode {
 		parent, _ = parent.Child(0)
 		if ancestor, ok := b.relationMapping(parent, b.physicalParameters); ok && ancestor.structure != nil {
-			absent = append(absent, "("+ancestor.structure.present.code+") IS NOT TRUE", "("+ancestor.structure.null.code+") IS TRUE")
+			absent = append(absent, "("+b.predicateCode(ancestor.structure.present)+") IS NOT TRUE", "("+b.predicateCode(ancestor.structure.null)+") IS TRUE")
 		}
 	}
 	outerSteps, outerPaths := b.steps, b.sharedPaths
@@ -106,7 +106,7 @@ func (b *builder) relationPredicate(n hff.Node, name string) (expression, bool, 
 	if len(b.steps) > 0 {
 		from += " CROSS JOIN LATERAL " + strings.Join(b.steps, " CROSS JOIN LATERAL ")
 	}
-	code := "(CASE WHEN " + strings.Join(absent, " OR ") + " THEN NULL ELSE " + operator + " (SELECT 1 FROM " + from + " WHERE (" + c.correlation.code + ") AND " + predicate + ") END)"
+	code := "(CASE WHEN " + strings.Join(absent, " OR ") + " THEN NULL ELSE " + operator + " (SELECT 1 FROM " + from + " WHERE (" + b.predicateCode(c.correlation) + ") AND " + predicate + ") END)"
 	return expression{code: code, present: "TRUE", kind: hff.BoolType}, true, nil
 }
 func (b *builder) physicalItemJSON(n hff.Node, mapping Binding, typ hff.Type) (string, JSONFormat, error) {

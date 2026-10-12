@@ -21,8 +21,8 @@ func main() {
 	}
 	relation, err := hffsql.NewRelation(
 		hffsql.WithRelationSource(hffsql.Column("order_items"), "item"),
-		hffsql.WithCorrelation(hffsql.TrustedSQL(`"item"."order_id" = "orders"."id"`, hffsql.Column("item"), hffsql.Column("orders"))),
-		hffsql.WithRelationItem(item, hffsql.BindStruct(nil, hffsql.TrustedSQL("true"), hffsql.TrustedSQL("false"),
+		hffsql.WithCorrelation(hffsql.Equal(hffsql.ColumnValue(hffsql.Column("item", "order_id"), schema.IntType), hffsql.ColumnValue(hffsql.Column("orders", "id"), schema.IntType))),
+		hffsql.WithRelationItem(item, hffsql.BindStruct(nil, hffsql.Boolean(true), hffsql.Boolean(false),
 			hffsql.Bind(hff.Path{"price"}, hffsql.Column("item", "price")),
 			hffsql.Bind(hff.Path{"active"}, hffsql.Column("item", "active")),
 		)),

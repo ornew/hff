@@ -11,38 +11,53 @@ import (
 	"github.com/ornew/hff"
 )
 
-// MethodFunc translates a pure extension at Build time. It must be safe for
-// concurrent Builds and preserve the declared semantics on its supported domain.
-// Return an error whenever a faithful translation is unavailable.
+// MethodFunc translates one declared extension during Build. The function must
+// be deterministic, side-effect-free, safe for concurrent Builds, and preserve
+// the declaration's semantics on the domain it accepts. Return an error when
+// faithful translation is unavailable. SQL execution remains caller-owned.
 type MethodFunc func(call *Call, receiver Expression, args []Expression) (Expression, error)
 
+// MethodImplementation associates an extension declaration with one dialect
+// translator. The translator is invoked during Build, never for each database
+// row.
 type MethodImplementation struct {
 	declaration hff.MethodDeclaration
 	dialect     Dialect
 	function    MethodFunc
 }
 
+// Implement registers a translator for declaration under dialect. Build checks
+// that the declaration exactly matches the one compiled into the Program.
 func Implement(declaration hff.MethodDeclaration, dialect Dialect, function MethodFunc) MethodImplementation {
 	return MethodImplementation{declaration, dialect, function}
 }
+
+// WithMethods replaces the translators configured for SQL Build. The slice is
+// copied; implementations must be safe for concurrent Build calls.
 func WithMethods(methods ...MethodImplementation) Option {
 	owned := append([]MethodImplementation(nil), methods...)
 	return Option{func(c *Config) error { c.Methods = append([]MethodImplementation(nil), owned...); return nil }}
 }
 
-// Expression is an immutable typed SQL value, scoped to one translation Call.
-// Its zero value is invalid. Raw SQL and internal presence flags are not exposed.
+// Expression is an immutable typed scalar SQL value scoped to one translation
+// Call. Its zero value is invalid. Raw SQL and internal presence flags are not
+// exposed; the declared type does not prove the SQL expression's behavior.
 type Expression struct {
 	owner *Call
 	value expression
 	typ   hff.Type
 }
 
-func (e Expression) Valid() bool    { return e.owner != nil && e.typ.Kind() != hff.InvalidType }
+// Valid reports whether e has a translator owner and a declared type. It does
+// not extend its lifetime: expressions may only be used during their own Call.
+func (e Expression) Valid() bool { return e.owner != nil && e.typ.Kind() != hff.InvalidType }
+
+// Type returns the declared HFF scalar type of e.
 func (e Expression) Type() hff.Type { return e.typ }
 
-// Call constructs expressions and bound parameters. Helpers may be called
-// concurrently during translation; retaining the Call for later work is invalid.
+// Call provides the selected dialect, context, and constructors to a translator.
+// Helpers may be called concurrently while translation is active; retaining
+// Call or its expressions for later work is invalid.
 type Call struct {
 	mu      sync.Mutex
 	ctx     context.Context
@@ -52,12 +67,15 @@ type Call struct {
 	failure error
 }
 
+// Context returns the Build context for this translation, or nil for a nil Call.
 func (c *Call) Context() context.Context {
 	if c == nil {
 		return nil
 	}
 	return c.ctx
 }
+
+// Dialect reports the dialect for this translation.
 func (c *Call) Dialect() Dialect {
 	if c == nil {
 		return ""
@@ -83,7 +101,8 @@ func (c *Call) active() error {
 	return nil
 }
 
-// Parameter binds a value using the dialect's validated scalar encoding.
+// Parameter binds a supported HFF scalar using the dialect's validated driver
+// encoding and returns an expression scoped to this Call.
 func (c *Call) Parameter(value hff.Value) (Expression, error) {
 	if c == nil {
 		return Expression{}, configuration("nil SQL extension Call")
@@ -101,10 +120,12 @@ func (c *Call) Parameter(value hff.Value) (Expression, error) {
 	return Expression{c, v, hff.PrimitiveType(v.kind)}, nil
 }
 
-// Expression fills each {} in a trusted, developer-authored SQL expression
-// template with a scoped Expression. Never put query text or record data in the
-// template: use Parameter for values. Templates must not contain $N parameters.
-// HFF verifies ownership and the declared type, not the SQL template's semantics.
+// Expression fills each {} in a fixed developer-authored SQL template with a
+// scoped Expression and declares the result's HFF scalar type. Never put query
+// text or record data in the template: use Parameter for values. Templates must
+// not contain $N parameters. HFF checks ownership, placeholder count, and type
+// shape, but does not parse or prove SQL semantics, purity, or database
+// function behavior; the translator author owns those contracts.
 func (c *Call) Expression(typ hff.Type, template string, args ...Expression) (Expression, error) {
 	if c == nil {
 		return Expression{}, configuration("nil SQL extension Call")
