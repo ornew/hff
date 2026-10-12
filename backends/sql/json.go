@@ -84,7 +84,7 @@ func (b *builder) jsonDecode(n hff.Node, code string, format JSONFormat, typ hff
 		return expression{normalized, present, kind}, nil
 	default:
 		text := "(" + normalized + " #>> '{}'::text[])"
-		return expression{"(" + text + "::" + sqlType(kind) + ")", present, kind}, nil
+		return expression{jsonScalarCast(text, kind), present, kind}, nil
 	}
 }
 func (b *builder) hasJSONAncestor(n hff.Node) bool {
@@ -223,6 +223,12 @@ func validJSONIndex(index expression) string {
 func (b *builder) jsonCall(n hff.Node, name string, values []expression, format JSONFormat) (expression, error) {
 	r := values[0]
 	present := ordinaryPresence(values)
+	if r.kind == hff.AnyType && (name == "len" || name == "startswith" || name == "endswith") {
+		return b.dynamicJSONStringCall(n, name, values)
+	}
+	if r.kind == hff.AnyType && (name == "not" || name == "and" || name == "or") {
+		return b.dynamicJSONBooleanCall(n, name, values)
+	}
 	if r.kind == hff.AnyType && name != "type" && name != "exists" {
 		return expression{}, b.failure(n, "dynamic JSON method requires an explicit supported type guard")
 	}
@@ -311,8 +317,11 @@ func (b *builder) jsonTypeGuard(n hff.Node, value expression, format JSONFormat,
 	if err != nil {
 		return expression{}, err
 	}
-	guarded := "CASE WHEN " + both(value.present, test) + " THEN " + value.code + " ELSE NULL END"
-	return b.jsonDecode(n, guarded, format, n.Type(), both(value.present, test))
+	// SQL type tests on NULL may themselves be NULL. No-value presence must be
+	// a definite false so later null tests still produce ordinary false.
+	present := both(value.present, "COALESCE(("+test+"), FALSE)")
+	guarded := "CASE WHEN " + present + " THEN " + value.code + " ELSE NULL END"
+	return b.jsonDecode(n, guarded, format, n.Type(), present)
 }
 func (b *builder) jsonMatches(n hff.Node, code string, format JSONFormat, source, target hff.Type) (string, error) {
 	null := "(" + code + " IS NULL OR " + string(format) + "_typeof(" + code + ") = 'null')"
@@ -334,8 +343,20 @@ func (b *builder) jsonMatches(n hff.Node, code string, format JSONFormat, source
 		}
 		return "(" + strings.Join(parts, " OR ") + ")", nil
 	}
+	if source.Kind() == hff.UnionType && (target.Kind() == hff.ListType || target.Kind() == hff.MapType) {
+		return b.jsonUnionCollectionMatches(n, code, format, source, target)
+	}
 	kind, ok := jsonKind(source)
 	if !ok {
+		if target.Kind() == hff.IntType || target.Kind() == hff.FloatType {
+			integer, floating := jsonNumericCandidates(source)
+			if !integer || !floating {
+				if (target.Kind() == hff.IntType && integer) || (target.Kind() == hff.FloatType && floating) {
+					return "(" + string(format) + "_typeof(" + code + ") = 'number')", nil
+				}
+				return "FALSE", nil
+			}
+		}
 		return b.dynamicJSONMatches(n, code, format, target)
 	}
 	source = nonnullJSONType(source)

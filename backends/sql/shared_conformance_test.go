@@ -36,17 +36,22 @@ func TestSharedConformanceJSONBuildContracts(t *testing.T) {
 	supported["null_type_is_observable"] = true
 	supported["object_lookup_distinguishes_missing"] = true
 	supported["type_guard_limits_method_permissions"] = true
+	supported["not_encloses_comparison"] = true
+	supported["null_inequality_is_false"] = true
+	supported["negative_index"] = true
+	supported["nested_callback_captures"] = true
+	supported["object_dynamic_key_lookup"] = true
 	rejected := map[string]bool{}
 	for _, name := range []string{
 		"json_preserves_float", "json_duplicate_keys_fail", "json_null_is_observable", "json_guard_stays_absent",
-		"not_encloses_comparison", "null_inequality_is_false", "two_null_values_are_not_equal", "not_of_null_comparison",
-		"exact_mixed_number_comparison", "negative_index", "contains_requires_all_arguments",
+		"two_null_values_are_not_equal", "not_of_null_comparison",
+		"exact_mixed_number_comparison", "contains_requires_all_arguments",
 		"structural_equality_ignores_key_order", "unique_is_a_predicate",
-		"nested_callback_captures", "fold_argument_order", "regex_partial_match", "invalid_regex_does_not_match_negation",
+		"fold_argument_order", "regex_partial_match", "invalid_regex_does_not_match_negation",
 		"strict_base64", "duration_compound_fraction", "timestamp_utc_components", "epoch_is_truthy",
 		"zero_duration_is_falsy",
 		"map_preserves_null_and_order", "flatmap_preserves_order", "sort_mixed_numbers_and_reject_null", "concat_preserves_order",
-		"object_dynamic_key_lookup", "object_enumeration_key_order", "decisive_or_skips_budgeted_callback",
+		"object_enumeration_key_order", "decisive_or_skips_budgeted_callback",
 		"decisive_and_skips_budgeted_callback",
 	} {
 		rejected[name] = true

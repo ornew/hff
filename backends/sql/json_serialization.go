@@ -159,7 +159,7 @@ func (b *builder) serializeJSON(n hff.Node, raw string, format JSONFormat, typ h
 		var code string
 		switch member.Kind() {
 		case hff.IntType:
-			code = "((" + raw + " #>> '{}')::bigint)::text"
+			code = jsonScalarCast("("+raw+" #>> '{}')", hff.IntType) + "::text"
 		case hff.FloatType:
 			code = b.floatText("((" + raw + " #>> '{}')::double precision)")
 		case hff.BoolType:

@@ -83,6 +83,11 @@ func TestPostgreSQLDynamicJSONGuards(t *testing.T) {
 	for _, name := range []string{"explicit_null_test", "type_guard_failure_is_not_null", "exists_observes_failed_type_guard", "guard_failure_is_not_null", "not_inverts_failed_guard", "exists_observes_falsy_values", "explicit_type_guard", "any_and_all_empty_lists", "callback_predicate_guard", "null_type_is_observable", "object_lookup_distinguishes_missing", "type_guard_limits_method_permissions"} {
 		supported[name] = true
 	}
+	supported["not_encloses_comparison"] = true
+	supported["null_inequality_is_false"] = true
+	supported["negative_index"] = true
+	supported["nested_callback_captures"] = true
+	supported["object_dynamic_key_lookup"] = true
 	var script strings.Builder
 	var expected []string
 	for _, tc := range conformance.Cases() {

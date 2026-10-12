@@ -200,8 +200,8 @@ func (b *builder) jsonEqualTyped(n hff.Node, left string, lf JSONFormat, lt hff.
 	// CASE protects casts for each runtime member of a heterogeneous list.
 	ltext := "(CASE WHEN " + string(lf) + "_typeof(" + left + ")='" + jsonCategory(lt.Kind()) + "' THEN " + left + " #>> '{}'::text[] END)"
 	rtext := "(CASE WHEN " + string(rf) + "_typeof(" + right + ")='" + jsonCategory(rt.Kind()) + "' THEN " + right + " #>> '{}'::text[] END)"
-	l := expression{"(" + ltext + "::" + sqlType(lt.Kind()) + ")", "TRUE", lt.Kind()}
-	r := expression{"(" + rtext + "::" + sqlType(rt.Kind()) + ")", "TRUE", rt.Kind()}
+	l := expression{jsonScalarCast(ltext, lt.Kind()), "TRUE", lt.Kind()}
+	r := expression{jsonScalarCast(rtext, rt.Kind()), "TRUE", rt.Kind()}
 	if lt.Kind() != rt.Kind() {
 		return b.mixedComparison(l, r, hff.Equal).code, nil
 	}

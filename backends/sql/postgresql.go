@@ -513,7 +513,7 @@ func (b *builder) binary(n hff.Node) (expression, error) {
 		return boolean("FALSE"), nil
 	}
 	if left.kind == hff.AnyType || right.kind == hff.AnyType {
-		return expression{}, b.failure(n, "dynamic JSON comparison requires an explicit supported type guard")
+		return b.dynamicJSONComparison(n, left, right, op)
 	}
 	if structuredKind(left.kind) && structuredKind(right.kind) {
 		return b.jsonComparison(n, l, r, left, right, op)
@@ -524,16 +524,7 @@ func (b *builder) binary(n hff.Node) (expression, error) {
 		}
 		return expression{}, b.failure(n, "mixed SQL scalar comparisons require exact numeric lowering")
 	}
-	leftCode, rightCode := left.code, right.code
-	if left.kind == hff.StringType {
-		leftCode += " COLLATE \"C\""
-		rightCode += " COLLATE \"C\""
-	}
-	operator := string(op)
-	if op == hff.NotEqual {
-		operator = "<>"
-	}
-	return boolean(both(both(left.present, right.present), "COALESCE(("+leftCode+" "+operator+" "+rightCode+"), FALSE)")), nil
+	return b.scalarComparison(left, right, op), nil
 }
 
 func (b *builder) arithmetic(n hff.Node, left, right expression, op hff.Operator) (expression, error) {
@@ -644,73 +635,27 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		}
 		return expression{"(CASE WHEN " + receiver.code + " IS NULL THEN 'null' ELSE '" + typ + "' END)", receiver.present, hff.StringType}, nil
 	}
-	// A null value ends ordinary method argument evaluation. Later no-value
-	// arguments must not turn that already determined null into no-value.
-	present := "TRUE"
-	for i := len(values) - 1; i >= 0; i-- {
-		present = both(values[i].present, "("+values[i].code+" IS NULL OR "+present+")")
-	}
 	if receiver.kind == hff.NullType {
 		return expression{"NULL", receiver.present, hff.NullType}, nil
 	}
+	if name == "not" || name == "and" || name == "or" {
+		for _, value := range values {
+			if value.kind == hff.AnyType {
+				return b.dynamicJSONBooleanCall(n, name, values)
+			}
+		}
+	}
 	if receiver.kind == hff.BoolType {
-		var code string
-		switch name {
-		case "not":
-			code = "(NOT " + receiver.code + ")"
-		case "and", "or":
-			// HFF short-circuit and/or skip the argument (including no-value)
-			// when the receiver already determines the result.
-			arg := values[1]
-			if arg.kind != hff.BoolType && arg.kind != hff.NullType {
-				return expression{}, b.failure(n, "unsupported boolean method argument")
+		return b.booleanCall(n, name, values)
+	}
+	if name == "len" || name == "startswith" || name == "endswith" {
+		for _, value := range values {
+			if value.kind == hff.AnyType {
+				return b.dynamicJSONStringCall(n, name, values)
 			}
-			op, decisive := "AND", "FALSE"
-			if name == "or" {
-				op, decisive = "OR", "TRUE"
-			}
-			code = "(CASE WHEN " + receiver.code + " IS NULL THEN NULL ELSE (" + receiver.code + " " + op + " " + arg.code + ") END)"
-			present = both(receiver.present, "("+receiver.code+" IS NULL OR "+receiver.code+" IS "+decisive+" OR "+arg.present+")")
-		default:
-			return expression{}, b.failure(n, "unsupported boolean method")
-		}
-		return expression{code, present, hff.BoolType}, nil
-	}
-	if receiver.kind != hff.StringType {
-		return expression{}, b.failure(n, "method requires a supported scalar SQL receiver")
-	}
-	for _, arg := range values[1:] {
-		if arg.kind != hff.StringType && arg.kind != hff.NullType {
-			return expression{}, b.failure(n, "method requires string SQL arguments")
 		}
 	}
-	code := receiver.code
-	switch name {
-	case "len":
-		return expression{"char_length(" + code + ")::bigint", present, hff.IntType}, nil
-	case "concat":
-		return expression{"(" + code + " || " + values[1].code + ")", present, hff.StringType}, nil
-	case "contains":
-		parts := make([]string, len(values)-1)
-		for i, arg := range values[1:] {
-			parts[i] = "(strpos(" + code + " COLLATE \"C\", " + arg.code + " COLLATE \"C\") > 0)"
-		}
-		// Explicit null propagation matters when another argument does not match.
-		nulls := make([]string, len(values))
-		for i, value := range values {
-			nulls[i] = value.code + " IS NULL"
-		}
-		return expression{"(CASE WHEN " + strings.Join(nulls, " OR ") + " THEN NULL ELSE (" + strings.Join(parts, " AND ") + ") END)", present, hff.BoolType}, nil
-	case "startswith", "endswith":
-		fn := "left"
-		if name == "endswith" {
-			fn = "right"
-		}
-		arg := values[1].code
-		return expression{"(" + fn + "(" + code + ", char_length(" + arg + ")) COLLATE \"C\" = " + arg + " COLLATE \"C\")", present, hff.BoolType}, nil
-	default:
-		return expression{}, b.failure(n, "unsupported string method")
-	}
+	return b.stringCall(n, name, values)
 }
 
 // Reuse an unordered materialization only within the same order-demand class.

@@ -35,7 +35,7 @@ func (b *builder) jsonSequence(n hff.Node, name string, values []expression, for
 		case hff.IntType, hff.FloatType, hff.StringType:
 			condition := category + "='" + jsonCategory(t.Kind()) + "'"
 			valid = append(valid, condition)
-			key := "(CASE WHEN " + condition + " THEN (" + raw + " #>> '{}'::text[])::" + sqlType(t.Kind()) + " END)"
+			key := "(CASE WHEN " + condition + " THEN " + jsonScalarCast("("+raw+" #>> '{}'::text[])", t.Kind()) + " END)"
 			if t.Kind() == hff.StringType {
 				key += " COLLATE \"C\""
 			}

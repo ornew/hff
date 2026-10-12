@@ -216,6 +216,129 @@ are available when their types are known from the schema. The backend rejects
 an operation during `Build` when the JSON storage type cannot preserve the
 required HFF semantics.
 
+### Compare a dynamic JSON value with a scalar
+
+An `Any` value from a JSON or JSONB document can be compared with a scalar
+whose HFF type is known from the query. String and numeric comparisons support
+the ordering operators; booleans support equality and inequality. Numeric
+comparisons use both the value's recoverable representation and the schema's
+possible numeric kinds. Native JSON retains whether a number was written as an
+integer or float. A schema that permits only one numeric kind, such as
+`Int|String` or `Float|String`, also makes JSONB comparisons unambiguous and
+does not require numeric metadata. If the schema permits both integer and float
+values, such as `Any` or `Int|Float`, JSONB needs type metadata to recover
+which kind was stored. Comparing two dynamic values, or using an unsupported
+scalar counterpart, is rejected by `Build`.
+
+For example, with `data` declared as `Any` and bound to a JSON document:
+
+```hff
+data="Alice"
+data<"Bob"
+data=true
+data=9007199254740993
+```
+
+The runtime JSON type and schema's numeric candidates determine whether the
+comparison is meaningful. A schema-known integer is decoded from the numeric
+value through an exact integer conversion; the schema remains authoritative
+even when JSON spells that value as `1.0` or `1e0`. The caller must ensure it
+is integral and within the int64 range. JSONB can use this path without subtype
+metadata when the schema leaves only the integer candidate. If both integer
+and float candidates remain possible, JSONB still needs metadata. The caller
+must also provide metadata when JSONB has lost part of the numeric value, such
+as the sign of zero. A non-null value with an incompatible runtime type yields
+ordinary HFF null. You can inspect that result with `type()`:
+
+```hff
+(data="Alice"):type="null"
+```
+
+At the top-level predicate boundary, that null result matches no row. A null or
+no-value operand is instead consumed as boolean false by the dynamic
+comparison. Consequently, when `data` itself is null, this predicate is true:
+
+```hff
+(data="Alice"):type="bool"
+```
+
+These rules distinguish a type mismatch from a null operand while keeping the
+usual HFF predicate conversion. They do not enable comparisons between two
+dynamic values. Method calls on an `Any` or union receiver are supported only
+when the schema and available representation resolve the operation's behavior.
+
+### Preserve numeric candidates in collection guards
+
+Type guards on schema unions retain the declared element candidates while
+checking the actual JSON collection. For example, when the source schema is
+`List<Float>|List<Float|null>`, this guard can recognize a float list in
+JSONB without numeric type metadata:
+
+```hff
+data:[list[float]]:exists
+```
+
+Both union members establish that numeric elements are floats; JSONB's loss of
+their original numeric spelling does not make this guard ambiguous. A schema
+that allows both integer and float elements, such as
+`List<Int>|List<Float>`, still needs recoverable numeric subtype information
+for JSONB. Native JSON preserves the numeric spelling for that case.
+Other operations on a union are supported only when its candidates let the
+backend resolve their result; for example, an `Int|String` profile
+can be serialized with `tojson()`. This does not make arbitrary union method
+calls available.
+
+### String methods on dynamic JSON values
+
+The backend supports `len()`, `startswith()`, and `endswith()` when a JSON
+receiver or one of these methods' string arguments has a dynamic `Any` or
+union representation. A runtime string is extracted and passed to the ordinary
+string operation; a non-string runtime value becomes ordinary HFF null. This
+works both for a dynamic receiver and for a known string receiver with a
+dynamic JSON argument:
+
+```hff
+data:len=5
+data:startswith("Al")
+data:endswith("ice")
+name:startswith(data)
+(data:len):type="null"
+```
+
+Here `data` can be an `Any` JSON value and `name` a schema-known string.
+When reached during evaluation, a no-value receiver or argument remains
+no-value. For methods with an argument, an ordinary null receiver or a
+non-string dynamic receiver produces null and suppresses a later no-value
+argument under the normal receiver-first evaluation rule. A non-string dynamic
+argument produces null when the receiver is a string. These dynamic
+receiver/argument rules do not extend `contains()` or `concat()` to arbitrary
+JSON values.
+
+### Boolean methods on dynamic JSON values
+
+`not()`, `and()`, and `or()` accept a JSON `Any` or union receiver or argument
+when the declared schema identifies a boolean candidate. At evaluation, a JSON
+boolean is converted to HFF bool; another JSON type yields ordinary HFF null.
+The backend does not apply truthiness conversions to strings, numbers, arrays,
+or objects. A known boolean can also be combined with a dynamic JSON argument:
+
+```hff
+data:not
+data:and(flag)
+flag:or(data)
+(data:and(flag)):type="null"
+```
+
+Here `data` is a dynamic JSON value and `flag` is a schema-known bool. A
+non-boolean runtime value produces ordinary null when the method reaches that
+receiver or argument. A null or no-value receiver suppresses evaluation of the
+argument. Boolean short-circuit rules also apply: `false:and(...)` skips its
+argument, and `true:or(...)` skips its argument, including an argument that
+would otherwise be no-value. When an operand is reached, its no-value state
+propagates normally.
+
+### Structural equality and collection operations
+
 List equality compares elements in order and requires equal lengths. Object
 equality compares the actual key/value entries, including for structs and
 string-keyed maps; a missing field differs from a present field containing
@@ -246,11 +369,18 @@ profile.scores:flatmap(score=>[score,score])=[80,80,90,90]
 The following operations remain unsupported for JSON-backed values and return
 a source-located `hff.BackendError` from `Build`:
 
-- Unguarded comparisons and method calls on dynamic `Any` or unions, even when
-  type metadata is present. Dynamic `type()` and `exists()` checks, guarded
-  branches, and statically typed string or numeric indexing are supported for
-  the verified profile; JSONB numeric guards require metadata where JSONB lost
-  the HFF numeric kind.
+- Comparisons between two dynamic values and method calls on an `Any` or union
+  receiver when the schema and stored representation cannot resolve their
+  semantics. Dynamic `type()` and `exists()` remain available. A dynamic
+  value compared with one statically typed scalar is supported as described
+  above; JSONB needs numeric metadata when both integer and float candidates
+  remain possible or when part of the numeric value, such as negative zero,
+  has been lost.
+- Dynamic string methods other than `len()`, `startswith()`, and `endswith()`;
+  `contains()` and `concat()` are not dynamically overloaded.
+- Other dynamic operations whose result cannot be resolved from schema
+  candidates, a supported type guard, or a statically typed string/numeric
+  index.
 - Other unsupported collection transformations.
 - `fromjson()`, conversions to bytes/timestamps/durations, float64
   serialization when JSONB has lost required numeric representation, and
@@ -269,6 +399,14 @@ Documents must not contain duplicate object keys. Strings must be valid UTF-8
 without NUL; int64 values must be in range, and float64 values must be finite.
 `Build` does not introspect database declarations or rows; malformed or
 schema-incompatible stored values can fail during database evaluation.
+
+For schema-known integer values, a JSON number is interpreted as int64
+according to the schema even if its spelling has a decimal point or exponent,
+such as `1.0` or `1e0`. The stored value must be an exact integer within the
+int64 range; fractional and out-of-range numbers violate the caller's storage
+contract. The backend does not validate that contract in advance. Schema-known
+floats are decoded as float64. JSONB can lose the sign of zero, so provide
+numeric metadata when negative zero must be preserved.
 
 JSONB normalizes numeric spelling, so a JSONB data column may be paired with a
 metadata column using `BindJSON(path, dataColumn, JSONB,
@@ -342,9 +480,12 @@ Type metadata currently restores numeric representations only. Metadata tags
 for bytes, timestamps, or durations are unsupported. Schema-known JSON-native
 kinds such as booleans, strings, arrays, objects, and null continue to use their
 JSON representation. Metadata-backed dynamic type guards and statically typed
-string or numeric indexing are supported for the verified profile. Dynamic receivers support `type()` and `exists()`. Other unguarded dynamic
-method calls and comparisons are currently rejected, including when numeric
-metadata is present; use an explicit type guard for supported operations.
+string or numeric indexing are supported for the verified profile. Dynamic
+`type()` and `exists()` are available directly. Other `Any`/union operations
+require schema candidates and the stored representation to resolve their
+semantics; comparisons between two dynamic values remain unsupported even
+when numeric metadata is present. Comparisons between one dynamic value and one
+statically typed scalar follow the rules above.
 Unsupported ambiguous HFF unions or operations are rejected rather than
 guessed.
 
