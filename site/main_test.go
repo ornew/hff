@@ -16,6 +16,21 @@ func fixture(t *testing.T) string {
 	write(t, repo, "spec/README.md", "# Specification\n\n[Syntax](syntax.md)\n")
 	write(t, repo, "spec/syntax.md", "# Syntax\n\n## Operators\n\n[Home](../README.md)\n\n| Operator | Meaning |\n|---|---|\n| a=b | Equality |\n")
 	write(t, repo, "LICENSE", "License text\n")
+
+	for _, name := range []string{"config.json", "layout.html", "landing.html", "playground.html", "redirect.html", "public/style.css", "public/theme.js", "public/site.js"} {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		write(t, repo, "site/"+name, string(data))
+	}
+	var config map[string]any
+	if err := json.Unmarshal([]byte(read(t, repo, "site/config.json")), &config); err != nil {
+		t.Fatal(err)
+	}
+	delete(config, "redirects")
+	data, _ := json.Marshal(config)
+	write(t, repo, "site/config.json", string(data))
 	return repo
 }
 
@@ -363,6 +378,11 @@ func TestSectionClassificationOrderAndPager(t *testing.T) {
 
 func TestMovedPagesHaveLocalRedirectsAndStayOutOfSearch(t *testing.T) {
 	repo := fixture(t)
+	data, err := os.ReadFile("config.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, repo, "site/config.json", string(data))
 	write(t, repo, "docs/backends/local/README.md", "# Local backend\n")
 	write(t, repo, "docs/backends/local/configuration.md", "# Configuration\n")
 	write(t, repo, "docs/backends/local/extensions.md", "# Extensions\n")

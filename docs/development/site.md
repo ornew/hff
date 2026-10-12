@@ -1,9 +1,12 @@
 # Building the Documentation Site
 
-The generator follows PEGO's approach: a separate Go module uses Goldmark to
-render repository Markdown and an HTML template. HFF's generator renders
-`README.md`, `spec/**/*.md`, and `docs/**/*.md`, without modifying those sources.
-It has no dependency on the PEGO checkout or a JavaScript build toolchain.
+The site uses Nanosite's standard `sitegen.BuildWith` publication pipeline. The
+configuration in `site/config.json` controls Markdown sources, defaults,
+front matter, record indexes, navigation, paging and search; use the installed
+Nanosite skill as the field-by-field authoring reference. HFF's
+`standard_driver` supplies the landing page, Playground integration and theme
+adapter. Site-specific styles and browser assets are published from
+`site/public/`. Source Markdown remains unchanged during publication.
 
 The website's public URL is [hff.ornew.net](https://hff.ornew.net/).
 
@@ -29,15 +32,15 @@ sh site/build.sh
 sh site/build.sh -serve localhost:8080
 ```
 
-The first build needs the Goldmark module downloaded or available in the Go
-module cache. Builds otherwise use local inputs. The second command builds,
-then serves the generated site. Stop it with Ctrl-C. Re-run the command after
-editing Markdown; the server does not automatically rebuild.
+The wrapper uses the repository's pinned Nanosite revision and configuration.
+The second command builds, then serves the generated site. Stop it with
+Ctrl-C. Re-run the command after editing Markdown; the server does not
+automatically rebuild.
 
 The output defaults to `site/dist/`. It is generated and ignored by Git. Open
 `site/dist/index.html` directly or serve the directory with any static server.
-Relative links support hosting the output beneath a URL subpath. Build commands
-do not publish the site or provision hosting.
+Nanosite resolves links and assets for configured subpath hosting. Build
+commands do not publish the site or provision hosting.
 
 To select a different output directory:
 
@@ -102,12 +105,13 @@ closes the dialog. Search, theme controls, and the drawer use browser JavaScript
 the documentation itself remains static HTML. The script-based index also works
 when HTML files are opened directly.
 
-Repository Markdown links are rewritten to relative HTML links. Before writing
-output, the generator rejects missing internal pages and heading fragments.
-External URLs are preserved; their remote availability is not checked.
-The license is copied into the output. Other local non-page assets are not yet
-supported: use an external URL or extend the generator explicitly when needed.
-Raw Markdown HTML is not enabled.
+Repository Markdown links are rewritten to published routes. Before writing
+output, the shared pipeline rejects missing internal pages and heading
+fragments. External URLs are preserved; their remote availability is not
+checked. HFF-specific public assets are served from `site/public/`; generated
+design-index source remains maintained by `hack/generate-design-index.sh`, while
+the published design index is generated from the configured record source.
+Raw Markdown HTML remains disabled by configuration.
 
 ## Verification
 
