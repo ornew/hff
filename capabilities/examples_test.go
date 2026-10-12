@@ -40,3 +40,15 @@ func ExampleSet_Check() {
 	fmt.Println("dependency error:", policy.Check() != nil)
 	// Output: dependency error: true
 }
+
+func ExampleSet_CheckWithMethods() {
+	extension := capabilities.Method("service.lookup.v1")
+	policy := capabilities.None().Without(extension)
+	fmt.Println(policy.Check() != nil) // The referenced extension is unknown here.
+	fmt.Println(policy.CheckWithMethods("service.lookup.v1") == nil)
+	fmt.Println(policy.Has(extension)) // A known declaration does not grant permission.
+	// Output:
+	// true
+	// true
+	// false
+}

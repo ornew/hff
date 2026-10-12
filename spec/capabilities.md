@@ -42,6 +42,12 @@ values do not turn a disabled operation into null or a runtime capability error.
 Disabled features must not be silently ignored, rewritten to true, or
 interpreted as different syntax.
 
+Capability policies also validate IDs supplied to `Allow` and `Without`.
+Removing a known ID is valid even when it was already disabled. An unknown ID
+is an error even if it was only supplied for removal; otherwise a typo could
+silently leave a permission enabled. Extension IDs must name declarations
+configured on the engine, including when an extension ID is removed from a set.
+
 HFF aims to ship engines that services can use by supplying a schema and a
 capability selection. Backend support is extensible without introducing a
 service-specific grammar. The [Go API record](../docs/design/004-go-api.md) defines configuration, common

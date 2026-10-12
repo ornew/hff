@@ -66,10 +66,22 @@ features := capabilities.None().Allow(
 The list methods any, all, map, flatmap, foldl, and foldr require Callbacks.
 Missing dependencies are errors, not implicitly enabled features. The Regex
 group adds or removes both regex operators and string.matches. Unknown IDs are
-rejected. A declared extension uses `capabilities.Method(declaration.ID())` and
-must also be included in `engine.WithMethods`. The engine checks that every
-capability ID is built in or belongs to a configured declaration. See the
-[local extension guide](extensions.md) for the complete flow.
+rejected, including IDs supplied only to `Without`. Removing a known but
+already-disabled ID is valid. For example, this typo is rejected by `Check`
+instead of silently leaving a similarly named method enabled:
+
+```go
+features := capabilities.Standard().Without(
+    capabilities.Method("string.maches"),
+)
+err := features.Check() // unknown capability "method:string.maches"
+```
+
+A declared extension uses `capabilities.Method(declaration.ID())` and must
+also be included in `engine.WithMethods`. `engine.New` checks every referenced
+extension ID against those declarations, even if it was removed from the set.
+Call `CheckWithMethods` with the declaration ID suffixes when checking a set
+directly. See the [local extension guide](extensions.md) for the complete flow.
 
 Structural equality permissions are checked during compilation for `=`/`!=`,
 `in()`, `list:contains()`, and `list:unique()`. Scalar comparisons and explicit

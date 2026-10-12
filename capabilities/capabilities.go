@@ -77,8 +77,9 @@ func init() {
 // permission policy, not a backend implementation or service authorization
 // policy.
 type Set struct {
-	specified bool
-	ids       map[ID]bool
+	specified  bool
+	ids        map[ID]bool
+	referenced map[ID]bool
 }
 
 // None returns an explicitly empty policy. It differs from the zero Set, which
@@ -118,6 +119,12 @@ func (s Set) clone() Set {
 	for id := range s.ids {
 		out.ids[id] = true
 	}
+	if len(s.referenced) > 0 {
+		out.referenced = make(map[ID]bool, len(s.referenced))
+		for id := range s.referenced {
+			out.referenced[id] = true
+		}
+	}
 	return out
 }
 
@@ -132,6 +139,10 @@ func (s Set) Allow(ids ...ID) Set {
 	out := s.clone()
 	for _, id := range ids {
 		for _, item := range expand(id) {
+			if out.referenced == nil {
+				out.referenced = make(map[ID]bool)
+			}
+			out.referenced[item] = true
 			out.ids[item] = true
 		}
 	}
@@ -140,11 +151,16 @@ func (s Set) Allow(ids ...ID) Set {
 
 // Without returns a new Set with the requested IDs removed; s is unchanged.
 // Removing a group alias removes every member. Removing a dependency while
-// leaving a dependent permission can make Check fail.
+// leaving a dependent permission can make Check fail. IDs supplied to Without
+// must be known even when they are not enabled; Check reports unknown IDs.
 func (s Set) Without(ids ...ID) Set {
 	out := s.clone()
 	for _, id := range ids {
 		for _, item := range expand(id) {
+			if out.referenced == nil {
+				out.referenced = make(map[ID]bool)
+			}
+			out.referenced[item] = true
 			delete(out.ids, item)
 		}
 	}
@@ -174,15 +190,16 @@ func (s Set) IDs() []ID {
 	return out
 }
 
-// Check validates that the Set is specified, all enabled IDs are known built-in
-// permissions, and required dependencies are present. It never enables missing
-// permissions. Use CheckWithMethods when the policy explicitly enables declared
+// Check validates that the Set is specified, all selected and removed IDs are
+// known built-in permissions, and enabled permissions have their dependencies.
+// It never enables missing permissions. Use CheckWithMethods when the policy selects or removes declared
 // extension IDs.
 func (s Set) Check() error { return s.CheckWithMethods() }
 
 // CheckWithMethods validates the Set while treating methodIDs as known
 // extension declaration IDs. It does not add permissions: an enabled
-// capabilities.Method(id) is still required. Unknown IDs, an unspecified Set,
+// capabilities.Method(id) is still required. Removed extension IDs also require
+// their declaration ID in methodIDs. Unknown IDs, an unspecified Set,
 // or missing dependencies return an error. engine.New wraps policy errors in
 // an HFF ConfigurationError when validating Engine options.
 func (s Set) CheckWithMethods(methodIDs ...string) error {
@@ -192,6 +209,20 @@ func (s Set) CheckWithMethods(methodIDs ...string) error {
 	}
 	if !s.specified {
 		return fmt.Errorf("capabilities must be explicitly selected")
+	}
+	// Validate all explicitly supplied IDs, even if a later selection removed
+	// them. Otherwise a typo in Without silently leaves a permission enabled.
+	var referenced []ID
+	for id := range s.referenced {
+		referenced = append(referenced, id)
+	}
+	if len(referenced) > 1 {
+		sort.Slice(referenced, func(i, j int) bool { return referenced[i] < referenced[j] })
+	}
+	for _, id := range referenced {
+		if _, known := builtins[id]; !known && !extensions[id] {
+			return fmt.Errorf("unknown capability %q", id)
+		}
 	}
 	for _, id := range s.IDs() {
 		dependencies, known := builtins[id]

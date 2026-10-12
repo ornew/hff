@@ -1,6 +1,7 @@
 package capabilities_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ornew/hff/capabilities"
@@ -74,5 +75,46 @@ func TestStructuralEqualityGroup(t *testing.T) {
 	}
 	if !without.Allow(capabilities.StructuralEquality).Has(capabilities.StructuralEquality) {
 		t.Fatal("group cannot be restored")
+	}
+}
+
+func TestRemovedUnknownIDsAreRejected(t *testing.T) {
+	baseline := capabilities.Standard()
+	unknown := capabilities.Method("any.tojson")
+	for _, policy := range []capabilities.Set{
+		baseline.Without(unknown),
+		capabilities.None().Allow(unknown).Without(unknown),
+		capabilities.None().Without(unknown).Allow(capabilities.Method("any.json")),
+	} {
+		if err := policy.Check(); err == nil || !strings.Contains(err.Error(), string(unknown)) {
+			t.Fatalf("unknown removal not diagnosed: %v", err)
+		}
+	}
+	if err := baseline.Check(); err != nil {
+		t.Fatal("derived policy mutated original", err)
+	}
+	if !baseline.Has(capabilities.Method("any.json")) {
+		t.Fatal("original permission changed")
+	}
+	// Disabled known permissions have no dependency requirements.
+	if err := capabilities.None().Without(capabilities.Method("list.any"), capabilities.Regex).Check(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRemovedExtensionIDsNeedADeclaration(t *testing.T) {
+	id := capabilities.Method("service.lookup.v1")
+	policy := capabilities.None().Allow(id).Without(id)
+	if policy.Has(id) || len(policy.IDs()) != 0 {
+		t.Fatal("removal retained permission")
+	}
+	if err := policy.Check(); err == nil {
+		t.Fatal("unknown removed extension accepted")
+	}
+	if err := policy.CheckWithMethods("service.lookup.v1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := policy.Allow(capabilities.Logical).CheckWithMethods("service.lookup.v1"); err != nil {
+		t.Fatal("cloned references corrupted", err)
 	}
 }

@@ -272,3 +272,11 @@ func TestDiagnosticPathsOwnTheirStorage(t *testing.T) {
 		t.Fatal("later validation mutated saved diagnostic")
 	}
 }
+
+func TestUnknownCapabilityRemovalIsAConfigurationError(t *testing.T) {
+	_, err := engine.New(engine.WithSchema(schema.Struct()), engine.WithCapabilities(capabilities.Standard().Without(capabilities.Method("any.tojson"))))
+	var detail *hff.Error
+	if !errors.As(err, &detail) || detail.Code != hff.ConfigurationError {
+		t.Fatalf("expected configuration rejection, got %v", err)
+	}
+}
