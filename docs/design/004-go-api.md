@@ -311,6 +311,14 @@ errors. Dependencies are validated without silently enabling a feature the
 service did not select. Built-in methods are addressable by stable method IDs;
 profiles and their contents are documented so services can inspect their policy.
 
+The accepted compatibility-profile design uses a common immutable value with
+backend-specific details attached. It reports effective common capabilities,
+signatures, and limits alongside portability-sensitive data and each backend's
+support restrictions. A common profile does not imply that two backends
+implement the same subset; callers compare both the common contract and the
+selected backend details. Exact profile accessors are defined with the profile
+implementation.
+
 Extension declaration does not imply permission. A declared extension's method
 ID must also be enabled. Engine configuration exposes the resolved feature set,
 method signatures, and limits for discovery. Compile rejects statically selected
@@ -495,6 +503,18 @@ bytes and strings, timestamps and durations, and missing versus present null
 must remain distinct. No-value is an internal evaluation state that a host
 cannot construct. Struct/map reflection is an optional adapter, rather than a
 requirement of compilation or evaluation.
+
+The optional Go-value adapter is a schema-configured, one-way converter. The
+caller provides an explicit HFF schema and explicit mappings from HFF object
+keys to direct exported Go struct fields. The adapter converts a Go record to
+an owned HFF value and validates that value against the schema; it does not
+infer a schema, mutate the record, or convert HFF values back to Go values.
+Reflection remains outside the core explicit `Value` API. Nil containers and
+wrappers map to explicit null, non-nil empty containers remain empty, and
+numeric kinds are preserved without coercion. The converter snapshots its
+schema, mappings, and input limits, and rejects cycles and unsupported values
+with typed errors. See the [Go-value adapter guide](../guides/go-values.md) for
+the implemented API and exact conversion rules.
 
 Constructors must have documented ownership and validation rules. Configurations
 are copied when an engine is created; immutable values must not expose mutable
