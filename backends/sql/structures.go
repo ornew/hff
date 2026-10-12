@@ -115,6 +115,9 @@ func (b *builder) checkStructBinding(binding Binding, typ hff.Type, kinds map[st
 			}
 			continue
 		}
+		if _, err := b.checkJSONMetadata(child); err != nil {
+			return err
+		}
 		column, err := quoteColumn(child.column)
 		if err != nil {
 			return err
@@ -187,7 +190,11 @@ func (b *builder) structJSON(n hff.Node, binding Binding, typ hff.Type) (string,
 				return "", quoteErr
 			}
 			if child.format != "" {
-				value = "COALESCE(" + column + "::json,'null'::json)"
+				restored, _, restoreErr := b.jsonBindingCode(child)
+				if restoreErr != nil {
+					return "", restoreErr
+				}
+				value = "COALESCE(" + restored + "::json,'null'::json)"
 			} else {
 				value, err = b.compositeJSON(n, column, field.Type)
 			}
@@ -227,7 +234,7 @@ func structLosesFloat(binding Binding, typ hff.Type, path []string) bool {
 		if field.relation != nil && relationLosesFloat(*field.relation) {
 			return true
 		}
-		if field.format == JSONB && jsonHasFloat(types[field.path[0]]) {
+		if field.format == JSONB && field.metadata == nil && jsonHasFloat(types[field.path[0]]) {
 			return true
 		}
 		if field.structure != nil {
@@ -334,8 +341,7 @@ func (b *builder) structPath(n hff.Node) (expression, bool, error) {
 			case mapping.relation != nil:
 				code, err = b.relationJSON(n, mapping)
 			case mapping.format != "":
-				code, err = quoteColumn(mapping.column)
-				format = mapping.format
+				code, format, err = b.jsonBindingCode(mapping)
 			default:
 				column, quoteErr := quoteColumn(mapping.column)
 				if quoteErr != nil {

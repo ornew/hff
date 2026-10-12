@@ -20,10 +20,18 @@ const (
 // BindJSON maps one HFF schema path to a PostgreSQL json or jsonb column. The
 // declared HFF schema supplies scalar subtypes; the caller must store documents
 // valid for that schema and selected format. Build rejects operations whose
-// distinctions cannot be recovered from the stored representation.
-func BindJSON(path hff.Path, column ColumnRef, format JSONFormat) Binding {
+// distinctions cannot be recovered from the stored representation. Options
+// configure metadata for distinctions that JSONB does not preserve.
+func BindJSON(path hff.Path, column ColumnRef, format JSONFormat, options ...JSONBindingOption) Binding {
 	b := Bind(path, column)
 	b.format = format
+	for _, option := range options {
+		if option.apply == nil {
+			b.invalidJSONOption = true
+			continue
+		}
+		option.apply(&b)
+	}
 	return b
 }
 func jsonKind(t hff.Type) (hff.TypeKind, bool) {
@@ -58,7 +66,13 @@ func jsonKind(t hff.Type) (hff.TypeKind, bool) {
 func (b *builder) jsonDecode(n hff.Node, code string, format JSONFormat, typ hff.Type, present string) (expression, error) {
 	kind, ok := jsonKind(typ)
 	if !ok {
-		return expression{}, b.failure(n, "JSON value requires an unambiguous supported schema type; dynamic JSON lowering is not yet supported")
+		if typ.Kind() != hff.AnyType && typ.Kind() != hff.UnionType {
+			return expression{}, b.failure(n, "JSON value requires a supported schema type")
+		}
+		raw := b.project(code)
+		normalized := "(CASE WHEN " + string(format) + "_typeof(" + raw + ") = 'null' THEN NULL ELSE " + raw + " END)"
+		b.jsonValues[normalized] = format
+		return expression{normalized, present, hff.AnyType}, nil
 	}
 	raw := b.project(code)
 	normalized := "(CASE WHEN " + string(format) + "_typeof(" + raw + ") = 'null' THEN NULL ELSE " + raw + " END)"
@@ -177,6 +191,18 @@ func (b *builder) jsonIndex(n hff.Node) (expression, error) {
 		}
 		valid := validJSONIndex(index)
 		code = "(CASE WHEN " + valid + " THEN " + value.code + " -> " + index.code + "::integer ELSE NULL END)"
+	case hff.AnyType:
+		class := string(format) + "_typeof(" + value.code + ")"
+		switch index.kind {
+		case hff.StringType:
+			code = "(CASE WHEN " + class + "='object' THEN " + value.code + " -> " + index.code + "::text ELSE NULL END)"
+		case hff.IntType, hff.FloatType:
+			code = "(CASE WHEN " + both("("+class+"='array')", validJSONIndex(index)) + " THEN " + value.code + " -> " + index.code + "::integer ELSE NULL END)"
+		case hff.NullType:
+			code = "NULL::" + string(format)
+		default:
+			return expression{}, b.failure(n, "dynamic JSON index requires a statically known string or number")
+		}
 	case hff.MapType, hff.StructType:
 		if index.kind != hff.StringType && index.kind != hff.NullType {
 			return expression{}, b.failure(n, "JSON object index requires a string")
@@ -197,6 +223,9 @@ func validJSONIndex(index expression) string {
 func (b *builder) jsonCall(n hff.Node, name string, values []expression, format JSONFormat) (expression, error) {
 	r := values[0]
 	present := ordinaryPresence(values)
+	if r.kind == hff.AnyType && name != "type" && name != "exists" {
+		return expression{}, b.failure(n, "dynamic JSON method requires an explicit supported type guard")
+	}
 	switch name {
 	case "contains", "unique":
 		return b.jsonMembership(n, name, values, format)
@@ -205,6 +234,10 @@ func (b *builder) jsonCall(n hff.Node, name string, values []expression, format 
 	case "exists":
 		return boolean(both(r.present, "("+r.code+" IS NOT NULL)")), nil
 	case "type":
+		if r.kind == hff.AnyType {
+			code := "(CASE " + string(format) + "_typeof(" + r.code + ") WHEN 'array' THEN 'list' WHEN 'boolean' THEN 'bool' ELSE COALESCE(" + string(format) + "_typeof(" + r.code + "),'null') END)"
+			return expression{code, r.present, hff.StringType}, nil
+		}
 		typ := "object"
 		if r.kind == hff.ListType {
 			typ = "list"
@@ -303,7 +336,7 @@ func (b *builder) jsonMatches(n hff.Node, code string, format JSONFormat, source
 	}
 	kind, ok := jsonKind(source)
 	if !ok {
-		return "", b.failure(n, "JSON type guard requires an unambiguous source schema")
+		return b.dynamicJSONMatches(n, code, format, target)
 	}
 	source = nonnullJSONType(source)
 	if target.Kind() == hff.ListType {

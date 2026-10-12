@@ -165,6 +165,9 @@ func (b *builder) checkRelation(binding Binding, typ hff.Type, kinds map[string]
 	if c.item.relation != nil {
 		return b.checkRelation(c.item, c.typ, kinds, formats, types)
 	}
+	if _, err := b.checkJSONMetadata(c.item); err != nil {
+		return err
+	}
 	if _, err := quoteColumn(c.item.column); err != nil {
 		return err
 	}
@@ -189,7 +192,11 @@ func (b *builder) relationJSON(n hff.Node, binding Binding) (string, error) {
 	} else {
 		column, _ := quoteColumn(c.item.column)
 		if c.item.format != "" {
-			item = "COALESCE(" + column + "::json,'null'::json)"
+			restored, _, restoreErr := b.jsonBindingCode(c.item)
+			if restoreErr != nil {
+				return "", restoreErr
+			}
+			item = "COALESCE(" + restored + "::json,'null'::json)"
 		} else {
 			item, err = b.compositeJSON(n, column, c.typ)
 		}
@@ -360,7 +367,7 @@ func relationLosesFloat(relation Relation) bool {
 	if !jsonHasFloat(c.typ) {
 		return false
 	}
-	if c.item.format == JSONB {
+	if c.item.format == JSONB && c.item.metadata == nil {
 		return true
 	}
 	if c.item.structure != nil {

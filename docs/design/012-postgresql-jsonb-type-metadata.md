@@ -36,39 +36,53 @@ change HFF behavior in dynamic values and transformations.
 - Inferring HFF type from SQL column declarations or reading database rows at
   Build time.
 - Making every dynamic or representation-sensitive HFF value translatable
-  before metadata support is implemented and verified.
+  merely because a metadata column is present.
 
 ## Design
 
 ### Public behavior and contracts
 
-A JSONB binding names the ordinary JSONB data column and supplies a separate
-metadata value indexed by JSON Pointer. The metadata identifies the HFF type
-only where needed to reconstruct the represented value. Schema information
-continues to determine statically known portions of the value; metadata does
-not replace the HFF schema or turn an unsupported operation into a supported
-one.
+A JSONB binding names the ordinary JSONB data column and may supply a separate
+version-1 metadata column indexed by JSON Pointer. The public option is
+`WithTypeMetadata(column)`, used with
+`BindJSON(path, dataColumn, JSONB, ...)`. Metadata identifies numeric HFF types
+where JSONB cannot preserve them; it supplements, rather than replaces, the
+HFF schema.
 
-If both schema and metadata fail to identify a value's HFF type faithfully,
-Build rejects the operation with a source-located backend error. The translator
-must not infer integer versus float, normalize negative zero, or conflate
-missing and null based solely on PostgreSQL JSONB output.
+If the declared schema, configured metadata binding, and operation cannot
+support faithful lowering, `Build` rejects the plan with a source-located
+backend error. The translator must not infer integer versus float, normalize
+negative zero, or conflate missing and null based solely on PostgreSQL JSONB
+output. Build does not inspect stored metadata contents.
 
 ### Implementation and invariants
 
 Metadata is separate from JSONB data, so the JSONB document remains usable by
-ordinary PostgreSQL JSON facilities. Metadata lookup is by JSON Pointer and
-must remain associated with the same stored document and binding. Nested paths
-must use a stable pointer encoding. Data and metadata are treated as caller-
-owned storage; HFF does not execute queries or inspect rows during Build.
+ordinary PostgreSQL JSON facilities. Version 1 uses an object with a `version`
+number and a `types` object keyed by JSON Pointer. For example,
+`{"version":1,"types":{"/price":{"type":"float","text":"-0.0"}}}`
+records a float at `/price`. Pointer segments escape `~` as `~0` and `/` as
+`~1`; array indexes are zero-based decimal segments, and the empty key is `/`.
+The `type` marker records `int` or `float`. Optional `text` is used when the
+JSONB value alone cannot preserve the exact HFF number, including negative
+zero.
+
+The caller stores the data and metadata together and guarantees that the
+version, paths, numeric markers, optional text, and declared schema agree.
+`Build` performs no database I/O, row inspection, or full-document metadata
+validation. It rejects unsupported or unrecoverable plans. Metadata currently
+restores numeric representations only; bytes, timestamps, and durations are
+not supported metadata types. JSON-native kinds continue to use the data
+document and schema.
 
 ### Compatibility and backend support
 
 Native JSON can preserve numeric spelling needed by supported profiles.
-JSONB translation requires schema knowledge and, for otherwise ambiguous
-values, the separate metadata. Operations whose semantics cannot be restored
-from this information remain Build errors. Local evaluation is independent of
-PostgreSQL storage metadata.
+JSONB translation uses schema knowledge and, for numeric distinctions lost by
+JSONB, the separate metadata. The current implementation restores numeric
+subtypes and text only; operations requiring unsupported metadata kinds or
+other unavailable representation remain Build errors. Local evaluation is
+independent of PostgreSQL storage metadata.
 
 ## Alternatives considered
 
@@ -89,13 +103,16 @@ ambiguity is still rejected.
 
 Tests should verify JSON and JSONB representation parity when schema and
 metadata suffice, including integer/float distinctions, negative zero, nested
-collections, missing versus null, and rejection when metadata is absent or
-conflicting. They must use real PostgreSQL storage and read-back for cases
-where JSONB normalization matters.
+collections, and missing versus null. Build-time tests cover invalid binding
+configuration and plans whose HFF representation is unrecoverable. Stored
+metadata consistency is a caller contract, not a runtime validation performed
+by HFF. Tests use real PostgreSQL storage and read-back where JSONB
+normalization matters.
 
-## Limitations and open questions
+## Limitations
 
-The storage choice is accepted. Exact metadata structs, SQL binding options,
-and the operations enabled by each metadata kind are implementation details
-that must be documented with the delivered API. Metadata does not promise
-support for every `Any` value or operation.
+The version-1 JSON Pointer format and `WithTypeMetadata` binding option are
+implemented for numeric type restoration. This is not general dynamic-value
+serialization: metadata does not make every `Any` value, union, or operation
+supported. If the schema, JSON value, and numeric sidecar cannot recover the
+required HFF representation, `Build` rejects the plan.

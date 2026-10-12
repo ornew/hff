@@ -118,8 +118,7 @@ func (b *builder) physicalItemJSON(n hff.Node, mapping Binding, typ hff.Type) (s
 		code, err := b.relationJSON(n, mapping)
 		return code, JSON, err
 	case mapping.format != "":
-		code, err := quoteColumn(mapping.column)
-		return code, mapping.format, err
+		return b.jsonBindingCode(mapping)
 	default:
 		column, err := quoteColumn(mapping.column)
 		if err != nil {
@@ -138,7 +137,12 @@ func (b *builder) shadowsOuterBinding(alias string) bool {
 			return true
 		}
 	}
-	for _, mapping := range b.structBindings {
+	for _, mapping := range b.physicalParameters {
+		if bindingUsesAlias(mapping, alias) {
+			return true
+		}
+	}
+	for _, mapping := range b.physicalBindings {
 		if bindingUsesAlias(mapping, alias) {
 			return true
 		}
@@ -146,6 +150,9 @@ func (b *builder) shadowsOuterBinding(alias string) bool {
 	return false
 }
 func bindingUsesAlias(mapping Binding, alias string) bool {
+	if mapping.metadata != nil && len(mapping.metadata.parts) > 1 && mapping.metadata.parts[0] == alias {
+		return true
+	}
 	if len(mapping.column.parts) > 1 && mapping.column.parts[0] == alias {
 		return true
 	}
@@ -198,5 +205,5 @@ func (b *builder) bindingLosesFloat(mapping Binding, typ hff.Type) bool {
 	if mapping.structure != nil {
 		return structLosesFloat(mapping, typ, nil)
 	}
-	return mapping.format == JSONB
+	return mapping.format == JSONB && mapping.metadata == nil
 }

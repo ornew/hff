@@ -38,7 +38,7 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 			{Name: "execution", Value: "caller owns database execution, input/schema validity, and database timeout configuration"},
 			{Name: "limits", Value: "translation cannot enforce HFF step, generated-value, or JSON-depth budgets in the database"},
 			{Name: "evaluation.order", Value: "SQL preserves supported expression results; database planning may reorder work and does not guarantee HFF evaluation steps"},
-			{Name: "bindings", Value: "explicit typed scalar, JSON/JSONB, or composite column bindings; ambiguous JSON representations are rejected"},
+			{Name: "bindings", Value: "explicit scalar, JSON/JSONB, composite, flattened struct, or relation bindings; version-1 JSONB numeric metadata supplements schema; caller guarantees stored metadata consistency; unrecoverable representations are rejected"},
 			{Name: "regex", Value: "RE2-compatible regex translation is not supported by this implementation"},
 			{Name: "extensions.contract", Value: "translators use typed expressions and parameter binding; caller guarantees trusted SQL templates and database function behavior"},
 		},

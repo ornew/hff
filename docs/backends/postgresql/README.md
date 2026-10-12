@@ -78,7 +78,7 @@ Choose a physical binding from the way the application stores each HFF value:
 | Physical storage | Binding | What it maps |
 | --- | --- | --- |
 | Scalar SQL column | `Bind(path, Column(...))` | One HFF scalar field to one column. SQL `NULL` is an explicit HFF null. |
-| JSON/JSONB column | `BindJSON(path, column, JSON/JSONB)` | One complete schema-known HFF object, map, or list value. Descendant paths are read inside that document. |
+| JSON/JSONB column | `BindJSON(path, column, JSON/JSONB)` | One complete schema-known HFF object, map, or list value. Descendant paths are read inside that document. JSONB may add `WithTypeMetadata(metadataColumn)` for numeric types lost by normalization. |
 | Native composite column | `BindComposite(path, column)` | One HFF struct to a PostgreSQL composite. A SQL-null row is null; its attributes are always present. |
 | Struct spread across columns | `BindStruct(path, present, null, fields...)` | One HFF object with caller-supplied parent state and per-field bindings. |
 | Related rows | `BindRelation(path, relation)` | An HFF list whose items come from one caller-selected correlated row source. |
@@ -97,10 +97,11 @@ The [binding tutorial](../../tutorials/06-postgresql-bindings.md) walks through
 a parent table and child rows. The representation-specific guides explain
 each binding's missing/null/empty rules.
 
-In addition to scalar columns, the backend supports an initial schema-typed
-JSON/JSONB profile. See [PostgreSQL JSON and JSONB bindings](json.md) for its
-binding API, supported field and collection access, storage requirements, and
-current rejection boundary.
+In addition to scalar columns, the backend supports a schema-typed JSON/JSONB
+profile. JSONB bindings can use a separate version-1 JSON Pointer sidecar to
+restore supported numeric representations. See [PostgreSQL JSON and JSONB
+bindings](json.md) for the binding API, metadata format, collection access,
+storage requirements, and current rejection boundary.
 Struct values can also be bound to native PostgreSQL composite columns with
 `BindComposite`; see [composite bindings](composites.md) for attribute presence,
 null handling, and the supported nested and array profile.
@@ -119,8 +120,8 @@ implicit AND, explicit null comparisons, numeric unary negation, postfix guards
 at scalar leaves, scalar type guards, `exists()`, and `type()` are supported.
 The generic `tojson()` and `tostring()` methods support the scalar and
 collection profile described in the JSON guide, including finite float values
-from scalar columns and native JSON. Serialization of float values read from
-JSONB and `fromjson()` remain unsupported.
+from scalar columns and native JSON. JSONB float serialization requires the
+numeric metadata described in that guide; `fromjson()` remains unsupported.
 String methods currently supported are `len()`, `contains()`, `startswith()`,
 `endswith()`, and `concat()`; boolean `not()`, `and()`, and `or()` are supported.
 The generic scalar `in()` method is supported for membership among its
@@ -165,16 +166,17 @@ from `Build`. For scalar bindings, the current subset rejects regex, collection
 operations, `Any` and non-null mixed unions, JSON and temporal conversions,
 float/float and mixed int/float arithmetic, and guarded access through nullable
 parents. JSON bindings support the schema-known access and inspection described
-in the [JSON guide](json.md); dynamic `Any`, mixed non-null unions, transforming
-callbacks, and representations whose runtime HFF type cannot be recovered
-remain unsupported there. JSON list/object structural equality, list
+in the [JSON guide](json.md). JSONB metadata supports selected numeric type
+guards and typed indexing; unguarded dynamic comparisons and methods, and
+ambiguous representations that schema and metadata cannot recover, remain
+unsupported. JSON list/object structural equality, list
 `contains()` and `unique()`, `sort()`, `concat(list)`, and `any()`/`all()` are
 available for schema-known values when their required capabilities are enabled;
 `map()` and `flatmap()` are supported when callback result types are known.
 Folds are supported for known accumulator types; see the JSON guide for their
-type and null rules. Other collection transformations, `fromjson()`,
-float64 serialization, and bytes/timestamp/duration conversions remain
-unsupported.
+type and null rules. Other collection transformations, `fromjson()`, float64
+serialization when JSONB has lost required numeric representation, and
+bytes/timestamp/duration conversions remain unsupported.
 Unsupported operations do not fall back to local evaluation.
 PostgreSQL is the only currently supported SQL dialect.
 
@@ -339,6 +341,7 @@ The example only builds a predicate; it does not connect to PostgreSQL:
 ```sh
 go run ./examples/sql-predicate
 go run ./examples/sql-extensions
+go run ./examples/sql-json-metadata
 ```
 
 Expected output:

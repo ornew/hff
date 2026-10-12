@@ -1,16 +1,20 @@
 # PostgreSQL JSON and JSONB Bindings
 
 The PostgreSQL backend can bind a schema-known HFF value to one native JSON or
-JSONB column. `Build` lowers field access, list indexing, selected collection
+JSONB column. A JSONB binding can also name a separate version-1 JSON Pointer
+type-metadata column to restore numeric distinctions that JSONB normalizes.
+`Build` lowers field access, list indexing, selected collection
 inspection, structural equality, predicates, and type guards into a
 parameterized predicate. It does not connect to PostgreSQL, inspect the table
 schema, or validate stored documents.
 
 ## Bind one JSON document
 
-Declare the JSON document's HFF shape in the engine schema. A single non-null
-type family may also be nullable; dynamic `Any` and unions with multiple
-non-null families cannot be mapped faithfully from a JSON column.
+Declare the JSON document's HFF shape in the engine schema. Schema-known
+operations use the declared type. Native JSON preserves numeric spelling used
+by dynamic type guards; JSONB needs the metadata described below only for
+numeric distinctions it loses. Guards and metadata do not make every dynamic
+operation available.
 
 For example, the HFF path `profile` can be stored as one physical JSONB
 column. These rows have the database shape used below:
@@ -82,12 +86,13 @@ the general construction contract.
 
 ## Supported profile
 
-The schema must determine each JSON value's HFF representation. Supported
-families are null, bool, int64, finite float64, string, homogeneous lists,
-string-keyed maps, and structs. Nullable variants of one family are supported.
-JSON numeric values are interpreted according to the declared HFF schema; the
-application must store values that satisfy that schema. `Build` does not
-inspect or validate the JSON documents in database rows.
+For statically known values, the schema determines the HFF representation.
+Supported families are null, bool, int64, finite float64, string, homogeneous
+lists, string-keyed maps, and structs; nullable variants are supported. JSONB
+metadata can restore numeric subtype and value when normalization would lose
+the distinction. The application must store data and metadata that satisfy
+the declared schema and remain consistent with each other. `Build` does not
+inspect rows, read the database, or validate stored documents or metadata.
 
 Known-schema field access is supported for nested struct/map fields. List
 indexing accepts negative indexes from the end and integer-valued floating
@@ -175,14 +180,15 @@ reconstructs the exact IEEE value and searches decimal precisions from one to
 seventeen using nearest, ties-to-even rounding; this correctness-first SQL
 lowering is a baseline, not a performance guarantee.
 
-Float values read from JSONB remain rejected for serialization because JSONB
-can discard the original numeric spelling and signed-zero distinction. This
-also applies when a callback merely returns a stored JSONB float. Float values
-created by query literals or transformations, including an integer-to-float
-result, can be serialized because they use the canonical HFF formatter. Native
-JSON preserves the stored spelling needed by this profile. Dynamic `Any`,
-ambiguous unions, bytes/timestamp/duration conversions, and `fromjson()` remain
-rejected.
+JSONB can discard integer-versus-float spelling and the sign of zero. Without
+metadata, operations requiring those distinctions remain rejected, including
+when a callback returns a stored JSONB float. With supported numeric metadata,
+the backend restores the recorded numeric subtype and value before typed
+lowering. Native JSON continues to use its stored numeric spelling. Dynamic
+representations still require schema or metadata information sufficient for
+the particular operation; `Any` is not a general escape from type recovery.
+Current metadata supports numeric types only: bytes, timestamps, and durations
+are not restored by type tags, and `fromjson()` remains unsupported.
 
 Nested callbacks can capture outer callback values and schema fields, with
 lexical shadowing:
@@ -240,12 +246,15 @@ profile.scores:flatmap(score=>[score,score])=[80,80,90,90]
 The following operations remain unsupported for JSON-backed values and return
 a source-located `hff.BackendError` from `Build`:
 
-- Dynamic `Any` decoding and unions with multiple non-null families when the
-  stored representation cannot determine the HFF type.
+- Unguarded comparisons and method calls on dynamic `Any` or unions, even when
+  type metadata is present. Dynamic `type()` and `exists()` checks, guarded
+  branches, and statically typed string or numeric indexing are supported for
+  the verified profile; JSONB numeric guards require metadata where JSONB lost
+  the HFF numeric kind.
 - Other unsupported collection transformations.
 - `fromjson()`, conversions to bytes/timestamps/durations, float64
-  serialization, and operations requiring a runtime type not fixed by the
-  schema.
+  serialization when JSONB has lost required numeric representation, and
+  operations requiring a runtime type not fixed by the schema or metadata.
 
 Unsupported behavior is rejected rather than delegated to local evaluation.
 The [method reference](../../reference/methods.md) lists built-in signatures;
@@ -261,14 +270,83 @@ without NUL; int64 values must be in range, and float64 values must be finite.
 `Build` does not introspect database declarations or rows; malformed or
 schema-incompatible stored values can fail during database evaluation.
 
-JSONB normalizes some input spelling, including numeric exponent notation and
-the distinction between integer and floating spellings, and does not preserve
-negative zero. This profile uses the explicit HFF schema to select numeric
-types when the schema determines them; ambiguous nested int/float unions and
-dynamic `Any` remain unsupported without type metadata. Operations that need
-discarded JSONB float spelling or signed-zero details are rejected; generated
-float values use canonical HFF serialization instead. Keep the application
-schema authoritative for the bound column.
+JSONB normalizes numeric spelling, so a JSONB data column may be paired with a
+metadata column using `BindJSON(path, dataColumn, JSONB,
+WithTypeMetadata(metadataColumn))`. The version-1 sidecar has this shape:
+
+```json
+{
+  "version": 1,
+  "types": {
+    "/price": {"type": "float", "text": "-0.0"},
+    "/items/0/value": {"type": "int"},
+    "/a~1b~0": {"type": "float"}
+  }
+}
+```
+
+`types` maps JSON Pointer paths in the data document to numeric HFF types.
+Pointer segments escape `~` as `~0` and `/` as `~1`. The empty pointer `""`
+addresses the bound document root; `/` addresses an object's empty-string key.
+Array indexes are zero-based decimal segments. The
+`text` member is optional and is needed only when the JSONB number alone cannot
+reconstruct the HFF numeric value and kind, such as negative zero. It is a
+valid HFF numeric spelling, not a promise to preserve the original lexical
+exponent or formatting. Integer and float markers preserve the HFF numeric
+kind.
+
+For example, bind the data document and its sidecar together:
+
+```go
+hffsql.BindJSON(
+    hff.Path{"payload"},
+    hffsql.Column("records", "payload"),
+    hffsql.JSONB,
+    hffsql.WithTypeMetadata(hffsql.Column("records", "payload_types")),
+)
+```
+
+For example, this JSONB data value and sidecar preserve the float type and
+negative zero at the `balance` key:
+
+```sql
+CREATE TABLE records (
+    id bigint PRIMARY KEY,
+    payload jsonb NOT NULL,
+    payload_types jsonb NOT NULL
+);
+INSERT INTO records VALUES (
+    1,
+    '{"balance":0}'::jsonb,
+    '{"version":1,"types":{"/balance":{"type":"float","text":"-0.0"}}}'::jsonb
+);
+```
+
+The corresponding HFF expression can inspect the value with a known type:
+
+```hff
+payload:[map[float]]["balance"]:tostring="-0.0"
+```
+
+Bind both database columns to the same HFF path using the JSONB binding call
+above. The sidecar is stored alongside the document; it is not a second HFF
+field.
+
+The caller must keep the sidecar's version and entries consistent with the data
+document and the declared schema. `Build` checks that the binding is configured
+for JSONB and rejects unsupported or unrecoverable plans, but performs no
+database I/O, row inspection, or runtime full-document metadata validation.
+Missing or inconsistent stored metadata violates the caller's storage
+contract; it is not detected by a runtime full-document validation pass.
+Type metadata currently restores numeric representations only. Metadata tags
+for bytes, timestamps, or durations are unsupported. Schema-known JSON-native
+kinds such as booleans, strings, arrays, objects, and null continue to use their
+JSON representation. Metadata-backed dynamic type guards and statically typed
+string or numeric indexing are supported for the verified profile. Dynamic receivers support `type()` and `exists()`. Other unguarded dynamic
+method calls and comparisons are currently rejected, including when numeric
+metadata is present; use an explicit type guard for supported operations.
+Unsupported ambiguous HFF unions or operations are rejected rather than
+guessed.
 
 PostgreSQL is the only supported SQL dialect. JSON and JSONB use their native
 operators; this support does not promise stable generated SQL text or database
@@ -292,5 +370,11 @@ HFF_POSTGRES_CONTAINER=<container-name-or-id> go test -tags=integration ./backen
 ```
 
 See [development checks](../../development/checks.md) for the test environment.
-Run the [JSON binding example source](https://github.com/ornew/hff/tree/main/examples/sql-json)
-with `go run ./examples/sql-json`.
+Run the [JSON binding example](https://github.com/ornew/hff/tree/main/examples/sql-json)
+and [JSONB numeric-metadata example](https://github.com/ornew/hff/tree/main/examples/sql-json-metadata)
+from the repository root:
+
+```sh
+go run ./examples/sql-json
+go run ./examples/sql-json-metadata
+```

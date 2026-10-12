@@ -24,18 +24,29 @@ func TestSharedConformanceJSONBuildContracts(t *testing.T) {
 	supported["nonnull_null_test_is_false"] = true
 	supported["nullable_guards_keep_presence"] = true
 	supported["typed_array_identical_guard"] = true
+	supported["explicit_null_test"] = true
+	supported["type_guard_failure_is_not_null"] = true
+	supported["exists_observes_failed_type_guard"] = true
+	supported["guard_failure_is_not_null"] = true
+	supported["not_inverts_failed_guard"] = true
+	supported["exists_observes_falsy_values"] = true
+	supported["explicit_type_guard"] = true
+	supported["any_and_all_empty_lists"] = true
+	supported["callback_predicate_guard"] = true
+	supported["null_type_is_observable"] = true
+	supported["object_lookup_distinguishes_missing"] = true
+	supported["type_guard_limits_method_permissions"] = true
 	rejected := map[string]bool{}
 	for _, name := range []string{
 		"json_preserves_float", "json_duplicate_keys_fail", "json_null_is_observable", "json_guard_stays_absent",
-		"not_encloses_comparison", "null_inequality_is_false", "explicit_null_test", "two_null_values_are_not_equal", "not_of_null_comparison",
-		"type_guard_failure_is_not_null", "exists_observes_failed_type_guard", "guard_failure_is_not_null", "not_inverts_failed_guard",
-		"exists_observes_falsy_values", "explicit_type_guard", "exact_mixed_number_comparison", "negative_index", "contains_requires_all_arguments",
-		"structural_equality_ignores_key_order", "unique_is_a_predicate", "any_and_all_empty_lists", "callback_predicate_guard",
+		"not_encloses_comparison", "null_inequality_is_false", "two_null_values_are_not_equal", "not_of_null_comparison",
+		"exact_mixed_number_comparison", "negative_index", "contains_requires_all_arguments",
+		"structural_equality_ignores_key_order", "unique_is_a_predicate",
 		"nested_callback_captures", "fold_argument_order", "regex_partial_match", "invalid_regex_does_not_match_negation",
-		"null_type_is_observable", "strict_base64", "duration_compound_fraction", "timestamp_utc_components", "epoch_is_truthy",
-		"zero_duration_is_falsy", "type_guard_limits_method_permissions",
+		"strict_base64", "duration_compound_fraction", "timestamp_utc_components", "epoch_is_truthy",
+		"zero_duration_is_falsy",
 		"map_preserves_null_and_order", "flatmap_preserves_order", "sort_mixed_numbers_and_reject_null", "concat_preserves_order",
-		"object_lookup_distinguishes_missing", "object_dynamic_key_lookup", "object_enumeration_key_order", "decisive_or_skips_budgeted_callback",
+		"object_dynamic_key_lookup", "object_enumeration_key_order", "decisive_or_skips_budgeted_callback",
 		"decisive_and_skips_budgeted_callback",
 	} {
 		rejected[name] = true

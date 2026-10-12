@@ -37,6 +37,12 @@ read access to repository contents. A successful local run does not establish
 that the remote workflow has completed; check the workflow result for the
 commit under review.
 
+To run the JSONB numeric-metadata example by itself, use:
+
+```sh
+go run ./examples/sql-json-metadata
+```
+
 ## Run the complete CI check scripts
 
 The main job runs three scripts with Go 1.27.1 and Node.js 24.19.0:

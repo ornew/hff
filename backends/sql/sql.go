@@ -31,12 +31,14 @@ func Column(parts ...string) ColumnRef { return ColumnRef{append([]string(nil), 
 // Construct bindings with Bind, BindJSON, BindComposite, BindStruct, or
 // BindRelation, then pass them to Build through WithBindings.
 type Binding struct {
-	path      hff.Path
-	column    ColumnRef
-	format    JSONFormat
-	composite bool
-	structure *structBinding
-	relation  *Relation
+	path              hff.Path
+	column            ColumnRef
+	format            JSONFormat
+	composite         bool
+	structure         *structBinding
+	relation          *Relation
+	metadata          *ColumnRef
+	invalidJSONOption bool
 }
 
 // Bind maps a scalar HFF path to a SQL column. Path components are literal
@@ -155,6 +157,10 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 	if err := b.checkMethods(program.Root()); err != nil {
 		return nil, err
 	}
+	b.physicalBindings = append([]Binding(nil), config.Bindings...)
+	for _, binding := range config.Bindings {
+		b.reserveBindingIdentifiers(binding)
+	}
 	columnKinds := make(map[string]hff.TypeKind)
 	columnFormats := make(map[string]JSONFormat)
 	columnJSONTypes := make(map[string]string)
@@ -187,6 +193,10 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 			b.jsonBindings[key] = JSON
 			b.structBindings[key] = binding
 			continue
+		}
+		metadata, err := b.checkJSONMetadata(binding)
+		if err != nil {
+			return nil, err
 		}
 		column, err := quoteColumn(binding.column)
 		if err != nil {
@@ -231,6 +241,10 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 			columnKinds[column] = kind
 		}
 		b.bindings[key] = column
+		if metadata != "" {
+			b.bindings[key] = b.restoreJSONMetadata(column, metadata)
+			b.jsonBindings[key] = JSON
+		}
 		for _, component := range binding.column.parts {
 			b.reserved[component] = true
 		}

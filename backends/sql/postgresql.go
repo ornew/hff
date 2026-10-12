@@ -16,6 +16,7 @@ type builder struct {
 	ctx                   context.Context
 	program               hff.Program
 	bindings              map[string]string
+	physicalBindings      []Binding
 	args                  []any
 	steps                 []string
 	reserved              map[string]bool
@@ -425,6 +426,9 @@ func both(a, b string) string {
 func truth(value expression) string {
 	var test string
 	switch value.kind {
+	case hff.AnyType:
+		raw := "(" + value.code + "::jsonb)"
+		test = "(CASE jsonb_typeof(" + raw + ") WHEN 'null' THEN FALSE WHEN 'boolean' THEN (" + raw + " #>> '{}'::text[])::boolean WHEN 'number' THEN (" + raw + " #>> '{}'::text[])::numeric<>0 WHEN 'string' THEN (" + raw + " #>> '{}'::text[])<>'' WHEN 'array' THEN " + raw + "<>'[]'::jsonb WHEN 'object' THEN " + raw + "<>'{}'::jsonb ELSE FALSE END)"
 	case hff.NullType:
 		test = "FALSE"
 	case hff.BoolType:
@@ -507,6 +511,9 @@ func (b *builder) binary(n hff.Node) (expression, error) {
 	}
 	if left.kind == hff.NullType || right.kind == hff.NullType {
 		return boolean("FALSE"), nil
+	}
+	if left.kind == hff.AnyType || right.kind == hff.AnyType {
+		return expression{}, b.failure(n, "dynamic JSON comparison requires an explicit supported type guard")
 	}
 	if structuredKind(left.kind) && structuredKind(right.kind) {
 		return b.jsonComparison(n, l, r, left, right, op)
