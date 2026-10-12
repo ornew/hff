@@ -1,0 +1,87 @@
+package sql_test
+
+import (
+	"context"
+	"testing"
+
+	"github.com/ornew/hff"
+	hffsql "github.com/ornew/hff/backends/sql"
+	"github.com/ornew/hff/capabilities"
+	"github.com/ornew/hff/engine"
+	"github.com/ornew/hff/schema"
+)
+
+func TestSQLProfilesDoNotInventDatabaseGuarantees(t *testing.T) {
+	base, err := hffsql.Profile(hffsql.PostgreSQL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !base.Valid() || len(base.Versions()) != 0 || len(base.Guarantees()) != 0 || base.Capabilities().Specified() {
+		t.Fatal("static translation profile fabricated database state or policy")
+	}
+	for _, id := range capabilities.Standard().IDs() {
+		if _, known := base.Feature(id); !known {
+			t.Fatalf("missing SQL support entry: %s", id)
+		}
+	}
+	for _, id := range []capabilities.ID{capabilities.RegexOperators, capabilities.Method("string.matches"), capabilities.Method("timestamp.year")} {
+		if support, _ := base.Feature(id); support.Level != hff.Unsupported {
+			t.Fatalf("unimplemented SQL feature advertised: %s", id)
+		}
+	}
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.String("name"))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := e.Compile(context.Background(), `name="Alice"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL),
+		hffsql.WithBindings(hffsql.Bind(hff.Path{"name"}, hffsql.Column("name"))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := q.Profile()
+	if !profile.Capabilities().Has(capabilities.Comparison) || profile.Backend() != "sql/postgresql" {
+		t.Fatal("built query profile lost its policy or identity")
+	}
+	if compile, known := profile.CompileLimits(); !known || compile.MaxQueryBytes != hff.DefaultLimits().MaxQueryBytes {
+		t.Fatal("compile limits missing")
+	}
+	if _, known := profile.RuntimeLimits(); known || profile.HasGuarantee(hff.StepBudgetGuarantee) || profile.HasGuarantee(hff.EvaluationOrderGuarantee) {
+		t.Fatal("query claims budgets/order it cannot enforce")
+	}
+	if _, known := profile.InputLimits(); known {
+		t.Fatal("query claims to validate the database rows")
+	}
+	if _, err := hffsql.Profile("unknown"); err == nil {
+		t.Fatal("unknown dialect accepted")
+	}
+	var nilQuery *hffsql.Query
+	if nilQuery.Profile().Valid() {
+		t.Fatal("nil query fabricated profile")
+	}
+}
+
+func TestSQLProfileReportsRegisteredExtensions(t *testing.T) {
+	ds := extensionDeclarations(t)
+	e := extensionEngine(t, ds)
+	p, err := e.Compile(context.Background(), `name:customprefix("a")`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	q, err := hffsql.Build(context.Background(), p, extensionOptions(ds)...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := q.Profile()
+	if len(profile.Methods()) != len(ds) {
+		t.Fatal("configured SQL declarations missing")
+	}
+	for _, d := range ds {
+		if support, known := profile.Feature(capabilities.Method(d.ID())); !known || support.Level != hff.Conditional {
+			t.Fatalf("extension support missing for %s", d.ID())
+		}
+	}
+}

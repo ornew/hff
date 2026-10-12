@@ -225,6 +225,44 @@ the operation. SQL currently supports only the PostgreSQL dialect and scalar
 expressions; a registered translator does not make unsupported collection or
 composite types available.
 
+## Inspect the PostgreSQL profile
+
+`hffsql.Profile(hffsql.PostgreSQL)` reports the translator's declared support
+without connecting to a database. After a successful `Build`, `query.Profile()`
+also includes the program's effective capability policy, compile limits, and
+registered SQL method declarations. Neither profile inspects the database or
+infers its version, collation, Unicode, regex, or time-zone data versions.
+
+```go
+profile, err := hffsql.Profile(hffsql.PostgreSQL)
+if err != nil {
+	return err
+}
+if support, known := profile.Feature(capabilities.RegexOperators); known {
+	fmt.Println(support.Level, support.Conditions)
+}
+
+queryProfile := query.Profile()
+if limits, known := queryProfile.CompileLimits(); known {
+	fmt.Println(limits.MaxCompileSteps)
+}
+if _, known := queryProfile.RuntimeLimits(); !known {
+	fmt.Println("SQL runtime limits are not reported")
+}
+```
+
+Feature levels describe translator support independently of service
+permissions. A conditional feature includes its condition; a missing feature
+is unknown. The built query's capability set reports service policy, and
+registered declarations in `Methods()` do not grant that policy. SQL profiles
+do not report input limits, runtime limits, or positive evaluation guarantees:
+the database owns row validation and SQL execution, and PostgreSQL does not
+enforce the local evaluation budgets or evaluation order.
+
+The [profile example](https://github.com/ornew/hff/blob/main/examples/profiles/main.go)
+also shows that a translated query reports unknown SQL runtime limits rather
+than inheriting the local evaluator's budgets.
+
 ## Inspect and request SQL execution guarantees
 
 `ExecutionGuarantees(dialect)` and `Query.Guarantees()` report whether the

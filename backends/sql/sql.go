@@ -65,8 +65,9 @@ func WithConfig(config *Config) Option {
 
 // Query owns a reusable WHERE expression and driver parameters. It performs no I/O.
 type Query struct {
-	where string
-	args  []any
+	where   string
+	args    []any
+	profile hff.Profile
 }
 
 func (q *Query) Where() string {
@@ -202,7 +203,11 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 	if len(b.steps) > 0 {
 		where = "(SELECT " + where + " FROM " + strings.Join(b.steps, " CROSS JOIN LATERAL ") + ")"
 	}
-	return &Query{where: where, args: append([]any(nil), b.args...)}, nil
+	profile, err := queryProfile(config.Dialect, program, methods)
+	if err != nil {
+		return nil, err
+	}
+	return &Query{where: where, args: append([]any(nil), b.args...), profile: profile}, nil
 }
 
 func configuration(message string) error {

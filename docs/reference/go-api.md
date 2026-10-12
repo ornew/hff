@@ -131,6 +131,56 @@ an explicit null rather than an absent optional field. See the
 [composite binding guide](../backends/postgresql/composites.md) for the current
 physical type profile and its limits.
 
+## Inspect a compatibility profile
+
+Profiles provide immutable snapshots of known backend and build facts. The
+static local profile is available from `local.Profile()`; a built filter reports
+its effective configuration through `filter.Profile()`. For SQL, use
+`hffsql.Profile(dialect)` for the static translation profile and
+`query.Profile()` for the built query's profile. SQL profile inspection does
+not connect to or inspect a database.
+
+```go
+profile := filter.Profile()
+if support, known := profile.Feature(capabilities.Method("timestamp.year")); known {
+	// support.Level is Supported, Conditional, or Unsupported.
+	// Conditional entries include the condition in support.Conditions.
+}
+
+if limits, known := profile.RuntimeLimits(); known {
+	// A known zero field means explicitly unbounded for that stage.
+	_ = limits.MaxSteps
+}
+
+if version, known := profile.Version("tz"); known {
+	_ = version // Supplied zone-data version, when configured.
+}
+```
+
+`Profile` exposes `Backend`, `Features`, `Feature`, `Capabilities`,
+`CompileLimits`, `InputLimits`, `RuntimeLimits`, `Versions`, `Version`,
+`Guarantees`, `HasGuarantee`, `Details`, and `Methods`. Slice accessors return
+copies. A missing feature or version is unknown; `UnknownSupport` is not
+reported as supported. Each stage-limit accessor returns `(Limits, bool)`: a
+false boolean means unknown or outside that backend's responsibility, while a
+true boolean with a zero limit field means the ceiling is explicitly
+unbounded. The capability set reports service policy only when specified.
+Backend feature support is a separate statement and does not grant permission.
+Registered method declarations in `Methods()` likewise do not enable those
+methods.
+
+Profiles do not infer database, collation, Unicode, regex, or time-zone data
+versions from ambient state. A missing version is unknown. Guarantees list only
+behavior the backend reports; absence is not a promise. In particular, a SQL
+profile does not claim that PostgreSQL enforces local evaluation budgets or
+HFF evaluation order. `Build` remains authoritative for a specific program,
+binding, and configuration, and database execution behavior remains under the
+service's control.
+
+Run the [profile example](https://github.com/ornew/hff/blob/main/examples/profiles/main.go)
+from the repository root with `go run ./examples/profiles` to inspect both a
+built local filter and a translated PostgreSQL query.
+
 ## Related lookup pages
 
 - [Built-in method signatures](methods.md)

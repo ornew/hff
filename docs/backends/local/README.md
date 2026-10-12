@@ -86,6 +86,38 @@ match. For repeated searches, validate once at ingestion and retain the
 immutable `Input`; this avoids traversing fields that an individual query does
 not read.
 
+## Inspect the local profile
+
+`local.Profile()` reports the local backend's static support and compatibility
+facts. After building, `filter.Profile()` reports the program's effective
+capability policy, compile limits, local input/runtime limits, registered
+extension declarations, and the selected time-zone snapshot. The profile is an
+immutable value; it does not load zone data or grant service permissions.
+
+```go
+profile := filter.Profile()
+if limits, known := profile.CompileLimits(); known {
+	fmt.Println(limits.MaxCompileSteps)
+}
+if zoneVersion, known := profile.Version("tz"); known {
+	fmt.Println(zoneVersion)
+}
+```
+
+The compile profile reports query-byte, syntax-depth, callback-depth, and
+compile-step ceilings. Input reports input depth/value ceilings; runtime
+reports step, generated-value, and JSON-depth ceilings. A known zero ceiling
+means unlimited. A missing limit stage means unknown or outside that backend's
+responsibility. The static profile has unknown compile policy; use the built
+filter profile for effective configured limits. Support levels describe what
+the backend can evaluate, while `Capabilities()` describes service permission
+policy; these are separate. A missing feature is unknown, not supported.
+Extension declarations appear in `Methods()` only when registered, and their
+presence does not enable them in the capability policy.
+
+The runnable [profile example](https://github.com/ornew/hff/blob/main/examples/profiles/main.go)
+prints the configured runtime ceiling and whether regex is permitted.
+
 ## Configure evaluation limits
 
 `local.Build` accepts backend-specific functional options. Individual limits
