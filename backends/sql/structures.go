@@ -223,3 +223,89 @@ func structLosesFloat(binding Binding, typ hff.Type, path []string) bool {
 	}
 	return false
 }
+
+// Project an unguarded field chain directly from a flattened mapping. Explicit
+// parent state checks preserve missing/null propagation while unrelated fields
+// are neither materialized nor translated. Guarded chains retain the general
+// lowering, which carries no-value separately from null.
+func (b *builder) structPath(n hff.Node) (expression, bool, error) {
+	root := n
+	for root.Kind() == hff.FieldNode {
+		root, _ = root.Child(0)
+	}
+	if root.Kind() != hff.VariableNode {
+		return expression{}, false, nil
+	}
+	path, ok := n.Path()
+	if !ok {
+		return expression{}, false, nil
+	}
+	for size := len(path) - 1; size > 0; size-- {
+		mapping, found := b.structBindings[pathKey(path[:size])]
+		if !found {
+			continue
+		}
+		var absent []string
+		for offset, name := range path[size:] {
+			if mapping.structure == nil {
+				return expression{}, false, nil
+			}
+			absent = append(absent, "("+mapping.structure.present.code+") IS NOT TRUE", "("+mapping.structure.null.code+") IS TRUE")
+			child, exists := structFieldBinding(mapping, name)
+			if !exists {
+				value, err := b.jsonDecode(n, "NULL::json", JSON, n.Type(), "TRUE")
+				return value, true, err
+			}
+			mapping = child
+			if offset < len(path[size:])-1 {
+				continue
+			}
+			condition := strings.Join(absent, " OR ")
+			if mapping.structure == nil && mapping.relation == nil && mapping.format == "" {
+				if kind, ok := scalarKind(n.Type()); ok {
+					column, err := quoteColumn(mapping.column)
+					if err != nil {
+						return expression{}, true, err
+					}
+					return expression{code: "(CASE WHEN " + condition + " THEN NULL ELSE " + column + " END)", present: "TRUE", kind: kind}, true, nil
+				}
+			}
+			format := JSON
+			var code string
+			var err error
+			switch {
+			case mapping.structure != nil:
+				code, err = b.structJSON(n, mapping, n.Type())
+			case mapping.relation != nil:
+				code, err = b.relationJSON(n, mapping)
+			case mapping.format != "":
+				code, err = quoteColumn(mapping.column)
+				format = mapping.format
+			default:
+				column, quoteErr := quoteColumn(mapping.column)
+				if quoteErr != nil {
+					return expression{}, true, quoteErr
+				}
+				code, err = b.compositeJSON(n, column, n.Type())
+			}
+			if err != nil {
+				return expression{}, true, err
+			}
+			code = "(CASE WHEN " + condition + " THEN NULL::" + string(format) + " ELSE " + code + " END)"
+			value, err := b.jsonDecode(n, code, format, n.Type(), "TRUE")
+			return value, true, err
+		}
+	}
+	return expression{}, false, nil
+}
+func structFieldBinding(mapping Binding, name string) (Binding, bool) {
+	if mapping.structure == nil {
+		return Binding{}, false
+	}
+	for _, field := range mapping.structure.fields {
+		if field.path[0] == name {
+			return field, true
+		}
+	}
+	return Binding{}, false
+}

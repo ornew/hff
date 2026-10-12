@@ -132,3 +132,22 @@ func TestFlattenedStructureSnapshotsCallerSlices(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestFlattenedFieldProjectionOmitsUnrelatedColumns(t *testing.T) {
+	e := flattenedEngine(t)
+	for _, source := range []string{`profile.age>=18`, `profile.child.name="Alice"`, `profile.ignored=null`} {
+		p, err := e.Compile(context.Background(), source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		q, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(flattenedBinding()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, column := range []string{`"scores"`, `"rate"`, `"labels"`} {
+			if strings.Contains(q.Where(), column) {
+				t.Fatal("unrelated column was projected", source, column)
+			}
+		}
+	}
+}
