@@ -10,11 +10,15 @@ type jsonParameter struct {
 	code   string
 	format JSONFormat
 	typ    hff.Type
+	lossy  bool
 }
 
 // Callback projections belong to their element subquery. Captures retain the
 // enclosing binding IDs and can reference outer lateral projections.
 func (b *builder) jsonPredicate(n hff.Node, name string) (expression, error) {
+	if value, handled, err := b.relationPredicate(n, name); handled {
+		return value, err
+	}
 	receiver, _ := n.Child(0)
 	value, err := b.expression(receiver)
 	if err != nil {
@@ -41,7 +45,10 @@ func (b *builder) jsonPredicate(n hff.Node, name string) (expression, error) {
 		b.parameters = make(map[hff.BindingID]jsonParameter)
 	}
 	id := parameters[0].ID()
-	b.parameters[id] = jsonParameter{code: alias + ".value", format: format}
+	receiverLoss := b.losesFloat(receiver, nil)
+	restoreProvenance := b.callbackProvenance(id, receiver)
+	defer restoreProvenance()
+	b.parameters[id] = jsonParameter{code: alias + ".value", format: format, lossy: receiverLoss}
 	defer func() { b.steps = outerSteps; b.sharedPaths = outerPaths; delete(b.parameters, id) }()
 	body, _ := callback.Child(0)
 	result, err := b.expression(body)

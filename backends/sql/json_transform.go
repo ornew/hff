@@ -23,7 +23,11 @@ func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONForm
 	}
 	id := parameters[0].ID()
 	previous, existed := b.parameters[id]
-	b.parameters[id] = jsonParameter{code: alias + ".value", format: format}
+	receiver, _ := n.Child(0)
+	loss := b.losesFloat(receiver, nil)
+	restoreProvenance := b.callbackProvenance(id, receiver)
+	defer restoreProvenance()
+	b.parameters[id] = jsonParameter{code: alias + ".value", format: format, lossy: loss}
 	defer func() {
 		b.steps = outer
 		b.sharedPaths = outerPaths

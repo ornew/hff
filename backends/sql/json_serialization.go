@@ -71,11 +71,17 @@ func (b *builder) losesFloat(n hff.Node, environment map[hff.BindingID]bool) boo
 	if !jsonHasFloat(n.Type()) {
 		return false
 	}
+	if mapping, exists := b.relationMapping(n, b.physicalParameters); exists {
+		return b.bindingLosesFloat(mapping, n.Type())
+	}
+	if mapping, exists := b.relationMapping(n, b.parameterProvenance); exists {
+		return b.bindingLosesFloat(mapping, n.Type())
+	}
 	if binding, ok := n.Binding(); ok {
 		if loss, exists := environment[binding.ID()]; exists {
 			return loss
 		}
-		if parameter, exists := b.parameters[binding.ID()]; exists && parameter.format == JSONB {
+		if parameter, exists := b.parameters[binding.ID()]; exists && (parameter.format == JSONB || parameter.lossy) {
 			return true
 		}
 	}

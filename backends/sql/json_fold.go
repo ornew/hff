@@ -44,7 +44,7 @@ func (b *builder) jsonFold(n hff.Node, name string) (expression, error) {
 	if err != nil {
 		return expression{}, err
 	}
-	result, steps, err := b.jsonFoldBody(callback, parameters, accumulatorIndex, previous, item, accumulatorType)
+	result, steps, err := b.jsonFoldBody(callback, parameters, accumulatorIndex, previous, item, accumulatorType, receiver, seed)
 	if err != nil {
 		return expression{}, err
 	}
@@ -89,7 +89,7 @@ func (b *builder) jsonFoldType(n hff.Node, typ hff.Type) (hff.Type, error) {
 	return hff.NewUnionType(members[0], hff.PrimitiveType(hff.NullType)), nil
 }
 
-func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accumulatorIndex int, previous, item string, accumulatorType hff.Type) (expression, []string, error) {
+func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accumulatorIndex int, previous, item string, accumulatorType hff.Type, receiver, seed hff.Node) (expression, []string, error) {
 	outer := b.steps
 	outerPaths := b.sharedPaths
 	b.steps = nil
@@ -97,14 +97,25 @@ func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accu
 	if b.parameters == nil {
 		b.parameters = make(map[hff.BindingID]jsonParameter)
 	}
+	receiverLoss, seedLoss := b.losesFloat(receiver, nil), b.losesFloat(seed, nil)
+	var provenanceRestores []func()
+	defer func() {
+		for i := len(provenanceRestores) - 1; i >= 0; i-- {
+			provenanceRestores[i]()
+		}
+	}()
 	old := make([]jsonParameter, len(parameters))
 	existed := make([]bool, len(parameters))
 	for i, binding := range parameters {
 		id := binding.ID()
 		old[i], existed[i] = b.parameters[id]
-		parameter := jsonParameter{code: item + ".value", format: JSON}
+		parameter := jsonParameter{code: item + ".value", format: JSON, lossy: receiverLoss}
+		if i != accumulatorIndex {
+			provenanceRestores = append(provenanceRestores, b.callbackProvenance(id, receiver))
+		}
 		if i == accumulatorIndex {
 			parameter.code, parameter.typ = previous+".acc", accumulatorType
+			parameter.lossy = receiverLoss || seedLoss
 		}
 		b.parameters[id] = parameter
 	}

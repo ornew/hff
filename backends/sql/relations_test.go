@@ -159,3 +159,33 @@ func TestIndependentRelationsCanReuseAliases(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRelationCallbacksPreserveFloatSerializationProvenance(t *testing.T) {
+	item := schema.Struct(schema.Float("native"), schema.Float("lossy"))
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.List("items", item))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	relation, err := hffsql.NewRelation(hffsql.WithRelationSource(hffsql.Column("float_items"), "floatrow"), hffsql.WithCorrelation(hffsql.TrustedSQL("true")), hffsql.WithRelationItem(item, hffsql.BindStruct(hff.Path{}, hffsql.TrustedSQL("true"), hffsql.TrustedSQL("false"), hffsql.Bind(hff.Path{"native"}, hffsql.Column("floatrow", "native")), hffsql.BindJSON(hff.Path{"lossy"}, hffsql.Column("floatrow", "lossy"), hffsql.JSONB))), hffsql.WithUniqueOrder(hffsql.Ascending(hffsql.Column("floatrow", "id"), schema.IntType)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"native", "lossy"} {
+		for _, source := range []string{
+			`items:any(x=>x.FIELD:tostring="-0.0")`, `items!:any(x=>x.FIELD:tostring="-0.0")`,
+			`items:all(x=>x.FIELD:tojson="-0.0")`, `items:map(x=>x.FIELD:tostring):contains("-0.0")`,
+			`items:foldl("",(acc,x)=>acc:concat(x.FIELD:tostring))="-0.0"`,
+			`items:foldr("",(x,acc)=>acc:concat(x.FIELD:tostring))="-0.0"`,
+		} {
+			source = strings.ReplaceAll(source, "FIELD", field)
+			p, err := e.Compile(context.Background(), source)
+			if err != nil {
+				t.Fatal(source, err)
+			}
+			_, err = hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindRelation(hff.Path{"items"}, relation)))
+			if (err != nil) != (field == "lossy") {
+				t.Fatalf("%s: %v", source, err)
+			}
+		}
+	}
+}

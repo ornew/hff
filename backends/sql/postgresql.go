@@ -11,21 +11,25 @@ import (
 )
 
 type builder struct {
-	ctx               context.Context
-	program           hff.Program
-	bindings          map[string]string
-	args              []any
-	steps             []string
-	reserved          map[string]bool
-	alias             int
-	methods           map[string]MethodImplementation
-	compositeBindings map[string]bool
-	jsonBindings      map[string]JSONFormat
-	structBindings    map[string]Binding
-	relationBindings  map[string]Binding
-	jsonValues        map[string]JSONFormat
-	parameters        map[hff.BindingID]jsonParameter
-	sharedPaths       map[string]expression
+	ctx                   context.Context
+	program               hff.Program
+	bindings              map[string]string
+	args                  []any
+	steps                 []string
+	reserved              map[string]bool
+	alias                 int
+	methods               map[string]MethodImplementation
+	compositeBindings     map[string]bool
+	jsonBindings          map[string]JSONFormat
+	structBindings        map[string]Binding
+	relationBindings      map[string]Binding
+	jsonValues            map[string]JSONFormat
+	parameters            map[hff.BindingID]jsonParameter
+	sharedPaths           map[string]expression
+	physicalParameters    map[hff.BindingID]Binding
+	parameterItems        map[hff.BindingID]Binding
+	parameterProvenance   map[hff.BindingID]Binding
+	activeRelationAliases map[string]int
 }
 
 // present tracks HFF's internal no-value separately from SQL NULL.
@@ -194,6 +198,13 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		parameter, ok := b.parameters[binding.ID()]
 		if !ok {
 			return expression{}, b.failure(n, "unbound callback parameter")
+		}
+		if item, exists := b.parameterItems[binding.ID()]; exists {
+			code, format, err := b.physicalItemJSON(n, item, parameter.typ)
+			if err != nil {
+				return expression{}, err
+			}
+			parameter.code, parameter.format = code, format
 		}
 		typ := n.Type()
 		if parameter.typ.Kind() != hff.InvalidType {

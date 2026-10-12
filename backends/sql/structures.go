@@ -230,23 +230,55 @@ func structLosesFloat(binding Binding, typ hff.Type, path []string) bool {
 // lowering, which carries no-value separately from null.
 func (b *builder) structPath(n hff.Node) (expression, bool, error) {
 	root := n
+	var reversed []string
 	for root.Kind() == hff.FieldNode {
+		name, _ := root.Field()
+		reversed = append(reversed, name)
 		root, _ = root.Child(0)
 	}
-	if root.Kind() != hff.VariableNode {
-		return expression{}, false, nil
+	var candidates []struct {
+		mapping Binding
+		fields  []string
 	}
-	path, ok := n.Path()
-	if !ok {
-		return expression{}, false, nil
-	}
-	for size := len(path) - 1; size > 0; size-- {
-		mapping, found := b.structBindings[pathKey(path[:size])]
-		if !found {
-			continue
+	switch root.Kind() {
+	case hff.ParameterNode:
+		parameter, ok := root.Binding()
+		if !ok {
+			return expression{}, false, nil
 		}
+		mapping, ok := b.physicalParameters[parameter.ID()]
+		if !ok || mapping.structure == nil {
+			return expression{}, false, nil
+		}
+		fields := make([]string, len(reversed))
+		for i, name := range reversed {
+			fields[len(reversed)-1-i] = name
+		}
+		candidates = append(candidates, struct {
+			mapping Binding
+			fields  []string
+		}{mapping, fields})
+	case hff.VariableNode:
+		path, ok := n.Path()
+		if !ok {
+			return expression{}, false, nil
+		}
+		for size := len(path) - 1; size > 0; size-- {
+			if mapping, found := b.structBindings[pathKey(path[:size])]; found {
+				candidates = append(candidates, struct {
+					mapping Binding
+					fields  []string
+				}{mapping, path[size:]})
+			}
+		}
+	default:
+		return expression{}, false, nil
+	}
+	for _, candidate := range candidates {
+		mapping := candidate.mapping
+		fields := candidate.fields
 		var absent []string
-		for offset, name := range path[size:] {
+		for offset, name := range fields {
 			if mapping.structure == nil {
 				return expression{}, false, nil
 			}
@@ -257,7 +289,7 @@ func (b *builder) structPath(n hff.Node) (expression, bool, error) {
 				return value, true, err
 			}
 			mapping = child
-			if offset < len(path[size:])-1 {
+			if offset < len(fields)-1 {
 				continue
 			}
 			condition := strings.Join(absent, " OR ")
