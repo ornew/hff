@@ -76,6 +76,41 @@ func TestJSONInputFidelity(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestBatchFilteringPreservesRecordsAndReportsTimings(t *testing.T) {
+	r := run(context.Background(), []byte(`{"schema":[{"name":"n","type":"int|float"}],"query":"n:[float]:exists | n=9007199254740993","records":[{"n":12},{"n":9007199254740993},{"n":1.0},{"n":-0.0}]}`))
+	if !r.OK || r.Matched != nil || r.Batch == nil || r.Batch.Total != 4 {
+		t.Fatalf("invalid batch response: %+v", r)
+	}
+	want := []string{`{"n":9007199254740993}`, `{"n":1.0}`, `{"n":-0.0}`}
+	if strings.Join(r.Batch.Filtered, "\n") != strings.Join(want, "\n") {
+		t.Fatal("lost source representations or order:", r.Batch.Filtered)
+	}
+	for _, measured := range []float64{r.Batch.Timings.Compile, r.Batch.Timings.Build, r.Batch.Timings.Evaluate} {
+		if measured < 0 || math.IsNaN(measured) || math.IsInf(measured, 0) {
+			t.Fatal("invalid timing", measured)
+		}
+	}
+	for _, records := range []string{`[]`, `[{"n":12}]`} {
+		r = run(context.Background(), []byte(`{"schema":[{"name":"n","type":"int"}],"query":"n>18","records":`+records+`}`))
+		if !r.OK || r.Batch == nil || r.Batch.Filtered == nil || len(r.Batch.Filtered) != 0 {
+			t.Fatalf("empty result: %+v", r)
+		}
+	}
+}
+
+func TestBatchFailureNeverReturnsPartialRecords(t *testing.T) {
+	r := run(context.Background(), []byte(`{"schema":[{"name":"n","type":"int"}],"query":"n>18","records":[{"n":20},{"n":"bad"},{"n":30}]}`))
+	if r.OK || r.Batch != nil || r.Matched != nil || r.Error == nil || r.Error.Record != 2 || r.Error.Stage != "match" {
+		t.Fatalf("partial or unlocated failure: %+v", r)
+	}
+	for _, raw := range []string{`{"records":null}`, `{"record":{},"records":[]}`, `{"schema":[],"query":""}`} {
+		r = run(context.Background(), []byte(raw))
+		if r.OK || r.Error == nil || r.Error.Stage != "request" {
+			t.Fatalf("accepted invalid mode: %s %+v", raw, r)
+		}
+	}
+}
 func TestJSONInputLimitsAndCancellation(t *testing.T) {
 	for _, raw := range []string{strings.Repeat(" ", maxRequestBytes+1), strings.Repeat("[", 66) + "0" + strings.Repeat("]", 66), "[" + strings.Repeat("0,", 100000) + "0]"} {
 		_, err := decode(context.Background(), []byte(raw))
@@ -93,7 +128,7 @@ func TestJSONInputLimitsAndCancellation(t *testing.T) {
 }
 
 func FuzzBridge(f *testing.F) {
-	for _, seed := range []string{`{}`, `{"schema":[],"query":"","record":{}}`, `{"schema":[{"name":"x","type":"any"}],"query":"x","record":{"x":1}}`} {
+	for _, seed := range []string{`{}`, `{"schema":[],"query":"","record":{}}`, `{"schema":[{"name":"x","type":"any"}],"query":"x","record":{"x":1}}`, `{"schema":[{"name":"x","type":"any"}],"query":"x","records":[{"x":1},{"x":false}]}`} {
 		f.Add(seed)
 	}
 	f.Fuzz(func(t *testing.T, raw string) {
@@ -103,10 +138,10 @@ func FuzzBridge(f *testing.F) {
 			t.Fatal(err)
 		}
 		if r.OK {
-			if r.Error != nil || r.Matched == nil {
+			if r.Error != nil || (r.Matched == nil) == (r.Batch == nil) {
 				t.Fatal("invalid successful response")
 			}
-		} else if r.Error == nil || r.Matched != nil {
+		} else if r.Error == nil || r.Matched != nil || r.Batch != nil {
 			t.Fatal("invalid failure response")
 		}
 	})

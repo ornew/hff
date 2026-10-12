@@ -10,6 +10,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/ornew/hff"
@@ -32,6 +33,7 @@ type request struct {
 	Query   string            `json:"query"`
 	Schema  []field           `json:"schema"`
 	Record  json.RawMessage   `json:"record"`
+	Records []json.RawMessage `json:"records"`
 	Without []capabilities.ID `json:"without,omitempty"`
 }
 type failure struct {
@@ -41,11 +43,23 @@ type failure struct {
 	Line    int           `json:"line,omitempty"`
 	Column  int           `json:"column,omitempty"`
 	Path    hff.Path      `json:"path,omitempty"`
+	Record  int           `json:"record,omitempty"`
+}
+type timings struct {
+	Compile  float64 `json:"compile_ms"`
+	Build    float64 `json:"build_ms"`
+	Evaluate float64 `json:"evaluate_ms"`
+}
+type batchResult struct {
+	Filtered []string `json:"filtered"`
+	Total    int      `json:"total"`
+	Timings  timings  `json:"timings"`
 }
 type response struct {
-	OK      bool     `json:"ok"`
-	Matched *bool    `json:"matched,omitempty"`
-	Error   *failure `json:"error,omitempty"`
+	OK      bool         `json:"ok"`
+	Matched *bool        `json:"matched,omitempty"`
+	Error   *failure     `json:"error,omitempty"`
+	Batch   *batchResult `json:"batch,omitempty"`
 }
 
 func handle(ctx context.Context, raw []byte) []byte {
@@ -65,7 +79,8 @@ func failed(stage string, err error) response {
 	return response{Error: f}
 }
 func run(ctx context.Context, raw []byte) response {
-	if _, err := decode(ctx, raw); err != nil {
+	admitted, err := decode(ctx, raw)
+	if err != nil {
 		return failed("request", err)
 	}
 	var req request
@@ -73,6 +88,20 @@ func run(ctx context.Context, raw []byte) response {
 	d.DisallowUnknownFields()
 	if err := d.Decode(&req); err != nil {
 		return failed("request", err)
+	}
+	object, _ := admitted.AsObject()
+	records, batch := object["records"]
+	_, single := object["record"]
+	if batch == single {
+		return failed("request", fmt.Errorf("provide either record or records"))
+	}
+	var values []hff.Value
+	if batch {
+		var ok bool
+		values, ok = records.AsList()
+		if !ok {
+			return failed("request", fmt.Errorf("records must be a JSON array"))
+		}
 	}
 	if err := capabilities.Standard().Allow(req.Without...).Check(); err != nil {
 		return failed("configuration", &hff.Error{Code: hff.ConfigurationError, Message: err.Error()})
@@ -85,13 +114,37 @@ func run(ctx context.Context, raw []byte) response {
 	if err != nil {
 		return failed("configuration", err)
 	}
+	start := time.Now()
 	p, err := e.Compile(ctx, req.Query)
+	compileTime := float64(time.Since(start).Nanoseconds()) / 1e6
 	if err != nil {
 		return failed("compile", err)
 	}
+	start = time.Now()
 	f, err := local.Build(ctx, p)
+	buildTime := float64(time.Since(start).Nanoseconds()) / 1e6
 	if err != nil {
 		return failed("build", err)
+	}
+	if batch {
+		out := &batchResult{Filtered: []string{}, Total: len(values), Timings: timings{Compile: compileTime, Build: buildTime}}
+		start = time.Now()
+		for i, value := range values {
+			matched, err := f.Match(ctx, value)
+			if err != nil {
+				r := failed("match", err)
+				r.Error.Record = i + 1
+				return r
+			}
+			if matched {
+				out.Filtered = append(out.Filtered, string(req.Records[i]))
+			}
+		}
+		if err := core.CheckContext(ctx); err != nil {
+			return failed("match", err)
+		}
+		out.Timings.Evaluate = float64(time.Since(start).Nanoseconds()) / 1e6
+		return response{OK: true, Batch: out}
 	}
 	v, err := decode(ctx, req.Record)
 	if err != nil {

@@ -7,12 +7,12 @@ entry point is build-tagged for `js/wasm`; a native entry point reads one JSON
 request from standard input and writes one JSON response to standard output
 for local testing.
 
-The site page provides curated examples and editable query, schema, and record
-JSON. It evaluates one local match in a dedicated worker, keeps the request in
-the browser, and starts a fresh worker after cancellation. The UI uses the
-standard capability set and HFF's default compile and local-match limits. The
-bridge does not provide a distributable JavaScript package, SQL translation,
-or custom extension registration.
+The site page accepts a query, schema, and newline-delimited JSON records. It
+compiles and builds once, then evaluates the records in a dedicated worker and
+returns matching records in their original order. The UI uses the standard
+capability set and HFF's default compile and local-match limits. It does not
+provide a distributable JavaScript package, SQL translation, or custom
+extension registration.
 
 ## Request and response
 
@@ -23,20 +23,24 @@ fields:
 |:--|:--|
 | `query` | HFF query source. |
 | `schema` | Array of field descriptors: `name`, `type`, optional `optional`, and nested `fields` for a struct. |
-| `record` | One JSON value to validate and match. It is transported as raw JSON text so number spellings are preserved. |
+| `records` | Array of JSON values to validate and match. Each is transported as raw JSON text so number spellings are preserved. |
 | `without` | Optional array of standard capability IDs to remove from the default capability set. |
 
-For example, the native command can evaluate a small request:
+The native command accepts the same batch request as the browser bridge:
 
 ```sh
-printf '%s' '{"query":"age>=18","schema":[{"name":"age","type":"int"}],"record":{"age":20}}' | go run ./playground
+printf '%s' '{"query":"age>=18","schema":[{"name":"age","type":"int"}],"records":[{"age":20},{"age":12}]}' | go run ./playground
 ```
 
-The response is JSON. A completed evaluation has `ok: true` and a boolean
-`matched`. Failure has `ok: false`, no `matched` value, and an `error` with a
-stage (`request`, `configuration`, `schema`, `compile`, `build`, `input`, or
-`match`), HFF error code, and message. Source line/column and input path are
-included when available.
+For a batch, a successful response has `ok: true` and `batch`, containing
+`filtered` (the matching raw JSON records in input order), `total` (the number
+of input records), and `timings`. The timing fields are `compile_ms`,
+`build_ms`, and `evaluate_ms`. Evaluation includes validation and matching for
+the whole batch; request decoding, schema setup, and worker loading are outside
+these measurements. If a record fails, the response has `ok: false`, no partial
+batch, and an `error` with a stage, HFF error code, message, and 1-based record
+index. Source line/column and input path are included when available. A
+single-record `record` request remains available to native bridge tests.
 
 Schema `type` strings use HFF's existing type-guard type-expression grammar;
 they are not Go type names or arbitrary source fragments. Use `type: "struct"`
@@ -83,5 +87,5 @@ Without Node.js the smoke test skips. The repository's generic
 package compatibility, while this smoke test exercises the bridge itself.
 
 The site worker loads the generated WebAssembly module and passes request JSON
-to the bridge without decoding the record into JavaScript objects. Its
-five-second match timeout stops the worker and produces no partial match.
+to the bridge without decoding records into JavaScript objects. A worker stop
+or any record error produces no partial batch result.

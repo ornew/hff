@@ -39,6 +39,10 @@ try {
   assert.equal(result.response.matched, undefined);
   result = await message({ type: "match", id: 4, request: '{"schema":[{"name":"n","type":"int"}],"query":"n=9007199254740993","record":{"n":9007199254740993}}' });
   assert.equal(result.response.matched, true);
+  result = await message({ type: "match", id: 8, request: '{"schema":[{"name":"n","type":"int|float"}],"query":"n:[float]:exists | n=9007199254740993","records":[{"n":12},{"n":9007199254740993},{"n":1.0},{"n":-0.0}]}' });
+  assert.deepEqual(result.response.batch.filtered, ['{"n":9007199254740993}', '{"n":1.0}', '{"n":-0.0}']);
+  assert.equal(result.response.batch.total, 4);
+  for (const measured of Object.values(result.response.batch.timings)) assert.ok(Number.isFinite(measured) && measured >= 0);
   // Kill actual WASM work, then start a fresh runtime rather than reusing state.
   const fields = [{ name: "age", type: "int" }, ...Array.from({ length: 8000 }, (_, i) => ({ name: `f${i}`, type: "int", optional: true }))];
   worker.postMessage({ type: "match", id: 5, request: JSON.stringify({ schema: fields, query: "age>18", record: { age: 20 } }) });
