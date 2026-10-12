@@ -84,6 +84,12 @@ func (b *builder) checkStructBinding(binding Binding, typ hff.Type, kinds map[st
 			return configuration("undeclared or duplicate struct field binding: " + name)
 		}
 		seen[name] = true
+		if child.relation != nil {
+			if err := b.checkRelation(child, field.Type, kinds, formats, types); err != nil {
+				return err
+			}
+			continue
+		}
 		if child.structure != nil {
 			if err := b.checkStructBinding(child, field.Type, kinds, formats, types); err != nil {
 				return err
@@ -154,6 +160,8 @@ func (b *builder) structJSON(n hff.Node, binding Binding, typ hff.Type) (string,
 		var value string
 		if child.structure != nil {
 			value, err = b.structJSON(n, child, field.Type)
+		} else if child.relation != nil {
+			value, err = b.relationJSON(n, child)
 		} else {
 			column, quoteErr := quoteColumn(child.column)
 			if quoteErr != nil {
@@ -172,6 +180,10 @@ func (b *builder) structJSON(n hff.Node, binding Binding, typ hff.Type) (string,
 		if child.structure != nil {
 			member = "CASE WHEN (" + child.structure.present.code + ") IS TRUE THEN " + member + " ELSE NULL END"
 		}
+		if child.relation != nil {
+			member = "CASE WHEN (" + child.relation.config.present.code + ") IS TRUE THEN " + member + " ELSE NULL END"
+		}
+
 		members = append(members, member)
 	}
 	object := "('{}'::json)"
@@ -192,6 +204,9 @@ func structLosesFloat(binding Binding, typ hff.Type, path []string) bool {
 	for _, field := range binding.structure.fields {
 		if len(path) > 0 && path[0] != field.path[0] {
 			continue
+		}
+		if field.relation != nil && relationLosesFloat(*field.relation) {
+			return true
 		}
 		if field.format == JSONB && jsonHasFloat(types[field.path[0]]) {
 			return true
