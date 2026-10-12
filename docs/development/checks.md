@@ -467,3 +467,51 @@ fixture setup and Docker/psql transport are excluded from the reported
 PostgreSQL `EXPLAIN` times. See the [PostgreSQL execution baseline](postgresql-execution.md)
 for workload details and the measured sample; it is not an index or service
 performance guarantee.
+
+### Benchmark PostgreSQL JSONB numeric-metadata restoration
+
+The metadata benchmarks compare the same typed fixtures in native JSON and
+JSONB with a version-1 type-metadata column. Four query shapes cover one scalar
+access, repeated access, guards, and a callback. The Build benchmark reports
+translation time and allocations along with generated SQL bytes and parameter
+count; it does not contact PostgreSQL:
+
+```sh
+go test ./backends/sql -run '^$' \
+  -bench '^BenchmarkPostgreSQLMetadataBuild$' \
+  -benchtime=200ms -count=1 -cpu=1 -benchmem
+```
+
+The tagged execution benchmark checks each SQL result against local matching
+before measuring its `EXPLAIN ANALYZE` plan, so the reported server timings are
+for a warmed scan. It reports PostgreSQL planning time, execution time, plan
+nodes, input and matched rows, and SQL bytes separately. Fixture loading, local
+evaluation, Docker/psql transport, and result validation are outside the
+reported server timings. The controlled fixture uses temporary tables with
+JIT and parallel workers disabled and a custom plan; it has no indexes. This
+profile is useful for comparing these scans, not for predicting indexed or
+production workloads.
+
+Run the two storage modes as alternating paired samples. Give every invocation
+a distinct plan directory because cases with the same name overwrite their
+artifacts:
+
+```sh
+HFF_POSTGRES_CONTAINER=<container-name-or-id> \
+HFF_POSTGRES_PLAN_DIR=/private/tmp/hff-metadata-native-a \
+go test -tags=integration ./backends/sql -run '^$' \
+  -bench '^BenchmarkPostgreSQLMetadataExecution/NativeJSON$' \
+  -benchtime=1x -count=1 -cpu=1
+
+HFF_POSTGRES_CONTAINER=<container-name-or-id> \
+HFF_POSTGRES_PLAN_DIR=/private/tmp/hff-metadata-jsonb-a \
+go test -tags=integration ./backends/sql -run '^$' \
+  -bench '^BenchmarkPostgreSQLMetadataExecution/JSONBMetadata$' \
+  -benchtime=1x -count=1 -cpu=1
+```
+
+Each invocation includes 100- and 1,000-row fixtures and all four query shapes.
+For a paired run, reverse the mode order and use fresh plan directories. The
+benchmark checks matching IDs and actual plan row counts before reporting; it
+does not establish a general performance gain. Keep raw plans, IDs, and SQL
+samples outside Git unless they are deliberately versioned.
