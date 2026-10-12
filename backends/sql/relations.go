@@ -180,7 +180,7 @@ func (b *builder) relationJSON(n hff.Node, binding Binding) (string, error) {
 	if len(orders) > 0 {
 		ordered = " ORDER BY " + strings.Join(orders, ",")
 	}
-	rows := "(SELECT COALESCE(json_agg(" + item + ordered + "),'[]'::json) FROM " + table + " AS " + alias + " WHERE (" + c.correlation.code + ") IS TRUE)"
+	rows := "(SELECT COALESCE(json_agg(" + item + ordered + "),'[]'::json) FROM " + table + " AS " + alias + " WHERE (" + c.correlation.code + "))"
 	return "(CASE WHEN (" + c.present.code + ") IS NOT TRUE OR (" + c.null.code + ") IS TRUE THEN NULL::json ELSE " + rows + " END)", nil
 }
 

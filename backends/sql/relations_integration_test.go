@@ -43,7 +43,7 @@ func runRelationParity(t *testing.T, nested, state bool) {
 		rows[1].value = hff.Object(map[string]hff.Value{"items": hff.Null()})
 	}
 	var script strings.Builder
-	script.WriteString("CREATE TEMP TABLE hff_parents(id integer); INSERT INTO hff_parents VALUES(0),(1),(2),(3); CREATE TEMP TABLE hff_related(id bigint,parent_id integer,price bigint,active boolean,tags json); INSERT INTO hff_related VALUES(10,1,20,true,'[\"auth\"]'),(20,1,5,false,'[\"dev\"]'),(30,2,0,NULL,'[]'),(40,3,20,true,'[\"auth\"]'),(50,3,20,true,'[\"auth\"]'); CREATE TEMP TABLE hff_tags(item_id bigint,position bigint,value text); INSERT INTO hff_tags SELECT related.id,tag.ord,tag.value FROM hff_related AS related CROSS JOIN LATERAL json_array_elements_text(related.tags) WITH ORDINALITY AS tag(value,ord);\n")
+	script.WriteString("CREATE TEMP TABLE hff_parents(id integer); INSERT INTO hff_parents VALUES(0),(1),(2),(3); CREATE TEMP TABLE hff_related(id bigint,parent_id integer,price bigint,active boolean,tags json); INSERT INTO hff_related VALUES(10,1,20,true,'[\"auth\"]'),(20,1,5,false,'[\"dev\"]'),(30,2,0,NULL,'[]'),(40,3,20,true,'[\"auth\"]'),(50,3,20,true,'[\"auth\"]'),(60,NULL,20,true,'[\"auth\"]'); CREATE TEMP TABLE hff_tags(item_id bigint,position bigint,value text); INSERT INTO hff_tags SELECT related.id,tag.ord,tag.value FROM hff_related AS related CROSS JOIN LATERAL json_array_elements_text(related.tags) WITH ORDINALITY AS tag(value,ord);\n")
 
 	e := relationEngine(t)
 	if state {
