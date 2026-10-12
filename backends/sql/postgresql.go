@@ -614,6 +614,13 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		values[i] = value
 	}
 	receiver := values[0]
+	if name == "concat" {
+		for _, value := range values {
+			if value.kind == hff.AnyType {
+				return b.dynamicJSONConcat(n, values)
+			}
+		}
+	}
 	if name == "contains" {
 		for _, value := range values {
 			if value.kind == hff.AnyType {

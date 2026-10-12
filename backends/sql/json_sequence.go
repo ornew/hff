@@ -63,6 +63,29 @@ func (b *builder) jsonSequence(n hff.Node, name string, values []expression, for
 }
 
 func (b *builder) jsonConcat(n hff.Node, values []expression, format JSONFormat) (expression, error) {
+	converted := append([]expression(nil), values...)
+	for i, value := range values {
+		if value.kind == hff.NullType {
+			continue
+		}
+		child, _ := n.Child(i)
+		physical, ok := b.jsonValues[value.code]
+		if !ok || value.kind != hff.ListType {
+			return expression{}, b.failure(n, "list concat requires JSON list operands")
+		}
+		document, err := b.comparisonDocument(child, value.code, physical, child.Type())
+		if err != nil {
+			return expression{}, err
+		}
+		code := "(CASE WHEN " + value.code + " IS NULL THEN NULL::json ELSE " + document + " END)"
+		b.jsonValues[code] = JSON
+		converted[i] = expression{code, value.present, hff.ListType}
+	}
+	return b.concatJSONLists(n, converted, JSON)
+}
+
+// Operands have already been normalized to preserve their declared subtypes.
+func (b *builder) concatJSONLists(n hff.Node, values []expression, format JSONFormat) (expression, error) {
 	r, arg := values[0], values[1]
 	if arg.kind == hff.NullType {
 		code := "NULL::json"

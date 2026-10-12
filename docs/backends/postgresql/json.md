@@ -339,8 +339,8 @@ no-value. For methods with an argument, an ordinary null receiver or a
 non-string dynamic receiver produces null and suppresses a later no-value
 argument under the normal receiver-first evaluation rule. A non-string dynamic
 argument produces null when the receiver is a string. `contains()` also has
-dynamic String/List dispatch, described below; `concat()` remains a statically
-typed method.
+dynamic String/List dispatch, described below. Dynamic `concat()` is described
+in the next section.
 
 ### `contains()` on dynamic strings and lists
 
@@ -373,6 +373,7 @@ continues. Thus a JSON number or object used as
 `labels` yields ordinary null for the example predicate, while a null
 `labels` value also produces a non-match through ordinary predicate
 conversion.
+
 That number/object behavior applies to an `Any` receiver. With a declared
 `String|List<String>` receiver, an incompatible host value is rejected by
 schema/input validation rather than dynamically treated as an `Any` value.
@@ -383,6 +384,41 @@ contain numbers, JSONB requires metadata when normalization erases a numeric
 kind or value needed for structural membership. Local evaluation still
 requires the corresponding list/object equality capability when composite
 elements may be compared.
+
+### `concat()` on dynamic strings and lists
+
+`concat()` dispatches to the matching String or List signature when the
+receiver is `Any` or a union with a supported candidate. String concatenation
+joins the two strings. List concatenation preserves the left operand's items,
+then the right operand's items, including order and duplicates. It normalizes
+list operands before concatenation so later explicit type guards such as
+`:[int]` and `:[float]` retain known element types. For example, concatenating
+schema-known `List<Float>` and `List<Int>` values preserves the float type for
+the left element even if JSONB stored its number as `1`:
+
+```hff
+data:concat("!")="Alice!"
+data:concat(["platform"]):contains("platform")
+(left:concat(right))[0]:[float]:exists
+```
+
+For a dynamic `Any` receiver, a runtime value that does not match the selected
+String or List family yields ordinary null. A null receiver or an inapplicable
+receiver determines the result before argument evaluation, so a later
+no-value argument is skipped. Once the receiver selects a signature, null
+arguments propagate null; a reached guard that produces no-value propagates
+no-value. Unlike list `contains()`, a null `concat()` argument is not a value
+to append.
+
+Native JSON supports these operations on `Any` when the stored JSON-native
+representation identifies the applicable signature. Plain JSONB supports
+schema-known string and list candidates whose element types are recoverable.
+Bytes, timestamps, and durations in `Any` are not supported. An `Any` list or
+an ambiguous numeric list requires JSONB type metadata when JSONB storage has
+already erased distinctions needed by concatenation or a later operation;
+concatenation's normalization does not itself lose those distinctions. The
+schema must also admit the resulting value for chained operations; unsupported
+representations are rejected during `Build`.
 
 ### Boolean methods on dynamic JSON values
 
@@ -451,9 +487,8 @@ a source-located `hff.BackendError` from `Build`:
   collection are supported as described above. JSONB needs numeric metadata
   when both integer and float candidates remain possible or an operation needs
   a numeric distinction lost during JSONB normalization.
-- Dynamic string methods other than `len()`, `startswith()`, `endswith()`, and
-  the String/List `contains()` overloads described above. `concat()` is not
-  dynamically overloaded.
+- Dynamic string methods other than `len()`, `startswith()`, `endswith()`,
+  String/List `contains()`, and String/List `concat()` described above.
 - Other dynamic operations whose result cannot be resolved from schema
   candidates, a supported type guard, or a statically typed string/numeric
   index.
