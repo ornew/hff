@@ -48,7 +48,7 @@ func TestJSONBNumericUnionUsesSchemaSubtype(t *testing.T) {
 		typ     hff.Type
 		sources []string
 	}{
-		{"integer", schema.Union(schema.IntType, schema.StringType), []string{`data=1.0`, `data:tojson="1"`, `data:[int]=1`, `!data:[float]:exists`}},
+		{"integer", schema.Union(schema.IntType, schema.StringType), []string{`data=1.0`, `data:json="1"`, `data:[int]=1`, `!data:[float]:exists`}},
 		{"floating", schema.Union(schema.FloatType, schema.StringType), []string{`data=1`, `data:[float]=1.0`, `!data:[int]:exists`}},
 		{"list", schema.Union(schema.ListOf(schema.FloatType), schema.StringType), []string{`data:[list[float]]:exists`}},
 		{"map", schema.Union(schema.MapOf(schema.FloatType), schema.StringType), []string{`data:[map[float]]:exists`}},

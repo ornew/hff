@@ -32,7 +32,7 @@ func (b *builder) serialize(n hff.Node, value expression, name string) (expressi
 			code = b.floatText(value.code)
 		case hff.StringType:
 			code = value.code
-			if name == "tojson" {
+			if name == "json" {
 				code = "to_json(" + code + ")::text"
 			}
 			code = "COALESCE(" + code + ",'null')"

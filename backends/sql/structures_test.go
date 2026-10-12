@@ -49,8 +49,8 @@ func flattenedQueries() []string {
 		`profile.name="Alice"`, `profile.age>=18`, `profile:has("child")`, `profile.child=null`,
 		`profile!.child!.name=null`, `!profile!.child!.name=null`, `profile.child={"name":null}`,
 		`profile.child={}`, `profile:size=5`, `profile:size=6`, `profile.scores[-1]=null`,
-		`profile.scores:any(x=>x>10)`, `profile.scores=[10,20,null]`, `profile.rate:tostring="-0.0"`,
-		`profile.labels.app="auth"`, `profile:tojson:contains("child")`, `profile=profile`,
+		`profile.scores:any(x=>x>10)`, `profile.scores=[10,20,null]`, `profile.rate:string="-0.0"`,
+		`profile.labels.app="auth"`, `profile:json:contains("child")`, `profile=profile`,
 		`profile:keys:contains("name","age")`, `profile:get("child")=null`}
 }
 
@@ -95,7 +95,7 @@ func TestFlattenedStructureTracksOnlyLossyFloatFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := e.Compile(context.Background(), `profile:tojson!=""`)
+	p, err := e.Compile(context.Background(), `profile:json!=""`)
 	if err != nil {
 		t.Fatal(err)
 	}

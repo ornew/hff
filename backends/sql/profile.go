@@ -61,7 +61,7 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 // method names shared by unrelated receiver families.
 func profileSQLMethod(id string) bool {
 	switch id {
-	case "any.type", "any.tojson", "any.tostring", "any.in", "any.exists",
+	case "any.type", "any.json", "any.string", "any.in", "any.exists",
 		"bool.and", "bool.or", "bool.not", "string.len", "string.contains", "string.startswith", "string.endswith", "string.concat",
 		"list.size", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr",
 		"object.size", "object.has", "object.get", "object.keys", "object.values", "object.items":

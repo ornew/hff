@@ -138,7 +138,7 @@ func (c *compiler) call(receiver plan.Node, n *syntax.MethodCall, span core.Span
 	result := union(results...)
 	// type()/stringification observe ordinary null, whereas all other receivers
 	// propagate it. exists() additionally consumes guard failure as false.
-	if name != "type" && name != "tostring" && name != "tojson" && name != "exists" {
+	if name != "type" && !(name == "string" && len(args) == 0) && name != "json" && name != "exists" {
 		result = nullable(result)
 	}
 	children := append([]plan.Node{receiver}, args...)

@@ -62,7 +62,7 @@ On a match, the guard returns the original value unchanged. On a mismatch, it
 returns internal no-value. An already no-value operand remains no-value. Normal
 no-value propagation then applies to access, arithmetic, ordinary calls,
 comparisons, boolean conversion, and collections. Existing method exceptions
-such as `exists()`, `type()`, `tojson()`, and `tostring()` retain their specified
+such as `exists()`, `type()`, `json()`, and `string()` retain their specified
 behavior for no-value.
 
 Method resolution after a guard uses its narrowed result type. For example,

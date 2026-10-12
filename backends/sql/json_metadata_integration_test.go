@@ -32,7 +32,7 @@ func TestPostgreSQLJSONMetadataRestoresNumericText(t *testing.T) {
 		t.Fatal(err)
 	}
 	var script strings.Builder
-	sources := []string{`data["a/b~"]:tostring="-0.0"`, `data:tojson="{\"a/b~\":-0.0,\"日\":1.0}"`, `data:values:any(x=>x:tostring="-0.0")`, `data["日"]=1.0`, `data:[map[float]]["a/b~"]:tostring="-0.0"`}
+	sources := []string{`data["a/b~"]:string="-0.0"`, `data:json="{\"a/b~\":-0.0,\"日\":1.0}"`, `data:values:any(x=>x:string="-0.0")`, `data["日"]=1.0`, `data:[map[float]]["a/b~"]:string="-0.0"`}
 	for index, source := range sources {
 		activeEngine := e
 		if strings.Contains(source, ":[map[float]]") {
@@ -229,22 +229,22 @@ func TestPostgreSQLJSONMetadataNestedBindings(t *testing.T) {
 		schema             hff.Type
 		bindings           []hffsql.Binding
 	}{
-		{"flattened", `profile.payload["a/b~"]:tostring="-0.0"`, "metadata_parents records",
+		{"flattened", `profile.payload["a/b~"]:string="-0.0"`, "metadata_parents records",
 			schema.Struct(schema.Field("profile", itemType)),
 			[]hffsql.Binding{hffsql.BindStruct(hff.Path{"profile"}, hffsql.Boolean(true), hffsql.Boolean(false),
 				hffsql.BindJSON(hff.Path{"payload"}, hffsql.Column("records", "data"), hffsql.JSONB,
 					hffsql.WithTypeMetadata(hffsql.Column("records", "meta"))))}},
-		{"relation_predicate", `items:any(x=>x.payload["a/b~"]:tostring="-0.0")`, "metadata_parents records",
+		{"relation_predicate", `items:any(x=>x.payload["a/b~"]:string="-0.0")`, "metadata_parents records",
 			schema.Struct(schema.List("items", itemType)), []hffsql.Binding{hffsql.BindRelation(hff.Path{"items"}, relation)}},
-		{"relation_index", `items[0].payload:tojson="{\"a/b~\":-0.0,\"日\":1.0}"`, "metadata_parents records",
+		{"relation_index", `items[0].payload:json="{\"a/b~\":-0.0,\"日\":1.0}"`, "metadata_parents records",
 			schema.Struct(schema.List("items", itemType)), []hffsql.Binding{hffsql.BindRelation(hff.Path{"items"}, relation)}},
-		{"nested_list", `data:[list[list[float]]][0][0]:tostring="-0.0"`, "metadata_arrays records",
+		{"nested_list", `data:[list[list[float]]][0][0]:string="-0.0"`, "metadata_arrays records",
 			schema.Struct(schema.Any("data")), []hffsql.Binding{hffsql.BindJSON(hff.Path{"data"}, hffsql.Column("records", "data"), hffsql.JSONB,
 				hffsql.WithTypeMetadata(hffsql.Column("records", "meta")))}},
-		{"scalar_root", `data:tostring="-0.0"`, "metadata_scalars records",
+		{"scalar_root", `data:string="-0.0"`, "metadata_scalars records",
 			schema.Struct(schema.Float("data")), []hffsql.Binding{hffsql.BindJSON(hff.Path{"data"}, hffsql.Column("records", "data"), hffsql.JSONB,
 				hffsql.WithTypeMetadata(hffsql.Column("records", "meta")))}},
-		{"empty_key", `data:[map[float]][""]:tostring="-0.0"`, "metadata_empty_keys records",
+		{"empty_key", `data:[map[float]][""]:string="-0.0"`, "metadata_empty_keys records",
 			schema.Struct(schema.Any("data")), []hffsql.Binding{hffsql.BindJSON(hff.Path{"data"}, hffsql.Column("records", "data"), hffsql.JSONB,
 				hffsql.WithTypeMetadata(hffsql.Column("records", "meta")))}},
 	}

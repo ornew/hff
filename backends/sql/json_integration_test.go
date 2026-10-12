@@ -101,10 +101,10 @@ func TestPostgreSQLJSONParity(t *testing.T) {
 		queries := jsonQueries()
 		if format == hffsql.JSON {
 			queries = append(queries,
-				`factors:tojson="[-0.0]"`, `factors:tostring="[1.0]"`,
-				`factors[0]:tojson="5e-324"`, `factors[0]:tostring="-0.0"`,
-				`factors:map(x=>x):tojson="[-0.0]"`, `factors:map(x=>[x,null]):tojson="[[-0.0,null]]"`,
-				`factors:tojson="[5e-324,1.7976931348623157e+308]"`,
+				`factors:json="[-0.0]"`, `factors:string="[1.0]"`,
+				`factors[0]:json="5e-324"`, `factors[0]:string="-0.0"`,
+				`factors:map(x=>x):json="[-0.0]"`, `factors:map(x=>[x,null]):json="[[-0.0,null]]"`,
+				`factors:json="[5e-324,1.7976931348623157e+308]"`,
 			)
 		}
 		for _, source := range queries {

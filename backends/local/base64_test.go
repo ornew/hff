@@ -20,7 +20,7 @@ func TestStrictBase64Conversions(t *testing.T) {
 		{"Zg== ", false}, {"Zg==\t", false}, {"_w==", false}, {"-w==", false}, {"é", false},
 	} {
 		t.Run(tc.text, func(t *testing.T) {
-			f := build(t, `x:frombase64:tobase64=x`)
+			f := build(t, `x:frombase64:base64=x`)
 			got, err := f.Match(context.Background(), record(hff.String(tc.text), hff.Null()))
 			if err != nil || got != tc.valid {
 				t.Fatalf("got %v %v want %v", got, err, tc.valid)
@@ -36,12 +36,12 @@ func TestStrictBase64Conversions(t *testing.T) {
 	for i := range data {
 		data[i] = byte(i)
 	}
-	f := build(t, `x:tobase64=y x:tobase64:frombase64=x`)
+	f := build(t, `x:base64=y x:base64:frombase64=x`)
 	got, err := f.Match(context.Background(), record(hff.Bytes(data), hff.String(base64.StdEncoding.EncodeToString(data))))
 	if err != nil || !got {
 		t.Fatal("all byte values must round trip:", got, err)
 	}
-	for _, query := range []string{`x:frombase64=null`, `x:tobase64=null`} {
+	for _, query := range []string{`x:frombase64=null`, `x:base64=null`} {
 		got, err := build(t, query).Match(context.Background(), record(hff.Null(), hff.Null()))
 		if err != nil || !got {
 			t.Fatal("null propagation:", got, err)
@@ -55,7 +55,7 @@ func TestBase64WorkBudget(t *testing.T) {
 		value hff.Value
 	}{
 		{`x:frombase64`, hff.String("YWJjZGVmZ2hpamtsbW5vcA==")},
-		{`x:tobase64`, hff.Bytes(make([]byte, 32))},
+		{`x:base64`, hff.Bytes(make([]byte, 32))},
 	} {
 		f := build(t, tc.query, local.WithLimits(hff.Limits{MaxSteps: 10}))
 		_, err := f.Match(context.Background(), record(tc.value, hff.Null()))

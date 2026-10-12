@@ -166,7 +166,7 @@ func TestPostgreSQLUnionCollectionGuardsPreserveSchema(t *testing.T) {
 		{schema.Union(schema.IntType, schema.StringType), `data:[int]=1`, `1e0`, hffsql.JSON, true},
 		{schema.ListOf(schema.IntType), `data=[2,1]`, `[2.0,1e0]`, hffsql.JSONB, true},
 		{schema.ListOf(schema.IntType), `data:sort=[1,2]`, `[2.0,1e0]`, hffsql.JSONB, true},
-		{schema.ListOf(schema.IntType), `data:tojson="[2,1]"`, `[2.0,1e0]`, hffsql.JSONB, true},
+		{schema.ListOf(schema.IntType), `data:json="[2,1]"`, `[2.0,1e0]`, hffsql.JSONB, true},
 		{schema.Union(schema.ListOf(schema.FloatType), schema.ListOf(floatOrNull), schema.StringType), `data:[list[float]]:exists`, `[1]`, hffsql.JSONB, true},
 		{schema.Union(schema.ListOf(schema.FloatType), schema.ListOf(floatOrNull), schema.StringType), `data:[list[float]]:exists`, `"hello"`, hffsql.JSON, false},
 		{schema.Union(schema.ListOf(schema.FloatType), schema.ListOf(floatOrNull)), `data:[list[float]]:exists`, `[null]`, hffsql.JSONB, false},

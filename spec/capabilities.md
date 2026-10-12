@@ -6,6 +6,13 @@ A service configures the features that its filters may use. This includes
 available methods; the configuration model must also cover selectable language
 operations as the implementation is designed.
 
+Built-in method capability IDs use the `method:` prefix, receiver family, and
+method name. For example, the common `any:string()` conversion is
+`method:any.string`, JSON serialization is `method:any.json`, the required-zone
+`timestamp:string(tz)` overload is `method:timestamp.string`, and base64
+encoding is `method:bytes.base64`. In Go, pass the suffix such as
+`any.string` to `capabilities.Method`; the helper adds the prefix.
+
 Structural equality uses `comparison:list-equality` and
 `comparison:object-equality` permissions. `group:structural-equality` selects
 both. Compilation checks only structural value families that the static types

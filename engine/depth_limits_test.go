@@ -64,7 +64,7 @@ func TestDefaultDepthBoundaries(t *testing.T) {
 		// Allow one extra host-input level so serialization tests reach the
 		// JSON budget instead of stopping in record validation.
 		jsonEngine := newEngine(t, schema.Struct(schema.Any("x")), engine.WithLimits(hff.Limits{MaxInputDepth: limits.MaxJSONDepth + 1}))
-		for _, source := range []string{`x:fromjson:exists`, `x:tojson:exists`} {
+		for _, source := range []string{`x:fromjson:exists`, `x:json:exists`} {
 			program, err := jsonEngine.Compile(ctx, source)
 			if err != nil {
 				t.Fatal(err)

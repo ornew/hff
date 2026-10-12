@@ -54,19 +54,19 @@ func jsonQueries() []string {
 		`scores:map(x=>profile.age+x)[0]=profile.age+10`,
 		`scores:foldl(0,(acc,x)=>acc+profile.age)=profile.age*scores:size`,
 		`people:any(x=>x.name="Alice") people:any(x=>x.name="Bob")`,
-		`scores:map(x=>-0.0):tojson="[-0.0,-0.0,-0.0]"`,
-		`scores:map(x=>-0.0)[0]:tostring="-0.0"`,
-		`factors:map(x=>-0.0):tojson="[-0.0]"`,
-		`scores:map(x=>{"zero":-0.0}):tojson="[{\"zero\":-0.0},{\"zero\":-0.0},{\"zero\":-0.0}]"`,
-		`scores:foldl(-0.0,(acc,x)=>acc):tostring="-0.0"`,
-		`scores:tojson="[10,20,null]"`, `scores:tostring="null"`, `scores!:tojson="null"`, `!scores!:tojson="null"`,
-		`labels:tojson="{\"app\":\"auth\",\"team\":null}"`, `labels:tostring="{}"`,
-		`profile:tojson="{\"age\":18,\"name\":\"Alice\"}"`, `people:tojson:contains("Alice")`,
-		`groups:tojson="[[10,20],[],null,[null]]"`, `scores:map(x=>x>10):tojson="[false,true,false]"`,
-		`scores:map(x=>[x,"a"]):tojson="[[10,\"a\"],[20,\"a\"],[null,\"a\"]]"`,
-		`profile.name:tostring="Alice"`, `profile.age:tostring="18"`, `profile.name:tojson="\"Alice\""`,
-		`scores:map(x=>{"n":x,"s":"a\nb\tc\\\"<>&/日本語"}):tojson:contains("日本語")`,
-		`labels:items:tojson="[[\"app\",\"auth\"],[\"team\",null]]"`,
+		`scores:map(x=>-0.0):json="[-0.0,-0.0,-0.0]"`,
+		`scores:map(x=>-0.0)[0]:string="-0.0"`,
+		`factors:map(x=>-0.0):json="[-0.0]"`,
+		`scores:map(x=>{"zero":-0.0}):json="[{\"zero\":-0.0},{\"zero\":-0.0},{\"zero\":-0.0}]"`,
+		`scores:foldl(-0.0,(acc,x)=>acc):string="-0.0"`,
+		`scores:json="[10,20,null]"`, `scores:string="null"`, `scores!:json="null"`, `!scores!:json="null"`,
+		`labels:json="{\"app\":\"auth\",\"team\":null}"`, `labels:string="{}"`,
+		`profile:json="{\"age\":18,\"name\":\"Alice\"}"`, `people:json:contains("Alice")`,
+		`groups:json="[[10,20],[],null,[null]]"`, `scores:map(x=>x>10):json="[false,true,false]"`,
+		`scores:map(x=>[x,"a"]):json="[[10,\"a\"],[20,\"a\"],[null,\"a\"]]"`,
+		`profile.name:string="Alice"`, `profile.age:string="18"`, `profile.name:json="\"Alice\""`,
+		`scores:map(x=>{"n":x,"s":"a\nb\tc\\\"<>&/日本語"}):json:contains("日本語")`,
+		`labels:items:json="[[\"app\",\"auth\"],[\"team\",null]]"`,
 		`scores:foldl(0,(acc,x)=>acc+x)=30`, `scores:foldl(0,(acc,x)=>acc+x)=null`,
 		`scores:foldr(0,(x,acc)=>x-acc)=26`, `scores:foldl(0,(acc,x)=>acc-x)=-34`,
 		`scores:foldl(null,(acc,x)=>x)=null`, `scores:foldr(null,(x,acc)=>x)=null`,
@@ -321,7 +321,7 @@ func TestJSONCallbacksConcurrentBuildsPreserveScopes(t *testing.T) {
 
 func TestJSONFloatSerializationRepresentation(t *testing.T) {
 	for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
-		for _, source := range []string{`factors:tojson="[-0.0]"`, `factors[0]:tostring="-0.0"`, `factors:map(x=>x):tojson="[-0.0]"`} {
+		for _, source := range []string{`factors:json="[-0.0]"`, `factors[0]:string="-0.0"`, `factors:map(x=>x):json="[-0.0]"`} {
 			p, err := jsonEngine(t).Compile(context.Background(), source)
 			if err != nil {
 				t.Fatal(err)

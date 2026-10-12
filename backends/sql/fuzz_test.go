@@ -22,7 +22,7 @@ func FuzzPostgreSQLBuild(f *testing.F) {
 		`profile.people:any(x=>x.name:matches("A"))`,
 		`profile.people:map(x=>x:keys):flatmap(x=>x):unique`,
 		`profile.people:foldl({},(a,x)=>x)=null`,
-		`profile:tojson:fromjson:[object]:exists`,
+		`profile:json:fromjson:[object]:exists`,
 		`profile.scores:foldr(0,(x,a)=>a+x)>0`,
 	} {
 		f.Add(source)

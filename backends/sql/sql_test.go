@@ -356,10 +356,10 @@ func parityCases() []parityCase {
 	queries := []string{
 		`age+1>18 name="O'Reilly" flag=true factor<1.5`,
 		`age>=18 age<=100 age:exists`,
-		`factor:tojson="1.25"`, `factor:tostring="-0.0"`, `factor:tojson="5e-324"`, `factor:tojson="1.7976931348623157e+308"`,
-		`name:tojson="\"Alice\""`, `name:tostring="Alice"`, `age:tojson="18"`, `flag:tojson="true"`,
-		`name!:tojson="null"`, `!name!:tostring="null"`, `name:[int]:tojson:exists`,
-		`name:tojson="null"`, `age:tostring="-9223372036854775808"`, `flag:tostring="false"`,
+		`factor:json="1.25"`, `factor:string="-0.0"`, `factor:json="5e-324"`, `factor:json="1.7976931348623157e+308"`,
+		`name:json="\"Alice\""`, `name:string="Alice"`, `age:json="18"`, `flag:json="true"`,
+		`name!:json="null"`, `!name!:string="null"`, `name:[int]:json:exists`,
+		`name:json="null"`, `age:string="-9223372036854775808"`, `flag:string="false"`,
 
 		`name:in("Alice","A",null)`, `age:in(18,9007199254740992.0,null)`, `flag:in(true,false)`,
 		`name:in("Alice",age)`, `age:in(18,factor!)`, `name:in(null,name!)`,
@@ -451,7 +451,7 @@ func parityCases() []parityCase {
 		if !strings.ContainsAny(text, ".eE") {
 			text += ".0"
 		}
-		cases = append(cases, parityCase{`factor:tojson="` + text + `"`, hff.Null(), hff.Null(), hff.Null(), hff.Float(value)})
+		cases = append(cases, parityCase{`factor:json="` + text + `"`, hff.Null(), hff.Null(), hff.Null(), hff.Float(value)})
 	}
 	integers := []int64{math.MinInt64, math.MinInt64 + 1, -9007199254740993, -9007199254740992, -2, -1, 0, 1, 2, 9007199254740992, 9007199254740993, math.MaxInt64 - 1, math.MaxInt64}
 	floats := []float64{
@@ -538,9 +538,9 @@ func TestDeclaredMethodRequiresSQLImplementation(t *testing.T) {
 
 func serializationEscapes() []parityCase {
 	return []parityCase{
-		parityCase{`name:tojson="\"a\\nb\\tc\\\\\\\"<>&/日本語\""`, hff.Null(), hff.String("a\nb\tc\\\"<>&/日本語"), hff.Null(), hff.Null()},
-		parityCase{`name:tojson="\"\\u0001\\u001f\""`, hff.Null(), hff.String("\x01\x1f"), hff.Null(), hff.Null()},
-		parityCase{`name:tojson="\"\u2028\u2029\""`, hff.Null(), hff.String("\u2028\u2029"), hff.Null(), hff.Null()},
+		parityCase{`name:json="\"a\\nb\\tc\\\\\\\"<>&/日本語\""`, hff.Null(), hff.String("a\nb\tc\\\"<>&/日本語"), hff.Null(), hff.Null()},
+		parityCase{`name:json="\"\\u0001\\u001f\""`, hff.Null(), hff.String("\x01\x1f"), hff.Null(), hff.Null()},
+		parityCase{`name:json="\"\u2028\u2029\""`, hff.Null(), hff.String("\u2028\u2029"), hff.Null(), hff.Null()},
 	}
 }
 

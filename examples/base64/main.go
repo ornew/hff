@@ -19,7 +19,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	program, err := e.Compile(ctx, `encoded:frombase64:len=4 encoded:frombase64:tobase64=encoded`)
+	program, err := e.Compile(ctx, `encoded:frombase64:len=4 encoded:frombase64:base64=encoded`)
 	if err != nil {
 		log.Fatal(err)
 	}

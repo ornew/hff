@@ -158,7 +158,7 @@ logical short-circuiting. It supports every built-in method family in the
 
 | Receiver family | Methods |
 |:--|:--|
-| Any | `type()`, `tojson()`, `tostring()`, `in(any...)`, `exists()` |
+| Any | `type()`, `json()`, `string()`, `in(any...)`, `exists()` |
 | Bool | `and(bool)`, `or(bool)`, `not()` |
 | Number | `round()`, `ceil()`, `floor()` |
 | String and bytes | Text, JSON/base64, timestamp/duration conversions, and byte length |

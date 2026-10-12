@@ -63,7 +63,7 @@ func Cases() []Case {
 			record("zero_false", nil, false), record("zero_true", map[string]hff.Value{"flag": hff.Bool(true)}, true),
 			record("positive_false", map[string]hff.Value{"age": hff.Int(18)}, false),
 		}},
-		{Name: "json_preserves_float", Source: `x:tojson:fromjson:[float]=1`, Records: []Record{
+		{Name: "json_preserves_float", Source: `x:json:fromjson:[float]=1`, Records: []Record{
 			record("float", map[string]hff.Value{"x": hff.Float(1)}, true),
 			record("int", map[string]hff.Value{"x": hff.Int(1)}, false),
 		}},
@@ -71,10 +71,10 @@ func Cases() []Case {
 			record("duplicate", map[string]hff.Value{"x": hff.String(`{"a":1,"\u0061":2}`)}, true),
 			record("valid", map[string]hff.Value{"x": hff.String(`{"a":1}`)}, false),
 		}},
-		{Name: "json_null_is_observable", Source: `x:tojson="null" x:tostring="null"`, Records: []Record{
+		{Name: "json_null_is_observable", Source: `x:json="null" x:string="null"`, Records: []Record{
 			record("null", nil, true), record("integer", map[string]hff.Value{"x": hff.Int(1)}, false),
 		}},
-		{Name: "json_guard_stays_absent", Source: `x!:tojson:exists`, Records: []Record{
+		{Name: "json_guard_stays_absent", Source: `x!:json:exists`, Records: []Record{
 			record("null", nil, false), record("zero", map[string]hff.Value{"x": hff.Int(0)}, true),
 		}},
 		{Name: "empty_filter", Source: " \t\n", Records: []Record{record("default", nil, true)}},

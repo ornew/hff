@@ -61,7 +61,7 @@ func scalarMethod(id string, receiver core.Value, args []core.Value) (core.Value
 			return core.Null(), true
 		}
 		return core.Int(int64(len(b))), true
-	case "bytes.tobase64":
+	case "bytes.base64":
 		data, ok := receiver.BytesView()
 		if !ok {
 			return core.Null(), true

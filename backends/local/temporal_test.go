@@ -21,6 +21,11 @@ func TestTemporalMethods(t *testing.T) {
 		{`x:year=2024 x:month=2 x:dayofmonth=29 x:dayofyear=60`, hff.Timestamp(stamp), hff.Null(), true},
 		{`x:hours=23 x:minutes=58 x:seconds=57 x:milliseconds=123`, hff.Timestamp(stamp), hff.Null(), true},
 		{`x:dayofmonth("+01:00")=1 x:month("+01:00")=3 x:hours("+01:00")=0`, hff.Timestamp(stamp), hff.Null(), true},
+		{`x:string="2024-02-29T23:58:57.123456789Z"`, hff.Timestamp(stamp), hff.Null(), true},
+		{`x:string()="2024-02-29T23:58:57.123456789Z"`, hff.Timestamp(stamp), hff.Null(), true},
+		{`x:string="null"`, hff.Null(), hff.Null(), true},
+		{`x:string("UTC")=null`, hff.Null(), hff.Null(), true},
+		{`x:string(y:[string])=null`, hff.Null(), hff.Int(1), true},
 		{`x:string("UTC")="2024-02-29T23:58:57.123456789Z"`, hff.Timestamp(stamp), hff.Null(), true},
 		{`x:string("+01:00")="2024-03-01T00:58:57.123456789+01:00"`, hff.Timestamp(stamp), hff.Null(), true},
 		{`x:hours("Asia/Tokyo")=null`, hff.Timestamp(stamp), hff.Null(), true},
@@ -57,10 +62,6 @@ func TestTemporalMethods(t *testing.T) {
 }
 
 func TestInvalidTemporalConversions(t *testing.T) {
-	for _, query := range []string{`x:string`, `x:string()`} {
-		_, err := configured(t).Compile(context.Background(), query)
-		code(t, err, hff.TypeError)
-	}
 	for _, text := range []string{"", "2024-02-30T00:00:00Z", "2024-02-29T00:00:60Z", "2024-02-29T24:00:00Z",
 		"2024-02-29t00:00:00Z", "2024-02-29T00:00:00z", "2024-02-29T00:00:00.1234567890Z",
 		"2024-02-29T00:00:00,1Z", "2024-02-29T00:00:00+24:00", "2024-02-29T00:00:00+00:60",

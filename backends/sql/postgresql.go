@@ -582,6 +582,9 @@ func (b *builder) mixedComparison(left, right expression, op hff.Operator) expre
 func (b *builder) call(n hff.Node) (expression, error) {
 	method, _ := n.Method()
 	name := method.Name()
+	if name == "string" && n.ChildCount() != 1 {
+		return expression{}, b.failure(n, "PostgreSQL does not yet support timestamp string formatting with a time zone")
+	}
 	if signatures := method.Signatures(); len(signatures) > 0 {
 		if _, custom := signatures[0].Declaration(); custom {
 			return b.extension(n, method)
@@ -597,7 +600,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		return b.jsonFold(n, name)
 	}
 	switch name {
-	case "tojson", "tostring", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
+	case "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
 	default:
 		return expression{}, b.failure(n, "PostgreSQL does not yet support method "+name)
 	}
@@ -611,7 +614,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		values[i] = value
 	}
 	receiver := values[0]
-	if name == "tojson" || name == "tostring" {
+	if name == "json" || name == "string" {
 		return b.serialize(n, receiver, name)
 	}
 	if name == "in" {

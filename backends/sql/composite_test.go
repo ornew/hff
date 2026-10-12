@@ -41,9 +41,9 @@ func compositeQueries() []string {
 		`profile.scores=[10,20,null]`, `profile.scores:any(x=>x>10)`, `profile.scores:all(x=>x!:exists)`,
 		`profile.scores:map(x=>x+1)=[11,21,null]`, `profile.scores:foldl(0,(acc,x)=>x)=null`,
 		`profile.scores:sort=null`, `profile.scores:contains(null)`, `profile.scores[-1]=null`,
-		`profile.factors:tojson="[-0.0,1.0]"`, `profile.factors[0]:tostring="-0.0"`,
-		`profile.factors:map(x=>x):tojson="[-0.0,1.0]"`, `profile.factors=[-0.0,1.0]`,
-		`profile:tojson:contains("service.name")`, `profile=profile`,
+		`profile.factors:json="[-0.0,1.0]"`, `profile.factors[0]:string="-0.0"`,
+		`profile.factors:map(x=>x):json="[-0.0,1.0]"`, `profile.factors=[-0.0,1.0]`,
+		`profile:json:contains("service.name")`, `profile=profile`,
 		`profile={"name":null,"age":null,"father":null,"scores":null,"factors":null,"people":null,"service.name":null}`,
 		`profile.father={"name":null}`, `profile.father={}`, `profile:keys[0]="age"`,
 		`profile.people:any(x=>x.name="A")`, `profile.people:all(x=>x!:exists)`,
@@ -51,7 +51,7 @@ func compositeQueries() []string {
 		`profile.people[1]=null`, `profile.people[2]={"name":null}`,
 		`profile.people:map(x=>x.name)=["A",null,null]`,
 		`profile.people:map(x=>x!.name)=null`, `!profile.people:map(x=>x!.name)=null`,
-		`profile.people:tojson="[{\"name\":\"A\"},null,{\"name\":null}]"`,
+		`profile.people:json="[{\"name\":\"A\"},null,{\"name\":null}]"`,
 		`profile.people:contains({"name":null},null)`, `profile.people:unique`,
 	}
 }

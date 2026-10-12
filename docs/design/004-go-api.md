@@ -530,7 +530,7 @@ are configuration errors. Configuration objects support the same explicit choice
 Limits cover source size, syntax depth, input depth and value count, evaluation
 steps, generated elements, and JSON parse/serialization depth. `MaxJSONDepth`
 defaults to 64, counts the JSON root at depth one, and applies to JSON decoding,
-JSON encoding, and list/object `tostring()` output. A zero value selects the
+JSON encoding, and list/object `string()` output. A zero value selects the
 default; a negative value is a configuration error.
 
 Default values are established with initial implementation benchmarks and

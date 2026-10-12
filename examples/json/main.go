@@ -29,9 +29,9 @@ func main() {
 		value hff.Value
 	}{
 		{"Parsed object", `raw:fromjson:[object]:get("name")="Ada"`, `{"name":"Ada"}`, hff.Null()},
-		{"Canonical JSON", `raw:fromjson:tojson="{\"a\":1,\"z\":2}"`, `{"z":2,"a":1}`, hff.Null()},
+		{"Canonical JSON", `raw:fromjson:json="{\"a\":1,\"z\":2}"`, `{"z":2,"a":1}`, hff.Null()},
 		{"Invalid JSON", `raw:fromjson:exists`, `{"name":"Ada","name":"Grace"}`, hff.Null()},
-		{"Object string", `value:tostring="{\"a\":1,\"z\":2}"`, ``, hff.Object(map[string]hff.Value{"z": hff.Int(2), "a": hff.Int(1)})},
+		{"Object string", `value:string="{\"a\":1,\"z\":2}"`, ``, hff.Object(map[string]hff.Value{"z": hff.Int(2), "a": hff.Int(1)})},
 	}
 
 	for _, item := range queries {

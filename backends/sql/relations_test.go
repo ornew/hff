@@ -76,10 +76,10 @@ func relationOrderedQueries() []string {
 	return []string{
 		`items[0].price=20`, `items[-1].price=5`,
 		`items:map(x=>x.price)=[20,5]`, `items:foldl(0,(acc,x)=>acc+x.price)=25`,
-		`items:tojson:contains("price")`, `items=items`, `items!:tojson!=""`,
+		`items:json:contains("price")`, `items=items`, `items!:json!=""`,
 		`items:flatmap(x=>x.tags)=["auth","dev"]`,
-		`items:foldl(0.0,(acc,x)=>{"keep":acc,"text":acc:tostring}.keep)=0.0`,
-		`items:foldr(0.0,(x,acc)=>{"keep":acc,"text":acc:tostring}.keep)=0.0`,
+		`items:foldl(0.0,(acc,x)=>{"keep":acc,"text":acc:string}.keep)=0.0`,
+		`items:foldr(0.0,(x,acc)=>{"keep":acc,"text":acc:string}.keep)=0.0`,
 		`items:map(x=>x.price):any(price=>price>10) items[0].price=20`,
 		`items:concat(items):contains({"price":20,"active":true,"tags":["auth"]}) items[-1].price=5`,
 	}
@@ -128,7 +128,7 @@ func TestRelationRejectsIncompleteConfiguration(t *testing.T) {
 
 func TestNestedRelationRequiresOrderOnlyForDependentOperations(t *testing.T) {
 	e := relationEngine(t)
-	for _, source := range []string{`items:any(x=>x.tags:any(tag=>tag="auth"))`, `items:any(x=>x.tags[0]="auth")`, `items:map(x=>x.tags)=[["auth"]]`, `items:tojson!=""`, `items:unique`} {
+	for _, source := range []string{`items:any(x=>x.tags:any(tag=>tag="auth"))`, `items:any(x=>x.tags[0]="auth")`, `items:map(x=>x.tags)=[["auth"]]`, `items:json!=""`, `items:unique`} {
 		p, err := e.Compile(context.Background(), source)
 		if err != nil {
 			t.Fatal(err)
@@ -174,7 +174,7 @@ func TestRelationCallbacksPreserveFloatSerializationProvenance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, source := range []string{`items:foldl(0.0,(acc,x)=>{"keep":acc,"text":acc:tostring}.keep)>=0`, `items:foldr(0.0,(x,acc)=>{"keep":acc,"text":acc:tostring}.keep)>=0`} {
+	for _, source := range []string{`items:foldl(0.0,(acc,x)=>{"keep":acc,"text":acc:string}.keep)>=0`, `items:foldr(0.0,(x,acc)=>{"keep":acc,"text":acc:string}.keep)>=0`} {
 		p, err := e.Compile(context.Background(), source)
 		if err != nil {
 			t.Fatal(source, err)
@@ -185,10 +185,10 @@ func TestRelationCallbacksPreserveFloatSerializationProvenance(t *testing.T) {
 	}
 	for _, field := range []string{"native", "lossy"} {
 		for _, source := range []string{
-			`items:any(x=>x.FIELD:tostring="-0.0")`, `items!:any(x=>x.FIELD:tostring="-0.0")`,
-			`items:all(x=>x.FIELD:tojson="-0.0")`, `items:map(x=>x.FIELD:tostring):contains("-0.0")`,
-			`items:foldl("",(acc,x)=>acc:concat(x.FIELD:tostring))="-0.0"`,
-			`items:foldr("",(x,acc)=>acc:concat(x.FIELD:tostring))="-0.0"`,
+			`items:any(x=>x.FIELD:string="-0.0")`, `items!:any(x=>x.FIELD:string="-0.0")`,
+			`items:all(x=>x.FIELD:json="-0.0")`, `items:map(x=>x.FIELD:string):contains("-0.0")`,
+			`items:foldl("",(acc,x)=>acc:concat(x.FIELD:string))="-0.0"`,
+			`items:foldr("",(x,acc)=>acc:concat(x.FIELD:string))="-0.0"`,
 		} {
 			source = strings.ReplaceAll(source, "FIELD", field)
 			p, err := e.Compile(context.Background(), source)
@@ -245,14 +245,14 @@ func TestUnorderedFloatStableSortRetainsOrderRequirement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	insensitive, err := e.Compile(context.Background(), `values:sort:any(v=>v:tostring="-0.0")`)
+	insensitive, err := e.Compile(context.Background(), `values:sort:any(v=>v:string="-0.0")`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := hffsql.Build(context.Background(), insensitive, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindRelation(hff.Path{"values"}, relation))); err != nil {
 		t.Fatal(err)
 	}
-	p, err := e.Compile(context.Background(), `values:sort[0]:tostring="-0.0"`)
+	p, err := e.Compile(context.Background(), `values:sort[0]:string="-0.0"`)
 	if err != nil {
 		t.Fatal(err)
 	}

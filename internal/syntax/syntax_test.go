@@ -66,7 +66,7 @@ func TestGrammarConformance(t *testing.T) {
 		`(age>=10 | age<=5) name="Alice"`, `age>=10 | age<=5 name="Alice"`,
 		`!sex="Female"`, `!flag`, `a!=b a!~b`, `a[-1]`,
 		`n1!.n2!.n3!.nullvalue=null`, `n1!.n2!.value:exists()`,
-		`{"a": "12h":duration()}`, `[1:tostring()]`,
+		`{"a": "12h":duration()}`, `[1:string()]`,
 		`items:map(x=>x.age)`, `items:foldl(0,(acc,x)=>acc+x)`,
 		`items:any(x=>x.price>10 x.active)`, `items:map((x=>x.age))`,
 		`items:map(x=>x.children:map(y=>y.name))`,

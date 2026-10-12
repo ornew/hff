@@ -234,7 +234,7 @@ func TestCompileStepBudget(t *testing.T) {
 func TestCompileBuiltinFamilies(t *testing.T) {
 	typ := schema.Struct(schema.Bool("b"), schema.Int("n"), schema.Float("f"), schema.String("s"), schema.Bytes("bytes"), schema.List("ls", schema.IntType), schema.Map("obj", schema.IntType), schema.Timestamp("ts"), schema.Duration("d"))
 	e := newEngine(t, typ)
-	queries := []string{`s:type()`, `s:tostring()`, `s:tojson()`, `s:in("x")`, `s:exists()`, `b:and(true)`, `b:or(false)`, `b:not()`, `n:round()`, `f:ceil()`, `f:floor()`, `s:len()`, `bytes:len()`, `s:contains("a","b")`, `s:matches("x")`, `s:startswith("x")`, `s:endswith("x")`, `s:lower()`, `s:upper()`, `s:timestamp()`, `s:duration()`, `s:bool()`, `s:number()`, `s:fromjson()`, `s:concat("x")`, `s:frombase64()`, `bytes:tobase64()`, `ls:size()`, `ls:has(1.0)`, `ls:contains(1,2)`, `ls:unique()`, `ls:sort()`, `ls:concat([1.0])`, `ls:map(x=>x)`, `ls:flatmap(x=>[x])`, `ls:any(x=>x>0)`, `ls:all(x=>x>0)`, `ls:foldl(0,(a,x)=>a+x)`, `ls:foldr(0,(x,a)=>x+a)`, `obj:size()`, `obj:has("a")`, `obj:get("a")`, `obj:keys()`, `obj:values()`, `obj:items()`, `ts:year()`, `ts:month("Asia/Tokyo")`, `ts:dayofmonth()`, `ts:dayofyear()`, `ts:hours()`, `ts:minutes()`, `ts:seconds()`, `ts:milliseconds()`, `ts:string("UTC")`, `ts:after(ts)`, `ts:before(ts)`, `ts:add(d)`, `d:hours()`, `d:minutes()`, `d:seconds()`, `d:milliseconds()`, `d:microseconds()`, `d:nanoseconds()`}
+	queries := []string{`s:type()`, `s:string()`, `s:json()`, `s:in("x")`, `s:exists()`, `b:and(true)`, `b:or(false)`, `b:not()`, `n:round()`, `f:ceil()`, `f:floor()`, `s:len()`, `bytes:len()`, `s:contains("a","b")`, `s:matches("x")`, `s:startswith("x")`, `s:endswith("x")`, `s:lower()`, `s:upper()`, `s:timestamp()`, `s:duration()`, `s:bool()`, `s:number()`, `s:fromjson()`, `s:concat("x")`, `s:frombase64()`, `bytes:base64()`, `ls:size()`, `ls:has(1.0)`, `ls:contains(1,2)`, `ls:unique()`, `ls:sort()`, `ls:concat([1.0])`, `ls:map(x=>x)`, `ls:flatmap(x=>[x])`, `ls:any(x=>x>0)`, `ls:all(x=>x>0)`, `ls:foldl(0,(a,x)=>a+x)`, `ls:foldr(0,(x,a)=>x+a)`, `obj:size()`, `obj:has("a")`, `obj:get("a")`, `obj:keys()`, `obj:values()`, `obj:items()`, `ts:year()`, `ts:month("Asia/Tokyo")`, `ts:dayofmonth()`, `ts:dayofyear()`, `ts:hours()`, `ts:minutes()`, `ts:seconds()`, `ts:milliseconds()`, `ts:string("UTC")`, `ts:after(ts)`, `ts:before(ts)`, `ts:add(d)`, `d:hours()`, `d:minutes()`, `d:seconds()`, `d:milliseconds()`, `d:microseconds()`, `d:nanoseconds()`}
 	for _, source := range queries {
 		t.Run(source, func(t *testing.T) {
 			p, err := e.Compile(context.Background(), source)
@@ -250,5 +250,37 @@ func TestCompileBuiltinFamilies(t *testing.T) {
 				t.Fatalf("wrong overload count for %s", source)
 			}
 		})
+	}
+}
+
+func TestConversionMethodNamesAndTimestampOverloads(t *testing.T) {
+	ctx := context.Background()
+	shape := schema.Struct(schema.Nullable(schema.Timestamp("ts")), schema.Any("x"), schema.Bytes("bytes"))
+	standard := newEngine(t, shape)
+	for _, source := range []string{`x:string`, `x:json`, `bytes:base64`, `ts:string`, `ts:string()`, `ts:string("UTC")`} {
+		if _, err := standard.Compile(ctx, source); err != nil {
+			t.Fatal(source, err)
+		}
+	}
+	for _, source := range []string{`x:tostring`, `x:tojson`, `bytes:tobase64`} {
+		_, err := standard.Compile(ctx, source)
+		requireCode(t, err, hff.TypeError)
+	}
+	utcOnly := newEngine(t, shape, engine.WithCapabilities(capabilities.Standard().Without(capabilities.Method("timestamp.string"))))
+	if _, err := utcOnly.Compile(ctx, `ts:string`); err != nil {
+		t.Fatal(err)
+	}
+	_, err := utcOnly.Compile(ctx, `ts:string("UTC")`)
+	requireCode(t, err, hff.CapabilityError)
+	zonedOnly := newEngine(t, shape, engine.WithCapabilities(capabilities.Standard().Without(capabilities.Method("any.string"))))
+	if _, err := zonedOnly.Compile(ctx, `ts:string("UTC")`); err != nil {
+		t.Fatal(err)
+	}
+	_, err = zonedOnly.Compile(ctx, `ts:string`)
+	requireCode(t, err, hff.CapabilityError)
+	for _, id := range []string{"any.tostring", "any.tojson", "bytes.tobase64"} {
+		if err := capabilities.Standard().Allow(capabilities.Method(id)).Check(); err == nil {
+			t.Fatal("legacy method ID accepted", id)
+		}
 	}
 }

@@ -7,14 +7,14 @@ import (
 
 func specialize(d declaration, receiver core.Type, args []plan.Node, callbackResult core.Type) (core.Type, bool) {
 	result := d.result
-	if d.family == "any" && (d.name == "type" || d.name == "tostring" || d.name == "tojson") {
+	if d.family == "any" && (d.name == "type" || d.name == "string" || d.name == "json") {
 		return result, true
 	}
 	if bottom(receiver) {
 		if receiver.Kind() == core.NeverType {
 			return receiver, true
 		}
-		if d.family == "any" && (d.name == "type" || d.name == "tostring" || d.name == "tojson" || d.name == "exists") {
+		if d.family == "any" && (d.name == "type" || d.name == "string" || d.name == "json" || d.name == "exists") {
 			return result, true
 		}
 		return primitive(core.NullType), true

@@ -10,13 +10,13 @@ import (
 
 func supportedMethod(id string) bool {
 	switch id {
-	case "string.fromjson", "any.tojson", "any.tostring", "any.type", "any.exists", "any.in", "bool.and", "bool.or", "bool.not", "number.round", "number.ceil", "number.floor", "string.len", "bytes.len", "string.contains", "string.matches", "string.startswith", "string.endswith", "string.lower", "string.upper", "string.bool", "string.number", "string.concat":
+	case "string.fromjson", "any.json", "any.string", "any.type", "any.exists", "any.in", "bool.and", "bool.or", "bool.not", "number.round", "number.ceil", "number.floor", "string.len", "bytes.len", "string.contains", "string.matches", "string.startswith", "string.endswith", "string.lower", "string.upper", "string.bool", "string.number", "string.concat":
 		return true
 	case "list.size", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "object.size", "object.has", "object.get", "object.keys", "object.values", "object.items":
 		return true
 	case "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr":
 		return true
-	case "string.frombase64", "bytes.tobase64":
+	case "string.frombase64", "bytes.base64":
 		return true
 	case "string.timestamp", "string.duration", "timestamp.year", "timestamp.month", "timestamp.dayofmonth", "timestamp.dayofyear", "timestamp.hours", "timestamp.minutes", "timestamp.seconds", "timestamp.milliseconds", "timestamp.string", "timestamp.after", "timestamp.before", "timestamp.add", "duration.hours", "duration.minutes", "duration.seconds", "duration.milliseconds", "duration.microseconds", "duration.nanoseconds":
 		return true
@@ -66,7 +66,12 @@ func (e *evaluation) call(n plan.Node) (result, error) {
 		switch name {
 		case "exists":
 			return ordinary(core.Bool(false)), nil
-		case "type", "tojson", "tostring":
+		case "type", "json":
+			return ordinary(core.String("null")), nil
+		case "string":
+			if n.ChildCount() != 1 {
+				return null(), nil
+			}
 			return ordinary(core.String("null")), nil
 		}
 		return null(), nil
@@ -144,9 +149,9 @@ func (e *evaluation) call(n plan.Node) (result, error) {
 	case "string.fromjson":
 		text, _ := receiver.value.AsString()
 		return e.decodeJSON(text, e.limits.MaxJSONDepth)
-	case "any.tojson":
+	case "any.json":
 		return e.encodeJSON(receiver.value, e.limits.MaxJSONDepth)
-	case "any.tostring":
+	case "any.string":
 		if receiver.value.Kind() == core.ListKind || receiver.value.Kind() == core.ObjectKind {
 			return e.encodeJSON(receiver.value, e.limits.MaxJSONDepth)
 		}
@@ -169,7 +174,7 @@ func (e *evaluation) call(n plan.Node) (result, error) {
 	return ordinary(value), nil
 }
 func (e *evaluation) scalarCost(id string, receiver core.Value, args []core.Value) error {
-	if id == "bytes.tobase64" {
+	if id == "bytes.base64" {
 		data, _ := receiver.BytesView()
 		return e.charge(len(data))
 	}

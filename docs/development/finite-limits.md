@@ -88,7 +88,7 @@ benchmark time per case produced these medians:
 | Callback depth 64, syntax limit raised to 512 | 394,374 ns/op | 554,002 B/op | 6,542 allocs/op |
 | Input depth 64 | 835 ns/op | 0 B/op | 0 allocs/op |
 | JSON `fromjson` depth 64 | 2,796 ns/op | 3,210 B/op | 128 allocs/op |
-| JSON `tojson` depth 64 | 1,509 ns/op | 440 B/op | 7 allocs/op |
+| JSON `json` depth 64 | 1,509 ns/op | 440 B/op | 7 allocs/op |
 
 These cases verify completed operations at selected depth ceilings. Exact
 acceptance and rejection immediately around the defaults are checked by
@@ -228,7 +228,7 @@ not generally acceptable service latency or a reason to change a default.
 | `MaxCompileSteps` (1,000,000) | Semantic compiler visits, including repeated inference and checking work | Repeated structural checks: 400 fields complete, 600 reject, and raising only this limit to 2,000,000 completes. Calibrated case: 998,002 steps complete; 1,000,002 reject. | One deliberately repeated structural-check workload has before/after timing and allocation measurements. Other compiler benchmarks cover common query shapes, not diverse service schemas near the ceiling. |
 | `MaxInputDepth` (64) | Host input root is depth 0; each nested value adds one | Exact depth boundary tested. | One depth-64 validation shape measured; no varied wide/deep record corpus. |
 | `MaxInputValues` (100,000) | Root, collection containers, entries, and nested values | 100,000 accepted and 100,001 rejected in correctness tests and benchmarks. | One flat `list[int]` admission workload measured. Record construction, retained memory, transport, and nested/wide service records are outside scope. |
-| `MaxJSONDepth` (64) | JSON root is depth 1; applies to decoding and serialization | Exact boundary tested for parsing and output. | One depth-64 `fromjson` and `tojson` shape measured; no broad JSON shape or size matrix. |
+| `MaxJSONDepth` (64) | JSON root is depth 1; applies to decoding and serialization | Exact boundary tested for parsing and output. | One depth-64 `fromjson` and `json` shape measured; no broad JSON shape or size matrix. |
 | `MaxSteps` (1,000,000) | Local runtime work, including evaluated nodes, traversed data, key bytes, and declared-field checks | Selected completion and limit-error workloads exercise nested search and step exhaustion. | One 600-item nested search and one abort workload are measured. No representative mix of application queries or hot-path records near the ceiling. |
 | `MaxGeneratedValues` (100,000) | Generated HFF collection containers and entries; logical values, not bytes | 99,999 generated values complete; 100,001 reject. Flatmap also checks 99,996 complete versus 100,001 rejected. | One identity-map and one flatmap shape are measured. `B/op` is cumulative allocation, not peak memory; other collection patterns and retained output sizes are not covered. |
 

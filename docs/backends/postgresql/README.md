@@ -118,7 +118,7 @@ mixed int64/float64 ordering without rounding the integer through float64;
 string ordering uses PostgreSQL's `C` collation. Boolean literals and operators,
 implicit AND, explicit null comparisons, numeric unary negation, postfix guards
 at scalar leaves, scalar type guards, `exists()`, and `type()` are supported.
-The generic `tojson()` and `tostring()` methods support the scalar and
+The generic `json()` and `string()` methods support the scalar and
 collection profile described in the JSON guide, including finite float values
 from scalar columns and native JSON. JSONB float serialization requires the
 numeric metadata described in that guide; `fromjson()` remains unsupported.

@@ -44,13 +44,13 @@ null
 {"a": 10}
 [1, "a", true]
 {"a": "12h":duration}
-[1:tostring]
+[1:string]
 ```
 
 The value families are number, string, bool, null, object, and list. Bytes,
 timestamps, and durations can be supplied by the host or produced by methods.
 Object values and list elements can contain expressions and method calls.
-The last example uses the `tostring` conversion in the [method catalog](methods.md).
+The last example uses the `string()` conversion in the [method catalog](methods.md).
 
 Numbers and double-quoted strings use JSON lexical forms, including numeric
 exponents and JSON string escapes. Negative numbers use unary minus. Empty

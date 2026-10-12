@@ -59,13 +59,13 @@ func init() {
 	builtins[NestedCallbacks] = []ID{Callbacks}
 	builtins[ListEquality] = nil
 	builtins[ObjectEquality] = nil
-	for _, name := range []string{"any.type", "any.tojson", "any.tostring", "any.in", "any.exists", "bool.and", "bool.or", "bool.not", "number.round", "number.ceil", "number.floor", "string.len", "string.contains", "string.matches", "string.startswith", "string.endswith", "string.lower", "string.upper", "string.timestamp", "string.duration", "string.bool", "string.number", "string.fromjson", "string.concat", "bytes.len", "list.size", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr", "object.size", "object.has", "object.get", "object.keys", "object.values", "object.items", "timestamp.year", "timestamp.month", "timestamp.dayofmonth", "timestamp.dayofyear", "timestamp.hours", "timestamp.minutes", "timestamp.seconds", "timestamp.milliseconds", "timestamp.string", "timestamp.after", "timestamp.before", "timestamp.add", "duration.hours", "duration.minutes", "duration.seconds", "duration.milliseconds", "duration.microseconds", "duration.nanoseconds"} {
+	for _, name := range []string{"any.type", "any.json", "any.string", "any.in", "any.exists", "bool.and", "bool.or", "bool.not", "number.round", "number.ceil", "number.floor", "string.len", "string.contains", "string.matches", "string.startswith", "string.endswith", "string.lower", "string.upper", "string.timestamp", "string.duration", "string.bool", "string.number", "string.fromjson", "string.concat", "bytes.len", "list.size", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr", "object.size", "object.has", "object.get", "object.keys", "object.values", "object.items", "timestamp.year", "timestamp.month", "timestamp.dayofmonth", "timestamp.dayofyear", "timestamp.hours", "timestamp.minutes", "timestamp.seconds", "timestamp.milliseconds", "timestamp.string", "timestamp.after", "timestamp.before", "timestamp.add", "duration.hours", "duration.minutes", "duration.seconds", "duration.milliseconds", "duration.microseconds", "duration.nanoseconds"} {
 		builtins[Method(name)] = nil
 	}
 	for _, name := range []string{"list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr"} {
 		builtins[Method(name)] = []ID{Callbacks}
 	}
-	for _, name := range []string{"string.frombase64", "bytes.tobase64"} {
+	for _, name := range []string{"string.frombase64", "bytes.base64"} {
 		builtins[Method(name)] = nil
 	}
 }

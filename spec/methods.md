@@ -29,22 +29,27 @@ float64; `round()`, `ceil()`, and `floor()` preserve the input numeric subtype.
 | Signature | Purpose |
 |:--|:--|
 | `any:type() -> string` | Runtime type name: `bool`, `number`, `string`, `list`, `object`, `bytes`, `timestamp`, `duration`, or `null` |
-| `any:tojson() -> string` | JSON serialization |
-| `any:tostring() -> string` | String conversion |
+| `any:json() -> string` | JSON serialization |
+| `any:string() -> string` | String conversion |
 | `any:in(any...) -> bool` | Membership among the arguments |
 | `any:exists() -> bool` | True for any present, non-null value |
 
-On a null receiver, `type()`, `tojson()`, and `tostring()` return `"null"`.
+On a null receiver, `type()`, `json()`, and zero-argument `string()` return
+`"null"`. The timestamp-specific `string(tz)` overload still requires a zone.
+The zero-argument `any:string()` formats timestamps in UTC; the required-zone
+`timestamp:string(tz)` overload is a separate method and capability.
 `exists()` returns false for null or guarded no-value, and true for every other
 value, including false, zero, and empty collections. It deliberately observes
-presence rather than truthiness. Other methods propagate null and guarded
-no-value, subject to predicate callback conversion described below.
+presence rather than truthiness. On guarded no-value, `type()`, `json()`, and
+zero-argument `string()` propagate no-value unchanged. Other methods propagate
+null and guarded no-value, subject to predicate callback conversion described
+below.
 `in()` requires at least one argument and tests membership among its arguments.
 
-`tostring()` leaves strings unquoted, formats booleans and numbers in ordinary
+`string()` leaves strings unquoted, formats booleans and numbers in ordinary
 lowercase/decimal notation, emits compact JSON for lists and objects, standard
 base64 for bytes, UTC RFC 3339 for timestamps, and compound h/m/s for durations
-with fractional seconds representing nanoseconds. `tojson()` produces compact
+with fractional seconds representing nanoseconds. `json()` produces compact
 JSON and represents bytes, timestamps, and durations as these strings.
 Object keys are sorted in code-point order. Non-JSON type information is not
 restored automatically by `fromjson()`. Float64 values use a shortest
@@ -86,7 +91,7 @@ the numeric subtype.
 | `string:concat(string) -> string` | Concatenation |
 | `string:frombase64() -> bytes` | Decode base64 |
 | `bytes:len() -> number` | Byte count |
-| `bytes:tobase64() -> string` | Encode base64 |
+| `bytes:base64() -> string` | Encode base64 |
 
 String length counts Unicode code points. Case conversion uses locale-independent
 Unicode simple mappings, without multi-code-point expansions;
@@ -107,8 +112,8 @@ whitespace. `fromjson()` rejects duplicate keys and out-of-range numbers with
 a null result, even when its receiver is a constant string. JSON parsing and
 canonical JSON serialization use the dedicated `MaxJSONDepth` resource limit:
 64 by default, counting the JSON root at depth one and incrementing for each
-nested array or object. It applies to `fromjson()`, `tojson()`, and list/object
-`tostring()` serialization. A scalar `tostring()` value has depth one. Exceeding
+nested array or object. It applies to `fromjson()`, `json()`, and list/object
+`string()` serialization. A scalar `string()` value has depth one. Exceeding
 the limit aborts evaluation with a limit error rather than returning null or a
 partial serialization.
 

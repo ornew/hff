@@ -59,13 +59,13 @@ Null-safe access, ordinary receiver calls, and arithmetic propagate null:
 
 A propagated null is indistinguishable from an explicit null value by ordinary
 value comparison. No implicit exception-handling expression is needed for these
-operations. The methods `type()`, `tojson()`, and `tostring()` are exceptions:
-on a null receiver, each returns the string `"null"`. `exists()` returns false
-for null or the internal no-value state from a failed guard. Other methods
-propagate no-value, except predicate callback conversion in any/all.
-Ordinary methods propagate null
-arguments. Membership methods `in(any...)` and `list:contains(any...)` can inspect a null
-search argument; their receiver still follows ordinary null propagation.
+operations. The methods `type()`, `json()`, and zero-argument `string()` are
+exceptions: on a null receiver, each returns the string `"null"`. `exists()`
+returns false for null or the internal no-value state from a failed guard. Other
+methods propagate no-value, except predicate callback conversion in any/all.
+Ordinary methods propagate null arguments. Membership methods `in(any...)` and
+`list:contains(any...)` can inspect a null search argument; their receiver still
+follows ordinary null propagation.
 `object:has(string)` checks key presence even when the stored value is null.
 
 ## Arithmetic and operator domains
@@ -158,11 +158,10 @@ propagation follows the same rules as other guarded expressions.
 For example, `value:[string]:contains("x")` calls string containment only when
 the guarded value is a string. Otherwise the guard yields no-value, so the call
 does not execute and the surrounding predicate converts to false. The existing
-no-value exceptions remain in effect: `exists()` reports false, and `type()`,
-`tojson()`, and `tostring()` may inspect the no-value receiver as specified in
-[methods](methods.md). A guard
-narrowing a union or `Any` lets compilation check subsequent methods against the
-narrowed type. Without that guard, every statically applicable method signature
+no-value exception remains in effect: `exists()` reports false for no-value.
+`type()`, `json()`, and zero-argument `string()` propagate no-value unchanged.
+A guard narrowing a union or `Any` lets compilation check subsequent methods
+against the narrowed type. Without that guard, every statically applicable method signature
 must be permitted by capabilities, even when a particular runtime value would
 not use every signature. This is a compile-time permission rule; a disabled
 candidate does not become null or a runtime capability error.
@@ -264,7 +263,7 @@ evaluation-cancellation result, distinct from null and from a completed boolean
 result. Partial evaluation must not be presented as a completed filter result.
 `MaxJSONDepth` defaults to 64 and counts the JSON root as depth one. It bounds
 JSON parsing and serialization, including JSON output produced by list/object
-`tostring()`. Exceeding it aborts with a limit error.
+`string()`. Exceeding it aborts with a limit error.
 
 ## Evaluation order
 

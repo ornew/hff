@@ -16,21 +16,21 @@ func TestJSONMethods(t *testing.T) {
 		value hff.Value
 		want  bool
 	}{
-		{`x:tojson="null"`, hff.Null(), true},
-		{`x:tostring="null"`, hff.Null(), true},
-		{`x!:tojson:exists`, hff.Null(), false},
-		{`x:[int]:tostring:exists`, hff.String("a"), false},
-		{`x:tostring="hello"`, hff.String("hello"), true},
-		{`x:tojson="\"hello\""`, hff.String("hello"), true},
-		{`x:tojson="1.0"`, hff.Float(1), true},
-		{`x:tojson="-0.0"`, hff.Float(math.Copysign(0, -1)), true},
-		{`x:tojson:fromjson:[float]=1`, hff.Float(1), true},
+		{`x:json="null"`, hff.Null(), true},
+		{`x:string="null"`, hff.Null(), true},
+		{`x!:json:exists`, hff.Null(), false},
+		{`x:[int]:string:exists`, hff.String("a"), false},
+		{`x:string="hello"`, hff.String("hello"), true},
+		{`x:json="\"hello\""`, hff.String("hello"), true},
+		{`x:json="1.0"`, hff.Float(1), true},
+		{`x:json="-0.0"`, hff.Float(math.Copysign(0, -1)), true},
+		{`x:json:fromjson:[float]=1`, hff.Float(1), true},
 		{`x:fromjson:[int]=1`, hff.String("1"), true},
 		{`x:fromjson:[float]=1`, hff.String("1.0"), true},
-		{`x:tojson="\"AAE=\""`, hff.Bytes([]byte{0, 1}), true},
-		{`x:tostring="AAE="`, hff.Bytes([]byte{0, 1}), true},
-		{`x:tojson="{\"a\":null,\"b\":1}"`, hff.Object(map[string]hff.Value{"b": hff.Int(1), "a": hff.Null()}), true},
-		{`x:tostring="[1,\"a\",true]"`, hff.List(hff.Int(1), hff.String("a"), hff.Bool(true)), true},
+		{`x:json="\"AAE=\""`, hff.Bytes([]byte{0, 1}), true},
+		{`x:string="AAE="`, hff.Bytes([]byte{0, 1}), true},
+		{`x:json="{\"a\":null,\"b\":1}"`, hff.Object(map[string]hff.Value{"b": hff.Int(1), "a": hff.Null()}), true},
+		{`x:string="[1,\"a\",true]"`, hff.List(hff.Int(1), hff.String("a"), hff.Bool(true)), true},
 		{`x:fromjson=null`, hff.Int(1), true},
 	}
 	for _, tc := range cases {
@@ -65,7 +65,7 @@ func TestJSONPublicBudgets(t *testing.T) {
 			t.Fatalf("default depth boundary: %v %v", got, err)
 		}
 	}
-	for _, q := range []string{`x:fromjson:exists`, `x:tojson:exists`, `x:tostring:exists`} {
+	for _, q := range []string{`x:fromjson:exists`, `x:json:exists`, `x:string:exists`} {
 		var v hff.Value
 		if strings.Contains(q, "fromjson") {
 			v = hff.String(`[[1]]`)

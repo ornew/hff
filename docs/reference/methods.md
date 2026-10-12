@@ -12,8 +12,8 @@ their parentheses. `func(T) -> U` is explanatory callback notation.
 | Signature | Result and use |
 |:--|:--|
 | `any:type() -> string` | Runtime type name. |
-| `any:tojson() -> string` | Compact canonical JSON representation. |
-| `any:tostring() -> string` | Human-readable conversion; structured values use compact JSON. |
+| `any:json() -> string` | Compact canonical JSON representation. |
+| `any:string() -> string` | Human-readable conversion; structured values use compact JSON and timestamps use UTC. |
 | `any:in(any...) -> bool` | True when the receiver equals any argument; requires one or more. |
 | `any:exists() -> bool` | True for present, non-null values, including false, zero, and empty collections. |
 
@@ -53,7 +53,7 @@ Numeric rounding preserves int64 versus float64 subtype. See
 | `string:concat(string) -> string` | Append the argument to the receiver. |
 | `string:frombase64() -> bytes` | Decode standard padded base64. |
 | `bytes:len() -> number` | Byte count. |
-| `bytes:tobase64() -> string` | Encode standard padded base64. |
+| `bytes:base64() -> string` | Encode standard padded base64. |
 
 Invalid conversions and invalid regular expressions yield null. The HFF regex
 reference is RE2 except `\\C`, which is rejected. Base64 decoding rejects
@@ -87,7 +87,7 @@ The PostgreSQL backend currently supports schema-known JSON/JSONB list
 `contains()`, `unique()`, `sort()`, `concat(list)`, `any()`, and `all()`, plus
 `map()` and `flatmap()` when callback result types are known; scalar `in()` is
 also supported inside callbacks. Folds are supported with known accumulator
-types. `tojson()` and `tostring()` support null, bool, int64, string, and finite
+types. `json()` and `string()` support null, bool, int64, string, and finite
 float values from scalar columns and native JSON in the schema-known profile.
 JSONB-origin floats remain unsupported because JSONB loses signed-zero
 information; query-generated floats use canonical shortest round-tripping
@@ -122,7 +122,7 @@ from stored nulls.
 | `timestamp:minutes([tz: string]) -> number` | Minute component; UTC by default. |
 | `timestamp:seconds([tz: string]) -> number` | Second component; UTC by default. |
 | `timestamp:milliseconds([tz: string]) -> number` | Millisecond component; UTC by default. |
-| `timestamp:string(tz: string) -> string` | RFC 3339 rendering in the required zone. |
+| `timestamp:string(tz: string) -> string` | RFC 3339 rendering in the required zone; unlike `any:string()`, this method requires a zone. |
 | `timestamp:after(timestamp) -> bool` | Later-than comparison. |
 | `timestamp:before(timestamp) -> bool` | Earlier-than comparison. |
 | `timestamp:add(duration) -> timestamp` | Add fixed elapsed time. |

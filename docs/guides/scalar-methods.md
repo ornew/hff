@@ -34,7 +34,7 @@ conversions yield null.
 ## Base64 and byte values
 
 `string:frombase64()` decodes standard padded base64 into an immutable bytes
-value. `bytes:tobase64()` encodes bytes with the standard alphabet and required
+value. `bytes:base64()` encodes bytes with the standard alphabet and required
 padding. URL-safe and unpadded forms, embedded CR/LF, and non-canonical pad bits
 are rejected; an invalid decode returns null. Null inputs propagate as null.
 
@@ -43,7 +43,7 @@ length and a decode/encode round trip:
 
 ```hff
 encoded:frombase64:len=4
-encoded:frombase64:tobase64=encoded
+encoded:frombase64:base64=encoded
 ```
 
 The methods charge their input byte length to the local per-match `MaxSteps`

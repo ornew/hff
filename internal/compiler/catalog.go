@@ -31,7 +31,7 @@ func builtins(name string) []declaration {
 		add(family, receiver, result, params, len(params), len(params), false)
 	}
 	switch name {
-	case "type", "tostring", "tojson":
+	case "type", "json":
 		fixed("any", any, str)
 	case "exists":
 		fixed("any", any, boolean)
@@ -68,7 +68,7 @@ func builtins(name string) []declaration {
 		fixed("list", list, list, list)
 	case "frombase64":
 		fixed("string", str, bytes)
-	case "tobase64":
+	case "base64":
 		fixed("bytes", bytes, str)
 	case "size":
 		fixed("list", list, integer)
@@ -99,6 +99,7 @@ func builtins(name string) []declaration {
 	case "hours", "minutes", "seconds":
 		add("timestamp", timestamp, integer, []core.Type{str}, 0, 1, false)
 	case "string":
+		fixed("any", any, str)
 		fixed("timestamp", timestamp, str, str)
 	case "after", "before":
 		fixed("timestamp", timestamp, boolean, timestamp)

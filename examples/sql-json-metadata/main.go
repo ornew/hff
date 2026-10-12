@@ -23,7 +23,7 @@ func main() {
 	// JSONB stores {"balance":0}, while the sidecar records the original -0.0:
 	// {"version":1,"types":{"/balance":{"type":"float","text":"-0.0"}}}
 	// Store both columns together; the application guarantees their consistency.
-	program, err := e.Compile(ctx, `payload:[map[float]]["balance"]:tostring="-0.0"`)
+	program, err := e.Compile(ctx, `payload:[map[float]]["balance"]:string="-0.0"`)
 	if err != nil {
 		panic(err)
 	}

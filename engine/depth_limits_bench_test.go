@@ -59,7 +59,7 @@ func BenchmarkDefaultDepthWorkloads(b *testing.B) {
 			}
 		}
 	})
-	for _, method := range []string{"fromjson", "tojson"} {
+	for _, method := range []string{"fromjson", "json"} {
 		program, err := e.Compile(ctx, "x:"+method+":exists")
 		if err != nil {
 			b.Fatal(err)

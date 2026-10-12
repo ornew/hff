@@ -16,7 +16,7 @@ func TestJSONMetadataBindingRequiresSupportedConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := e.Compile(context.Background(), `value:tostring="-0.0"`)
+	p, err := e.Compile(context.Background(), `value:string="-0.0"`)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -159,18 +159,18 @@ These are HFF result-order guarantees. SQL does not promise physical callback
 evaluation order or local `MaxSteps`/`MaxGeneratedValues` enforcement; unsupported
 explicit execution-budget requirements are rejected by `Build`.
 
-For schema-known scalar columns and JSON/JSONB values, `tojson()` and
-`tostring()` support null, bool, int64, string, and finite float64 values,
+For schema-known scalar columns and JSON/JSONB values, `json()` and
+`string()` support null, bool, int64, string, and finite float64 values,
 including recursive lists, maps, and structs containing those types when their
-numeric representation is available. `tojson()` emits compact JSON;
-`tostring()` leaves strings unquoted and uses compact JSON for collections.
+numeric representation is available. `json()` emits compact JSON;
+`string()` leaves strings unquoted and uses compact JSON for collections.
 Object keys are sorted with PostgreSQL's `C` collation, arrays retain element
 order, and stored nulls remain JSON nulls. A null receiver returns the text
 `"null"`; no-value propagates. For example:
 
 ```hff
-profile.scores:tojson="[80,90]"
-profile.name:tostring="Ada"
+profile.scores:json="[80,90]"
+profile.name:string="Ada"
 ```
 
 Float serialization uses a canonical shortest round-tripping decimal with a
@@ -285,7 +285,7 @@ that allows both integer and float elements, such as
 for JSONB. Native JSON preserves the numeric spelling for that case.
 Other operations on a union are supported only when its candidates let the
 backend resolve their result; for example, an `Int|String` profile
-can be serialized with `tojson()`. This does not make arbitrary union method
+can be serialized with `json()`. This does not make arbitrary union method
 calls available.
 
 ### String methods on dynamic JSON values
@@ -463,7 +463,7 @@ INSERT INTO records VALUES (
 The corresponding HFF expression can inspect the value with a known type:
 
 ```hff
-payload:[map[float]]["balance"]:tostring="-0.0"
+payload:[map[float]]["balance"]:string="-0.0"
 ```
 
 Bind both database columns to the same HFF path using the JSONB binding call
