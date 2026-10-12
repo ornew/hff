@@ -81,6 +81,12 @@ func (b *builder) losesFloat(n hff.Node, environment map[hff.BindingID]bool) boo
 	}
 	if path, ok := n.Path(); ok {
 		for size := len(path); size > 0; size-- {
+			if binding, exists := b.structBindings[pathKey(path[:size])]; exists {
+				typ, err := boundType(b.program.Schema(), path[:size])
+				if err == nil && structLosesFloat(binding, typ, path[size:]) {
+					return true
+				}
+			}
 			if b.jsonBindings[pathKey(path[:size])] == JSONB {
 				return true
 			}

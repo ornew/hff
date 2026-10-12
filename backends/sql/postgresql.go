@@ -21,6 +21,7 @@ type builder struct {
 	methods           map[string]MethodImplementation
 	compositeBindings map[string]bool
 	jsonBindings      map[string]JSONFormat
+	structBindings    map[string]Binding
 	jsonValues        map[string]JSONFormat
 	parameters        map[hff.BindingID]jsonParameter
 	sharedPaths       map[string]expression

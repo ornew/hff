@@ -92,6 +92,13 @@ func (b *builder) jsonPath(n hff.Node) (expression, bool, error) {
 	if path, ok := n.Path(); ok {
 		if format, yes := b.jsonBindings[pathKey(path)]; yes {
 			code := b.bindings[pathKey(path)]
+			if binding, yes := b.structBindings[pathKey(path)]; yes {
+				converted, err := b.structJSON(n, binding, n.Type())
+				if err != nil {
+					return expression{}, true, err
+				}
+				code = converted
+			}
 			if b.compositeBindings[pathKey(path)] {
 				converted, err := b.compositeJSON(n, code, n.Type())
 				if err != nil {

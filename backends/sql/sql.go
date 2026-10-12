@@ -28,6 +28,7 @@ type Binding struct {
 	column    ColumnRef
 	format    JSONFormat
 	composite bool
+	structure *structBinding
 }
 
 func Bind(path hff.Path, column ColumnRef) Binding {
@@ -116,7 +117,7 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 	if err != nil {
 		return nil, err
 	}
-	b := builder{methods: methods, ctx: ctx, program: program, bindings: make(map[string]string), reserved: make(map[string]bool), jsonBindings: make(map[string]JSONFormat), jsonValues: make(map[string]JSONFormat), compositeBindings: make(map[string]bool)}
+	b := builder{methods: methods, ctx: ctx, program: program, bindings: make(map[string]string), reserved: make(map[string]bool), jsonBindings: make(map[string]JSONFormat), jsonValues: make(map[string]JSONFormat), compositeBindings: make(map[string]bool), structBindings: make(map[string]Binding)}
 	if err := b.checkMethods(program.Root()); err != nil {
 		return nil, err
 	}
@@ -134,6 +135,15 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 		key := pathKey(binding.path)
 		if _, exists := b.bindings[key]; exists {
 			return nil, configuration("duplicate schema binding path")
+		}
+		if binding.structure != nil {
+			if err := b.checkStructBinding(binding, typ, columnKinds, columnFormats, columnJSONTypes); err != nil {
+				return nil, err
+			}
+			b.bindings[key] = ""
+			b.jsonBindings[key] = JSON
+			b.structBindings[key] = binding
+			continue
 		}
 		column, err := quoteColumn(binding.column)
 		if err != nil {
@@ -183,7 +193,7 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 		}
 	}
 	for _, parent := range config.Bindings {
-		if parent.format == "" && !parent.composite {
+		if parent.format == "" && !parent.composite && parent.structure == nil {
 			continue
 		}
 		for _, child := range config.Bindings {
