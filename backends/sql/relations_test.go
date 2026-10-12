@@ -78,6 +78,8 @@ func relationOrderedQueries() []string {
 		`items:map(x=>x.price)=[20,5]`, `items:foldl(0,(acc,x)=>acc+x.price)=25`,
 		`items:tojson:contains("price")`, `items=items`, `items!:tojson!=""`,
 		`items:flatmap(x=>x.tags)=["auth","dev"]`,
+		`items:foldl(0.0,(acc,x)=>{"keep":acc,"text":acc:tostring}.keep)=0.0`,
+		`items:foldr(0.0,(x,acc)=>{"keep":acc,"text":acc:tostring}.keep)=0.0`,
 	}
 }
 func TestRelationBuildAndOrderingContract(t *testing.T) {
@@ -169,6 +171,15 @@ func TestRelationCallbacksPreserveFloatSerializationProvenance(t *testing.T) {
 	relation, err := hffsql.NewRelation(hffsql.WithRelationSource(hffsql.Column("float_items"), "floatrow"), hffsql.WithCorrelation(hffsql.TrustedSQL("true")), hffsql.WithRelationItem(item, hffsql.BindStruct(hff.Path{}, hffsql.TrustedSQL("true"), hffsql.TrustedSQL("false"), hffsql.Bind(hff.Path{"native"}, hffsql.Column("floatrow", "native")), hffsql.BindJSON(hff.Path{"lossy"}, hffsql.Column("floatrow", "lossy"), hffsql.JSONB))), hffsql.WithUniqueOrder(hffsql.Ascending(hffsql.Column("floatrow", "id"), schema.IntType)))
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, source := range []string{`items:foldl(0.0,(acc,x)=>{"keep":acc,"text":acc:tostring}.keep)>=0`, `items:foldr(0.0,(x,acc)=>{"keep":acc,"text":acc:tostring}.keep)>=0`} {
+		p, err := e.Compile(context.Background(), source)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		if _, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindRelation(hff.Path{"items"}, relation))); err != nil {
+			t.Fatal(source, err)
+		}
 	}
 	for _, field := range []string{"native", "lossy"} {
 		for _, source := range []string{

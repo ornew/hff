@@ -104,18 +104,40 @@ func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accu
 			provenanceRestores[i]()
 		}
 	}()
+	for i, binding := range parameters {
+		if i != accumulatorIndex {
+			provenanceRestores = append(provenanceRestores, b.callbackProvenance(binding.ID(), receiver))
+		}
+	}
+	body, _ := callback.Child(0)
+	accumulatorLoss := seedLoss
+	lossEnvironment := map[hff.BindingID]bool{}
+	for i, binding := range parameters {
+		lossEnvironment[binding.ID()] = receiverLoss
+		if i == accumulatorIndex {
+			lossEnvironment[binding.ID()] = accumulatorLoss
+		}
+	}
+	// Reach the Boolean provenance fixed point without inheriting loss from
+	// an unused element. Accumulator state can only gain a possible loss.
+	for attempt := 0; attempt < 2; attempt++ {
+		next := seedLoss || b.losesFloat(body, lossEnvironment)
+		if next == accumulatorLoss {
+			break
+		}
+		accumulatorLoss = next
+		lossEnvironment[parameters[accumulatorIndex].ID()] = next
+	}
 	old := make([]jsonParameter, len(parameters))
 	existed := make([]bool, len(parameters))
 	for i, binding := range parameters {
 		id := binding.ID()
 		old[i], existed[i] = b.parameters[id]
 		parameter := jsonParameter{code: item + ".value", format: JSON, lossy: receiverLoss}
-		if i != accumulatorIndex {
-			provenanceRestores = append(provenanceRestores, b.callbackProvenance(id, receiver))
-		}
+
 		if i == accumulatorIndex {
 			parameter.code, parameter.typ = previous+".acc", accumulatorType
-			parameter.lossy = receiverLoss || seedLoss
+			parameter.lossy = accumulatorLoss
 		}
 		b.parameters[id] = parameter
 	}
@@ -130,7 +152,6 @@ func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accu
 			}
 		}
 	}()
-	body, _ := callback.Child(0)
 	result, err := b.expression(body)
 	return result, b.steps, err
 }
