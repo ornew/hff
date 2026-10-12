@@ -53,6 +53,7 @@ func (b *builder) restoreJSONMetadataAt(data, metadata, pointer string) string {
  SELECT o.value,o.key,row_number() OVER (ORDER BY o.key COLLATE "C"),to_json(o.key)::text || ':'
  FROM jsonb_each(CASE WHEN jsonb_typeof(` + walk + `.value)='object' THEN ` + walk + `.value ELSE '{}'::jsonb END) AS o(key,value)
  ) AS ` + child + `
+ WHERE jsonb_typeof(` + walk + `.value) IN ('array','object')
  ), ` + tokens + ` AS (
  SELECT position || 0::bigint AS position,prefix || CASE jsonb_typeof(value)
  WHEN 'array' THEN '[' WHEN 'object' THEN '{'

@@ -911,6 +911,16 @@ not. See the
 [PostgreSQL translation choices](optimizations.md#restore-only-a-selected-jsonb-metadata-subtree)
 for the scope of this SQL-shape optimization.
 
+The recursive restoration walk also avoids expanding scalar leaves as
+children. It still visits each leaf to restore numeric representations, apply
+the document-relative metadata pointer, and reconstruct the complete value.
+This applies to direct, flattened, and relation-backed metadata bindings;
+flattened and relation bindings still restore their full document. It does not
+prune subtrees or validate the stored document; the caller remains responsible
+for consistency between stored JSON and metadata. See
+[JSONB leaf expansion](../../optimizations/005-postgresql-jsonb-leaf-expansion.md)
+for the measured profiles and limitations.
+
 PostgreSQL is the only supported SQL dialect. JSON and JSONB use their native
 operators; this support does not promise stable generated SQL text or database
 execution order. SQL execution constraints are reported by the SQL API, and

@@ -66,6 +66,17 @@ guarantee. See the
 The measured workload and tradeoffs are recorded in [JSONB metadata
 restoration](../../optimizations/002-postgresql-jsonb-metadata-restoration.md).
 
+### Skip child expansion for JSONB scalar leaves
+
+During recursive metadata restoration, scalar leaves remain in the walk for
+numeric type/text restoration, pointer lookup, and reconstruction, but the
+recursive term does not try to expand them as children. The same leaf filter
+applies to direct, flattened, and relation-backed metadata documents. Direct
+nested `BindJSON` already has selected-subtree restoration; flattened and
+relation bindings still restore the full document. This reduces recursive
+expansion work without pruning values or changing the metadata contract. The
+measured profiles and tradeoffs are in [JSONB leaf expansion](../../optimizations/005-postgresql-jsonb-leaf-expansion.md).
+
 ### Reuse parsed JSON within a projection scope
 
 Repeated `fromjson()` calls on the same projected receiver can reuse the
