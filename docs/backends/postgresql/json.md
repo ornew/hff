@@ -380,7 +380,8 @@ could be either int64 or float64. A schema-known Float type identifies the
 numeric subtype, but it cannot recover a negative-zero sign lost during JSONB
 normalization; include the Float text metadata if that sign must remain
 observable. See the [storage requirements](#storage-requirements-and-limits)
-for the sidecar format.
+for the sidecar format. The scoped Build and database measurements are in the
+[dynamic sorting record](../../optimizations/011-postgresql-dynamic-json-sort.md).
 
 `concat(list)` preserves left-to-right order, duplicates, and null elements.
 JSON- or JSONB-backed lists can be concatenated with schema-compatible list

@@ -162,7 +162,9 @@ arguments. For JSON-backed lists, the backend also supports `contains()`,
 `flatmap()`; callbacks may use scalar `in()`. Dynamic `Any` or list-union
 sorting requires recoverable JSON values; JSONB needs numeric metadata when it
 has erased the int64/float64 distinction. See the
-[JSON guide](json.md) for equality capabilities and collection semantics.
+[JSON guide](json.md) for equality capabilities and collection semantics, and
+the [sort measurements](../../optimizations/011-postgresql-dynamic-json-sort.md)
+for the measured Build and database profile.
 
 ### Bytes and base64
 

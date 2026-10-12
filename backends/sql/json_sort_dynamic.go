@@ -50,14 +50,21 @@ func (b *builder) jsonSort(n hff.Node, value expression) (expression, error) {
 	if stored.Kind() != hff.ListType {
 		return expression{}, b.failure(n, "sort requires an applicable list schema")
 	}
-	document, err := b.comparisonDocument(receiver, list.code, format, stored)
-	if err != nil {
-		return expression{}, err
+	var raw string
+	if format == JSON && stored.Element().Kind() == hff.AnyType {
+		// Native JSON already retains the element representation. The receiver
+		// check masks non-arrays, so rebuilding this array adds no validation.
+		raw = b.project(list.code)
+	} else {
+		document, err := b.comparisonDocument(receiver, list.code, format, stored)
+		if err != nil {
+			return expression{}, err
+		}
+		normalized := b.project(document)
+		// Normalization returns JSON null for ordinary null; array expansion
+		// must receive SQL NULL instead.
+		raw = b.project("(CASE WHEN json_typeof(" + normalized + ")='array' THEN " + normalized + " ELSE NULL::json END)")
 	}
-	normalized := b.project(document)
-	// Normalization returns JSON null for ordinary null; array expansion must
-	// receive SQL NULL instead, including for a wrong dynamic receiver family.
-	raw := b.project("(CASE WHEN json_typeof(" + normalized + ")='array' THEN " + normalized + " ELSE NULL::json END)")
 	alias := b.nextAlias()
 	item := alias + ".value"
 	category := "json_typeof(" + item + ")"
@@ -66,7 +73,12 @@ func (b *builder) jsonSort(n hff.Node, value expression) (expression, error) {
 	floating := "(" + category + "='number' AND " + text + " ~ '[.eE]')"
 	i := "(CASE WHEN " + integer + " THEN " + jsonScalarCast(text, hff.IntType) + "::numeric END)"
 	f := "(CASE WHEN " + floating + " THEN " + jsonScalarCast(text, hff.FloatType) + " END)"
-	number := "(CASE WHEN " + integer + " THEN " + i + " WHEN " + floating + " THEN " + b.floatNumeric(f) + " END)"
+	floatAlias := b.nextAlias()
+	floatValue := floatAlias + ".v"
+	// Zero needs no binary64 decomposition. Keep this projection inside the
+	// item query: its expression refers to the array expansion's local alias.
+	floatKey := "(SELECT CASE WHEN " + floatValue + "=0 THEN 0::numeric ELSE " + b.floatNumeric(floatValue) + " END FROM LATERAL (SELECT " + f + " AS v OFFSET 0) AS " + floatAlias + ")"
+	number := "(CASE WHEN " + integer + " THEN " + i + " WHEN " + floating + " THEN " + floatKey + " END)"
 	stringKey := "(CASE WHEN " + category + "='string' THEN " + text + " END) COLLATE \"C\""
 	from := "json_array_elements(" + raw + ") WITH ORDINALITY AS " + alias + "(value,ord)"
 	invalid := "EXISTS(SELECT 1 FROM " + from + " WHERE " + category + " NOT IN ('number','string'))"

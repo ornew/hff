@@ -96,6 +96,21 @@ the tested repeated query and does not establish a database speedup for other
 workloads. See [Float operand reuse](../../optimizations/008-postgresql-float-decomposition-reuse.md)
 for the Build and PostgreSQL measurements.
 
+### Sort recoverable dynamic JSON lists
+
+For native JSON `Any` lists, dynamic sorting can consume the original array
+after checking that the receiver is an array, instead of rebuilding a
+comparison document. JSONB keeps comparison-document normalization when
+numeric subtype restoration requires it. The dynamic Float key is projected
+inside the item query; zero uses an exact numeric zero key without the shared
+Float decomposition. The homogeneous schema-resolved fast path and global
+Float arithmetic lowering are unchanged. Stable ordering, invalid-family
+checks, and representation recovery remain in place. The combined candidate
+was measured on fixed JSON/JSONB fixtures; its result is workload-specific and
+does not promise lower execution time for every shape. See the
+[dynamic JSON sort measurements](../../optimizations/011-postgresql-dynamic-json-sort.md)
+for controls, ranges, and limits.
+
 ### Prune scalar leaves during canonical JSON serialization
 
 The recursive token CTE keeps scalar and null rows as token sources but does

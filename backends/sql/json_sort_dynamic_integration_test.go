@@ -30,7 +30,14 @@ func TestPostgreSQLDynamicSortParity(t *testing.T) {
 	numbers := schema.Union(schema.IntType, schema.FloatType, schema.NullType)
 	types := []hff.Type{schema.AnyType, schema.Union(schema.ListOf(schema.AnyType), schema.NullType), schema.Union(schema.ListOf(numbers), schema.NullType), schema.Union(schema.ListOf(numbers), schema.StringType, schema.MapOf(schema.BytesType), schema.NullType)}
 	values := []hff.Value{hff.Null(), hff.String(""), hff.Int(1), hff.Bool(true), hff.Object(nil), hff.List(), hff.List(hff.Null()), hff.List(hff.Bool(true)), hff.List(hff.Object(nil)), hff.List(hff.Int(1), hff.String("1")), hff.List(hff.String("日"), hff.String("é"), hff.String("a")), hff.List(hff.Int(3), hff.Float(1), hff.Int(2)), hff.List(hff.Float(1), hff.Float(math.Copysign(0, -1))), hff.List(hff.Float(1), hff.Int(1)), hff.List(hff.Int(1), hff.Float(1)), hff.List(hff.Float(math.Copysign(0, -1)), hff.Int(0), hff.Float(0)), hff.List(hff.Int(9007199254740993), hff.Float(9007199254740992)), hff.List(hff.Float(float64(math.MaxInt64)), hff.Int(math.MaxInt64)), hff.List(hff.Int(math.MinInt64), hff.Float(float64(math.MinInt64))), hff.List(hff.Float(math.SmallestNonzeroFloat64), hff.Int(0), hff.Float(-math.SmallestNonzeroFloat64))}
-	sources := []string{`data:exists=[]:sort:exists`, `data:sort`, `data:sort=null`, `data:sort:json="null"`, `data:sort:json="[]"`, `data:sort=[1,2,3]`, `data:sort[0]:[int]:exists`, `data:sort[0]:[float]:exists`, `data:sort[0]<0`, `data:sort:json="[-0.0,0,0.0]"`, `data:sort=[9007199254740992.0,9007199254740993]`, `data!:sort:exists`, `!data!:sort`, `data:sort:sort:json=data:sort:json`, `data:sort:map(v=>v:[float]):json="[-0.0,1.0]"`, `data:sort:map(v=>v:[float]):exists`}
+	// Exercise native JSON spellings that a typed host serializer canonicalizes.
+	rawStart := len(values)
+	values = append(values,
+		hff.List(hff.Float(math.Copysign(0, -1)), hff.Int(0), hff.Float(0), hff.Float(1), hff.Int(1)),
+		hff.List(hff.String("日"), hff.String("a")),
+	)
+	rawJSON := []string{` [ -1e-400, 0, 0.0, 1e0, 1 ] `, ` [ "\u65e5", "a" ] `}
+	sources := []string{`data:exists=[]:sort:exists`, `data:sort:json="[-0.0,0,0.0,1.0,1]"`, `data:sort`, `data:sort=null`, `data:sort:json="null"`, `data:sort:json="[]"`, `data:sort=[1,2,3]`, `data:sort[0]:[int]:exists`, `data:sort[0]:[float]:exists`, `data:sort[0]<0`, `data:sort:json="[-0.0,0,0.0]"`, `data:sort=[9007199254740992.0,9007199254740993]`, `data!:sort:exists`, `!data!:sort`, `data:sort:sort:json=data:sort:json`, `data:sort:map(v=>v:[float]):json="[-0.0,1.0]"`, `data:sort:map(v=>v:[float]):exists`}
 	var script strings.Builder
 	var wants []bool
 	var labels []string
@@ -72,7 +79,11 @@ func TestPostgreSQLDynamicSortParity(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					rows = append(rows, "("+sqlFixtureString(metadataJSONFixture(t, value))+"::"+string(format)+","+sqlFixtureString(pairTypeMetadata(t, value))+"::jsonb)")
+					jsonText := metadataJSONFixture(t, value)
+					if format == hffsql.JSON && i >= rawStart {
+						jsonText = rawJSON[i-rawStart]
+					}
+					rows = append(rows, "("+sqlFixtureString(jsonText)+"::"+string(format)+","+sqlFixtureString(pairTypeMetadata(t, value))+"::jsonb)")
 					wants = append(wants, want)
 					labels = append(labels, fmt.Sprintf("type%d %s %s input%d", ti, format, source, i))
 				}
