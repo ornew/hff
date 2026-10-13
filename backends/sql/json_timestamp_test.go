@@ -42,7 +42,13 @@ func TestJSONTimestampBuildsFromKnownSchema(t *testing.T) {
 			`created:json="\"2026-01-01T00:00:00Z\""`,
 			`payload.created:year=2026`,
 			`items[0]:year=2026`, `items[0]:exists`, `items=items`, `items:contains(null)`,
+			`items:contains("2026-01-01T00:00:00Z":timestamp)`, `items:unique`, `items:json="[]"`,
+			`items:map(x=>x):json="[]"`,
+			`items:flatmap(x=>[x]):json="[]"`,
+			`items:foldl("2026-01-01T00:00:00Z":timestamp,(a,x)=>a):exists`,
+			`[created]:json="[null]"`,
 			`sorted:sort[0]:year=0`,
+			`payload:json="{\"created\":null}"`,
 		} {
 			program, err := e.Compile(ctx, source)
 			if err != nil {
@@ -95,6 +101,9 @@ func TestJSONTimestampIntUnionUsesDisjointJSONCategories(t *testing.T) {
 			`value:type="timestamp"`, `value:[timestamp]:year=2026`,
 			`value:before("2027-01-01T00:00:00Z":timestamp)`,
 			`value="2026-01-01T00:00:00Z":timestamp`, `value=value`,
+			`value:in("2026-01-01T00:00:00Z":timestamp,1)`,
+			`value:string="2026-01-01T00:00:00Z"`,
+			`value:json="\"2026-01-01T00:00:00Z\""`,
 		} {
 			program, err := e.Compile(ctx, source)
 			if err != nil {

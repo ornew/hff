@@ -307,13 +307,48 @@ For schema-known JSON/JSONB Timestamps, the PostgreSQL subset supports direct
 comparisons, `before()`, `after()`, `add(duration)`, `in()`, `exists()`,
 `type()`, UTC component methods, and zero-argument `string()` and `json()`.
 Schema-known lists of Timestamps also support ascending `sort()` by exact
-instant. Other collection transformations may be rejected if their SQL
-lowering would need to materialize a Timestamp value the backend cannot
-represent. The output of `string()` and `json()` is canonical UTC text.
-Time-zone arguments—including
-`timestamp:string(tz)`—and data-dependent string parsing are unsupported.
-Ambiguous string-backed unions, such as `String|Timestamp` or
-`Duration|Timestamp`, are rejected when an operation needs the active type.
+instant, `contains()`, and `unique()`. Timestamp values can also be retained in
+schema-known list and struct construction and serialized with `json()` when
+the result schema is representable. For example, a typed list can compare,
+deduplicate, and serialize its Timestamp elements:
+
+```hff
+items:contains("2026-10-01T00:00:00.000000123Z":timestamp)
+items:unique
+items:json="[\"2026-10-01T00:00:00.000000123Z\"]"
+[payload.created]:json="[\"2026-10-01T00:00:00.000000123Z\"]"
+```
+
+The same canonical string representation is used when a schema-known struct
+containing Timestamp fields is serialized. A JSON string under `Any` remains
+String; these operations do not infer Timestamp values from JSON strings.
+Other collection transformations may be rejected if their SQL lowering would
+need to materialize a Timestamp value the backend cannot represent. The output
+of `string()` and `json()` is canonical UTC text.
+
+The schema-known disjoint union `Timestamp|Int|Null` is also supported for
+type inspection, Timestamp guards and operations, comparisons, membership,
+and `string()`/`json()` serialization. JSON strings identify the Timestamp
+alternative, JSON numbers identify Int, and JSON null remains null:
+
+```hff
+value:type="timestamp"
+value:[timestamp]:year=2026
+value:in("2026-01-01T00:00:00.000000123Z":timestamp,2026)
+value=value
+value:string="2026-01-01T00:00:00.000000123Z"
+value:json="\"2026-01-01T00:00:00.000000123Z\""
+```
+
+This does not generalize to unions whose alternatives share a JSON
+representation category, such as `String|Timestamp` or
+`Duration|Timestamp`; operations that need the active type are rejected by
+`Build`. Other dynamic union operations remain supported only when the schema
+and JSON representation preserve the HFF type.
+
+Time-zone arguments—including `timestamp:string(tz)`—and data-dependent string
+parsing are unsupported. Operations outside the listed subset are rejected
+when their SQL lowering cannot preserve the Timestamp representation.
 JSONB metadata version 1 remains numeric-only and does not add Timestamp tags.
 For native `timestamptz` columns, use the separate `BindTimestamp` contract in
 the [temporal guide](../../guides/temporal.md#store-postgresql-timestamps).

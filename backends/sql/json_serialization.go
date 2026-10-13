@@ -202,6 +202,10 @@ func (b *builder) serializeJSON(n hff.Node, raw string, format JSONFormat, typ h
 			// BindJSON requires canonical duration strings. Computed
 			// durations enter collections through durationTextInline.
 			code = "to_json(" + raw + " #>> '{}'::text[])::text"
+		case hff.TimestampType:
+			// BindJSON requires canonical UTC strings. Computed Timestamps
+			// enter collections through timestampUTCString.
+			code = "to_json(" + raw + " #>> '{}'::text[])::text"
 		case hff.StringType:
 			code = "to_json(" + raw + " #>> '{}')::text"
 		case hff.ListType:

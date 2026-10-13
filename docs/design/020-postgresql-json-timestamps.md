@@ -89,9 +89,20 @@ comparison, `before()`, `after()`, `add(duration)`, `in()`, `exists()`,
 zero-argument `any:string()` and `any:json()`. The separate
 `timestamp:string(tz)` overload takes a time-zone argument and is outside this
 subset. `sort()` is also supported for schema-known lists of Timestamps and
-orders them by exact instant. Other collection transformations are supported
-only where the binding and operation can be lowered without materializing an
-unsupported representation.
+orders them by exact instant. Schema-known Timestamp lists also support
+`contains()` and `unique()`, and Timestamp values can be retained in supported
+list/struct construction and serialized when the resulting value is
+representable.
+
+The category-disjoint schema union `Timestamp|Int|Null` is supported for type
+inspection, Timestamp guards and operations, comparisons, membership, and
+`string()`/`json()` serialization. JSON strings identify Timestamp, JSON
+numbers identify Int, and null remains null. This does not generalize to
+unions whose alternatives share a JSON representation category, such as
+`String|Timestamp` or `Duration|Timestamp`; `Build` rejects operations that
+need an unrecoverable active type. Other collection transformations are
+supported only where their binding and operation can be lowered without
+materializing an unsupported representation.
 
 Zone arguments, data-dependent string parsing, ambiguous unions, and
 operations whose SQL lowering cannot preserve the active Timestamp
@@ -137,16 +148,17 @@ rejects genuinely ambiguous unions.
 
 ## Testing
 
-Required conformance tests compare PostgreSQL results with local evaluation for
+Conformance tests compare PostgreSQL results with local evaluation for
 schema-known Timestamp values in JSON and JSONB. They cover nullable and nested
-fields, typed collection elements where supported, the operation subset above,
-and canonical serialization. Boundary cases include nanoseconds on either
-side of a second boundary, pre-epoch instants, years 0000 and 9999, and
-different zone offsets normalized to the same instant. Tests confirm that a
-JSON string under `Any` remains an HFF String, that Build rejects ambiguous
-`String|Timestamp` and `Bytes|Timestamp` operations, and that null, missing
-members, and no-value remain distinct. Storage fixtures use canonical values
-consistent with their declared schema; Build does not validate stored rows.
+fields, typed Timestamp lists, membership, uniqueness, sorting, list and
+struct serialization, the supported `Timestamp|Int|Null` union, and canonical
+serialization. Boundary cases include nanoseconds on either side of a second
+boundary, pre-epoch instants, years 0000 and 9999, and different zone offsets
+normalized to the same instant. Tests confirm that a JSON string under `Any`
+remains an HFF String, that `Build` rejects ambiguous `String|Timestamp` and
+`Bytes|Timestamp` operations, and that null, missing members, and no-value
+remain distinct. Storage fixtures use canonical values consistent with their
+declared schema; `Build` does not validate stored rows.
 
 ## Limitations and open questions
 

@@ -263,11 +263,35 @@ nanosecond precision and supports HFF years 0000 through 9999 without using
 the microsecond-precision `timestamptz` column representation. Schema-known
 JSON/JSONB support includes comparisons, `before()`, `after()`,
 `add(duration)`, `in()`, `exists()`, `type()`, UTC component methods, and
-zero-argument `string()`/`json()`. Schema-known lists of Timestamps can also
-use ascending `sort()`, ordered by exact instant. Other collection
-transformations may still fail to build if they require an unsupported
-materialized value. Time-zone arguments, data-dependent Timestamp parsing, and
-ambiguous string-backed unions are rejected by `Build`.
+zero-argument `string()`/`json()`. Schema-known lists of Timestamps also
+support ascending `sort()` by exact instant, `contains()`, and `unique()`.
+Timestamp values can be retained in supported list/struct construction and
+JSON serialization:
+
+```hff
+events:contains("2026-10-01T00:00:00.000000123Z":timestamp)
+events:unique
+events:json="[\"2026-10-01T00:00:00.000000123Z\"]"
+[payload.created]:json="[\"2026-10-01T00:00:00.000000123Z\"]"
+payload:json="{\"created\":\"2026-10-01T00:00:00.000000123Z\"}"
+```
+
+The schema-known disjoint union `Timestamp|Int|Null` is also supported for
+type inspection, Timestamp guards and operations, comparisons, membership, and
+`string()`/`json()` serialization. JSON strings select Timestamp, numbers
+select Int, and JSON null remains null:
+
+```hff
+value:type="timestamp"
+value:in("2026-01-01T00:00:00.000000123Z":timestamp,2026)
+value:json="\"2026-01-01T00:00:00.000000123Z\""
+```
+
+These capabilities apply when schema and JSON categories preserve the active
+HFF type. Other collection transformations may still fail to build if they
+require an unsupported materialized value. Time-zone arguments,
+data-dependent Timestamp parsing, and ambiguous string-backed unions such as
+`String|Timestamp` are rejected by `Build`.
 The [PostgreSQL JSON guide](../backends/postgresql/json.md#timestamp-values-in-json-documents)
 describes the full binding contract and operation limits.
 

@@ -60,8 +60,14 @@ func TestTimestampInFlattenedStruct(t *testing.T) {
 		if err != nil {
 			t.Fatal(source, err)
 		}
-		_, err = hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(binding))
-		requireCode(t, err, hff.BackendError)
+		query, err := hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(binding))
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		if !strings.Contains(query.Where(), `"records"."profile_present"`) ||
+			!strings.Contains(query.Where(), `"records"."profile_null"`) {
+			t.Error(source, "lost the nullable parent state:", query.Where())
+		}
 	}
 }
 

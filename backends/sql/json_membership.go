@@ -18,6 +18,8 @@ func (b *builder) jsonRepresentation(n hff.Node, value expression) (string, JSON
 		return "to_json(" + postgresBase64(value.code) + ")", JSON, nil
 	case hff.DurationType:
 		return "to_json(" + b.durationTextInline(value.code) + ")", JSON, nil
+	case hff.TimestampType:
+		return "to_json(" + b.timestampUTCStringInline(value.code) + ")", JSON, nil
 	case hff.FloatType:
 		return b.floatText(value.code) + "::json", JSON, nil
 	case hff.BoolType, hff.IntType, hff.StringType:

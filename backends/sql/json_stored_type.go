@@ -169,7 +169,7 @@ func jsonNativeCarrierType(typ, stored hff.Type) hff.Type {
 			return stored
 		}
 		return typ
-	case hff.BytesType, hff.DurationType:
+	case hff.BytesType, hff.DurationType, hff.TimestampType:
 		if jsonHasTaggedKind(stored, typ.Kind()) {
 			return typ
 		}

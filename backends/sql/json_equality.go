@@ -46,7 +46,9 @@ func (b *builder) jsonLiteral(n hff.Node) (expression, error) {
 			args = append(args, key.code)
 		}
 		if v.kind == hff.TimestampType {
-			return expression{}, b.failure(child, "PostgreSQL JSON collections do not yet preserve timestamp values")
+			// Timestamp values remain exact numeric until their canonical UTC
+			// string is inserted into the constructed JSON collection.
+			v.code = b.timestampUTCStringInline(v.code)
 		}
 		values = append(values, v)
 		code := v.code
@@ -56,6 +58,8 @@ func (b *builder) jsonLiteral(n hff.Node) (expression, error) {
 			code = postgresBase64(code)
 		} else if v.kind == hff.DurationType {
 			code = b.durationTextInline(code)
+		} else if v.kind == hff.TimestampType {
+			code = v.code
 		} else if v.kind == hff.FloatType {
 			code = b.floatText(code) + "::json"
 		} else if format, ok := b.jsonValues[code]; ok {

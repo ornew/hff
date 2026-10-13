@@ -125,7 +125,7 @@ func (b *builder) comparisonDocument(n hff.Node, raw string, format JSONFormat, 
 			value = "(" + value + ")::json"
 		case hff.BytesType:
 			value = "COALESCE(to_json(" + postgresBase64(jsonScalarCast("("+raw+" #>> '{}')", hff.BytesType)) + "),'null'::json)"
-		case hff.DurationType:
+		case hff.DurationType, hff.TimestampType:
 			value = raw + "::json"
 		case hff.StringType, hff.BoolType:
 			value = raw + "::json"

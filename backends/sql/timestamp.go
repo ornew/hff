@@ -17,14 +17,18 @@ const (
 // to_timestamp(double precision) never rounds the seconds component. The
 // subsecond nanoseconds remain numeric until formatting or component access.
 func (b *builder) timestampUTC(code string) (instant, fraction string) {
+	return b.timestampUTCWithProject(code, b.project)
+}
+
+func (b *builder) timestampUTCWithProject(code string, project func(string) string) (instant, fraction string) {
 	// PostgreSQL numeric division rounds its quotient to a finite scale before
 	// floor() sees it. div()/mod() retain the exact integer boundary, including
 	// instants before the epoch where div() truncates toward zero.
-	quotient := b.project("div((" + code + "), 1000000000::numeric)")
-	remainder := b.project("mod((" + code + "), 1000000000::numeric)")
-	seconds := b.project("(" + quotient + " - CASE WHEN " + remainder + " < 0 THEN 1 ELSE 0 END)")
-	instant = b.project("(to_timestamp(" + seconds + "::double precision) AT TIME ZONE 'UTC')")
-	fraction = b.project("((" + code + ") - " + seconds + " * 1000000000::numeric)")
+	quotient := project("div((" + code + "), 1000000000::numeric)")
+	remainder := project("mod((" + code + "), 1000000000::numeric)")
+	seconds := project("(" + quotient + " - CASE WHEN " + remainder + " < 0 THEN 1 ELSE 0 END)")
+	instant = project("(to_timestamp(" + seconds + "::double precision) AT TIME ZONE 'UTC')")
+	fraction = project("((" + code + ") - " + seconds + " * 1000000000::numeric)")
 	return instant, fraction
 }
 
@@ -103,8 +107,18 @@ func (b *builder) timestampCall(n hff.Node, name string, values []expression) (e
 }
 
 func (b *builder) timestampUTCString(code string) string {
-	instant, fraction := b.timestampUTC(code)
-	year := b.project("EXTRACT(YEAR FROM " + instant + ")::bigint")
+	return b.timestampUTCStringWithProject(code, b.project)
+}
+
+// A callback result may refer to a local element alias after the outer
+// projection scope has been restored. Keep those conversions self-contained.
+func (b *builder) timestampUTCStringInline(code string) string {
+	return b.timestampUTCStringWithProject(code, func(value string) string { return value })
+}
+
+func (b *builder) timestampUTCStringWithProject(code string, project func(string) string) string {
+	instant, fraction := b.timestampUTCWithProject(code, project)
+	year := project("EXTRACT(YEAR FROM " + instant + ")::bigint")
 	astronomicalYear := "(CASE WHEN " + year + "<0 THEN " + year + "+1 ELSE " + year + " END)"
 	yearText := "lpad(" + astronomicalYear + "::text,4,'0')"
 	fractionText := "(CASE WHEN " + fraction + "=0 THEN '' ELSE '.'||rtrim(lpad(" + fraction + "::bigint::text,9,'0'),'0') END)"

@@ -65,7 +65,15 @@ func TestPostgreSQLJSONTimestampMatchesLocal(t *testing.T) {
 		`created:add("1ns":duration)=null`,
 		`payload.created:year=2026`, `payload.created=null`,
 		`items[0]:year=2026`, `items[0]:exists`, `items=items`, `items:contains(null)`,
+		`items:contains("2026-10-01T00:00:00.000000123Z":timestamp)`,
+		`items:unique`, `items:json="[null]"`, `[created]:json="[null]"`,
+		`items:map(x=>x):json="[null]"`,
+		`items:flatmap(x=>[x]):json="[null]"`,
+		`items:foldl("2026-01-01T00:00:00Z":timestamp,(a,x)=>a):exists`,
+		`items:foldr("2026-01-01T00:00:00Z":timestamp,(x,a)=>a):string="2026-01-01T00:00:00Z"`,
 		`sorted:sort[0]:year=0`, `sorted:sort[1]:year=2026`,
+		`sorted:unique`, `payload:json="{\"created\":null}"`,
+		`sorted:json="[\"2026-01-01T00:00:00.000000123Z\",\"0000-01-01T00:00:00Z\"]"`,
 		`raw:type="string"`, `raw:[string]:exists`,
 	}
 	var script strings.Builder
@@ -100,13 +108,25 @@ func TestPostgreSQLJSONTimestampMatchesLocal(t *testing.T) {
 			}
 			var rows []string
 			for ri, row := range fixtures {
+				itemValues := []hff.Value{row.value}
+				itemsJSON := "[" + row.json + "]"
+				if ri == 0 {
+					itemValues = nil
+					itemsJSON = "[]"
+				}
+				sortedValues := []hff.Value{
+					hff.Timestamp(time.Date(2026, 1, 1, 0, 0, 0, 123, time.UTC)),
+					hff.Timestamp(time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC)),
+				}
+				sortedJSON := `["2026-01-01T00:00:00.000000123Z","0000-01-01T00:00:00Z"]`
+				if ri == 0 {
+					sortedValues[1] = sortedValues[0]
+					sortedJSON = `["2026-01-01T00:00:00.000000123Z","2026-01-01T00:00:00.000000123Z"]`
+				}
 				record := hff.Object(map[string]hff.Value{
 					"created": row.value,
-					"items":   hff.List(row.value),
-					"sorted": hff.List(
-						hff.Timestamp(time.Date(2026, 1, 1, 0, 0, 0, 123, time.UTC)),
-						hff.Timestamp(time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC)),
-					),
+					"items":   hff.List(itemValues...),
+					"sorted":  hff.List(sortedValues...),
 					"raw":     hff.String("2026-10-01T00:00:00.000000123Z"),
 					"payload": hff.Object(map[string]hff.Value{"created": row.value}),
 				})
@@ -116,7 +136,7 @@ func TestPostgreSQLJSONTimestampMatchesLocal(t *testing.T) {
 				}
 				expected = append(expected, match)
 				labels = append(labels, fmt.Sprintf("%s %s row%d", format, source, ri))
-				rows = append(rows, "("+sqlFixtureString(row.json)+"::"+string(format)+","+sqlFixtureString("["+row.json+"]")+"::"+string(format)+","+sqlFixtureString(`["2026-01-01T00:00:00.000000123Z","0000-01-01T00:00:00Z"]`)+"::"+string(format)+","+sqlFixtureString(`"2026-10-01T00:00:00.000000123Z"`)+"::"+string(format)+","+sqlFixtureString(row.payload)+"::"+string(format)+")")
+				rows = append(rows, "("+sqlFixtureString(row.json)+"::"+string(format)+","+sqlFixtureString(itemsJSON)+"::"+string(format)+","+sqlFixtureString(sortedJSON)+"::"+string(format)+","+sqlFixtureString(`"2026-10-01T00:00:00.000000123Z"`)+"::"+string(format)+","+sqlFixtureString(row.payload)+"::"+string(format)+")")
 			}
 			params, args := "", ""
 			if len(parameterTypes) > 0 {
@@ -173,6 +193,9 @@ func TestPostgreSQLJSONTimestampIntUnionMatchesLocal(t *testing.T) {
 		`value:before("1970-01-01T00:00:00Z":timestamp)`,
 		`value="2026-01-01T00:00:00.000000123Z":timestamp`,
 		`value!=2026`, `value=value`,
+		`value:in("2026-01-01T00:00:00.000000123Z":timestamp,2026)`,
+		`value:string="2026-01-01T00:00:00.000000123Z"`,
+		`value:json="\"2026-01-01T00:00:00.000000123Z\""`,
 	}
 	var script strings.Builder
 	var expected []bool
