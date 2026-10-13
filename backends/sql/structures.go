@@ -126,7 +126,7 @@ func (b *builder) checkStructBinding(binding Binding, typ hff.Type, kinds map[st
 			}
 			continue
 		}
-		if timestampSchema(field.Type) {
+		if timestampSchema(field.Type) && child.format == "" {
 			return configuration("Timestamp struct fields require BindTimestamp")
 		}
 		if _, err := b.checkJSONMetadata(child); err != nil {

@@ -18,13 +18,13 @@ func (b *builder) jsonLiteral(n hff.Node) (expression, error) {
 	}
 	if n.Kind() == hff.ListNode {
 		// Check before NewUnionType canonicalizes the element schema. In
-		// particular Any otherwise erases an explicit Bytes/Duration member.
+		// particular Any otherwise erases an explicit Bytes/Duration/Timestamp member.
 		for i := 0; i < n.ChildCount(); i++ {
 			left, _ := n.Child(i)
 			for j := i + 1; j < n.ChildCount(); j++ {
 				right, _ := n.Child(j)
 				if jsonTaggedStringStateAmbiguous(b.jsonStoredType(left), b.jsonStoredType(right)) {
-					return expression{}, b.failure(n, "JSON list cannot distinguish String, Bytes, and Duration elements")
+					return expression{}, b.failure(n, "JSON list cannot distinguish String, Bytes, Duration, and Timestamp elements")
 				}
 			}
 		}
@@ -110,7 +110,7 @@ func jsonCategory(k hff.TypeKind) string {
 		return "number"
 	case hff.BoolType:
 		return "boolean"
-	case hff.StringType, hff.BytesType, hff.DurationType:
+	case hff.StringType, hff.BytesType, hff.DurationType, hff.TimestampType:
 		return "string"
 	case hff.ListType:
 		return "array"
@@ -153,7 +153,7 @@ func (b *builder) jsonEqualValue(n hff.Node, left string, lf JSONFormat, lt hff.
 	}
 	if (needsDynamicJSONEquality(lt) || needsDynamicJSONEquality(rt)) && !definiteJSONContainerPair(lt, rt) {
 		if jsonHasTaggedString(lt) || jsonHasTaggedString(rt) {
-			return "", b.failure(n, "dynamic JSON comparison cannot preserve Bytes or Duration type identity")
+			return "", b.failure(n, "dynamic JSON comparison cannot preserve Bytes, Duration, or Timestamp type identity")
 		}
 		l, err := b.comparisonDocumentAgainst(n, left, lf, lt, rt)
 		if err != nil {
@@ -292,10 +292,10 @@ func (b *builder) jsonEqualTyped(n hff.Node, left string, lf JSONFormat, lt hff.
 	// CASE protects casts for each runtime member of a heterogeneous list.
 	ltext := "(CASE WHEN " + string(lf) + "_typeof(" + left + ")='" + jsonCategory(lt.Kind()) + "' THEN " + left + " #>> '{}'::text[] END)"
 	rtext := "(CASE WHEN " + string(rf) + "_typeof(" + right + ")='" + jsonCategory(rt.Kind()) + "' THEN " + right + " #>> '{}'::text[] END)"
-	// Duration strings in stored JSON are canonical by the binding contract.
-	// Equal spellings therefore represent equal nanosecond values; no parser
-	// needs to run inside a nested array/object comparison.
-	if lt.Kind() == hff.DurationType && rt.Kind() == hff.DurationType {
+	// Duration and Timestamp strings in stored JSON are canonical by the
+	// binding contract. Equal spellings therefore represent equal values;
+	// no parser needs to run inside a nested array/object comparison.
+	if lt.Kind() == rt.Kind() && (lt.Kind() == hff.DurationType || lt.Kind() == hff.TimestampType) {
 		return "COALESCE((" + ltext + " COLLATE \"C\"=" + rtext + " COLLATE \"C\"),FALSE)", nil
 	}
 	l := expression{jsonScalarCast(ltext, lt.Kind()), "TRUE", lt.Kind()}
@@ -364,7 +364,7 @@ func (b *builder) jsonObjectEqual(n hff.Node, left string, lf JSONFormat, lt hff
 }
 
 func jsonTaggedStringKind(kind hff.TypeKind) bool {
-	return kind == hff.BytesType || kind == hff.DurationType
+	return kind == hff.BytesType || kind == hff.DurationType || kind == hff.TimestampType
 }
 
 func jsonHasTaggedKind(typ hff.Type, kind hff.TypeKind) bool {
@@ -390,10 +390,10 @@ func jsonHasTaggedKind(typ hff.Type, kind hff.TypeKind) bool {
 }
 
 func jsonHasTaggedString(typ hff.Type) bool {
-	return jsonHasTaggedKind(typ, hff.BytesType) || jsonHasTaggedKind(typ, hff.DurationType)
+	return jsonHasTaggedKind(typ, hff.BytesType) || jsonHasTaggedKind(typ, hff.DurationType) || jsonHasTaggedKind(typ, hff.TimestampType)
 }
 
-// A string spelling alone cannot distinguish Bytes or Duration from String,
+// A string spelling alone cannot distinguish Bytes, Duration, or Timestamp from String,
 // each other, or Any at the same structural position. Check consumed values;
 // unrelated fields need not be materialized.
 func (b *builder) checkJSONStringSchemas(n hff.Node, typ hff.Type) error {
@@ -403,7 +403,7 @@ func (b *builder) checkJSONStringSchemas(n hff.Node, typ hff.Type) error {
 		for i, member := range members {
 			for _, other := range members[i+1:] {
 				if jsonTaggedStringStateAmbiguous(member, other) {
-					return b.failure(n, "JSON cannot distinguish String, Bytes, and Duration at one structural position")
+					return b.failure(n, "JSON cannot distinguish String, Bytes, Duration, and Timestamp at one structural position")
 				}
 			}
 			if err := b.checkJSONStringSchemas(n, member); err != nil {

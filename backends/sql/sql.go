@@ -189,7 +189,7 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 			b.bindings[key] = code
 			continue
 		}
-		if timestampSchema(typ) {
+		if timestampSchema(typ) && binding.format == "" {
 			return nil, configuration("Timestamp fields require BindTimestamp to declare their precision contract")
 		}
 		if binding.relation != nil {

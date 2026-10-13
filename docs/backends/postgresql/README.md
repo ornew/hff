@@ -79,7 +79,7 @@ Choose a physical binding from the way the application stores each HFF value:
 | --- | --- | --- |
 | Scalar SQL column | `Bind(path, Column(...))` | One HFF scalar field to one column. SQL `NULL` is an explicit HFF null. Duration columns use signed `bigint` nanoseconds. |
 | Timestamp columns | `BindTimestamp(path, instantColumn, options...)` | One schema-known Timestamp to `timestamptz`, optionally paired with a `smallint` nanosecond remainder. |
-| JSON/JSONB column | `BindJSON(path, column, JSON/JSONB)` | One complete schema-known HFF JSON value, including objects, maps, lists, Bytes as base64 strings, and Duration as canonical duration strings. Descendant paths are read inside that document. JSONB may add `WithTypeMetadata(metadataColumn)` for numeric types lost by normalization. |
+| JSON/JSONB column | `BindJSON(path, column, JSON/JSONB)` | One complete schema-known HFF JSON value, including objects, maps, lists, Bytes as base64 strings, Duration as canonical duration strings, and Timestamp as canonical UTC RFC 3339 strings. Descendant paths are read inside that document. JSONB may add `WithTypeMetadata(metadataColumn)` for numeric types lost by normalization. |
 | Native composite column | `BindComposite(path, column)` | One HFF struct to a PostgreSQL composite. A SQL-null row is null; its attributes are always present. |
 | Struct spread across columns | `BindStruct(path, present, null, fields...)` | One HFF object with caller-supplied parent state and per-field bindings. |
 | Related rows | `BindRelation(path, relation)` | An HFF list whose items come from one caller-selected correlated row source. |
@@ -97,8 +97,10 @@ predicate example. HFF year 0000 maps to PostgreSQL 1 BC. Timestamp
 comparisons, `before()`, `after()`,
 `add(duration)`, `in()`, `exists()`, `type()`, UTC component methods, and UTC
 `string()`/`json()` are supported. `string:timestamp` accepts only a literal
-RFC 3339 string. Zone arguments, data-dependent Timestamp parsing, and
-JSON/JSONB Timestamp storage are not supported. The
+RFC 3339 string. Zone arguments and data-dependent Timestamp parsing are not
+supported by the native binding. JSON/JSONB Timestamp storage uses the
+schema-known canonical string representation described in the
+[JSON binding guide](json.md#timestamp-values-in-json-documents). The
 [runnable timestamp example](https://github.com/ornew/hff/tree/main/examples/sql-timestamps)
 shows schema setup,
 `BindTimestamp`, compilation, and reports whether the predicate was built and
@@ -311,8 +313,17 @@ unsupported. `duration()` parses strings into computed durations. Native
 Duration columns use `bigint` nanoseconds, and schema-known JSON/JSONB Duration
 values use canonical duration strings. The backend does not infer Duration
 inside `Any` or use JSONB metadata to restore Duration. Native composite
-Duration storage remains unavailable. JSON/JSONB Timestamp conversions and
-storage remain unsupported. Float64 serialization when JSONB has lost required
+Duration storage remains unavailable. Schema-known JSON/JSONB Timestamps use
+canonical UTC RFC 3339 strings and support direct comparisons, `before()`,
+`after()`, `add(duration)`, `in()`, `exists()`, `type()`, UTC component
+methods, zero-argument `string()` and `json()`, and ascending `sort()` for
+schema-known Timestamp lists. Sorting orders by exact instant. A string under
+`Any` remains a String. The caller must store canonical values consistent with
+the schema; `Build` does not validate documents. Timestamp zone arguments,
+data-dependent string parsing, ambiguous string-backed unions, and unsupported
+operations are rejected by `Build`. JSONB metadata remains numeric-only. See
+the [JSON binding guide](json.md#timestamp-values-in-json-documents). Float64
+serialization when JSONB has lost required
 numeric representation and other unsupported types remain unsupported.
 Unsupported operations do not fall back to local evaluation.
 PostgreSQL is the only currently supported SQL dialect.

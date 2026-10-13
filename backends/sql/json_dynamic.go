@@ -68,6 +68,20 @@ func (b *builder) dynamicJSONComparison(n hff.Node, left, right expression, op h
 		comparison := compare(value)
 		code := "(CASE WHEN " + nullOrAbsent + " THEN FALSE WHEN " + matches + " THEN " + comparison.code + " ELSE NULL::boolean END)"
 		return expression{code, "TRUE", hff.BoolType}, nil
+	case hff.TimestampType:
+		child := 0
+		if reversed {
+			child = 1
+		}
+		dynamicNode, _ := n.Child(child)
+		if !jsonRootHasKind(b.jsonStoredType(dynamicNode), hff.TimestampType) {
+			return expression{}, b.failure(n, "dynamic JSON comparison cannot recover Timestamp identity")
+		}
+		matches := "(" + class + "='string')"
+		value := expression{"(CASE WHEN " + matches + " THEN " + jsonTimestampNanoseconds(text) + " ELSE NULL::numeric END)", "TRUE", hff.TimestampType}
+		comparison := compare(value)
+		code := "(CASE WHEN " + nullOrAbsent + " THEN FALSE WHEN " + matches + " THEN " + comparison.code + " ELSE NULL::boolean END)"
+		return expression{code, "TRUE", hff.BoolType}, nil
 	case hff.IntType, hff.FloatType:
 		child := 0
 		if reversed {

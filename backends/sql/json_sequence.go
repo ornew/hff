@@ -32,13 +32,15 @@ func (b *builder) jsonSequence(n hff.Node, name string, values []expression, for
 	var valid, order []string
 	for _, t := range members {
 		switch t.Kind() {
-		case hff.IntType, hff.FloatType, hff.StringType, hff.DurationType:
+		case hff.IntType, hff.FloatType, hff.StringType, hff.DurationType, hff.TimestampType:
 			condition := category + "='" + jsonCategory(t.Kind()) + "'"
 			valid = append(valid, condition)
 			text := "(" + raw + " #>> '{}'::text[])"
 			cast := jsonScalarCast(text, t.Kind())
 			if t.Kind() == hff.DurationType {
 				cast = b.parseDurationInline(text)
+			} else if t.Kind() == hff.TimestampType {
+				cast = jsonTimestampNanoseconds(text)
 			}
 			key := "(CASE WHEN " + condition + " THEN " + cast + " END)"
 			if t.Kind() == hff.StringType {
@@ -100,7 +102,7 @@ func (b *builder) concatJSONLists(n hff.Node, values []expression, format JSONFo
 	for _, left := range jsonPossibleListElements(b.jsonStoredType(leftNode)) {
 		for _, right := range jsonPossibleListElements(b.jsonStoredType(rightNode)) {
 			if jsonTaggedStringStateAmbiguous(left, right) {
-				return expression{}, b.failure(n, "JSON list concat cannot distinguish String, Bytes, and Duration elements")
+				return expression{}, b.failure(n, "JSON list concat cannot distinguish String, Bytes, Duration, and Timestamp elements")
 			}
 		}
 	}

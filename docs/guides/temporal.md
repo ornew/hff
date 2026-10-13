@@ -189,6 +189,88 @@ Timestamp items. Indexing or operations on guarded or computed relation
 receivers may still fail to build when their SQL lowering requires complete
 item or list values.
 
+### Store schema-known timestamps in JSON or JSONB
+
+For a JSON-backed value, store a schema-known Timestamp as a canonical UTC
+RFC 3339 string with at most nine fractional digits and no trailing fractional
+zeros. The schema determines the HFF type; the same JSON string under `Any`
+remains a String. The caller guarantees that stored documents match the schema
+and use the canonical representation. `Build` does not inspect or validate
+stored documents.
+
+```sql
+CREATE TABLE json_events (
+    id bigint PRIMARY KEY,
+    payload jsonb NOT NULL
+);
+INSERT INTO json_events VALUES
+    (1, '{"created":"2026-10-01T00:00:00.000000123Z"}'::jsonb),
+    (2, '{"created":"2026-10-01T00:00:00.000000122Z"}'::jsonb);
+```
+
+Declare the nested field as Timestamp, then bind the document column. This
+standalone example builds and reports a predicate; a service can execute it by
+passing `query.Where()` and `query.Args()` to its database driver.
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/ornew/hff"
+	hffsql "github.com/ornew/hff/backends/sql"
+	"github.com/ornew/hff/capabilities"
+	"github.com/ornew/hff/engine"
+	"github.com/ornew/hff/schema"
+)
+
+func main() {
+	ctx := context.Background()
+	payloadType := schema.Struct(schema.Nullable(schema.Timestamp("created")))
+	e, err := engine.New(
+		engine.WithSchema(schema.Struct(schema.Field("payload", payloadType))),
+		engine.WithCapabilities(capabilities.Standard()),
+	)
+	if err != nil {
+		panic(err)
+	}
+	program, err := e.Compile(ctx,
+		`payload.created:after("2026-10-01T00:00:00.000000122Z":timestamp)`,
+	)
+	if err != nil {
+		panic(err)
+	}
+	query, err := hffsql.Build(ctx, program,
+		hffsql.WithDialect(hffsql.PostgreSQL),
+		hffsql.WithBindings(hffsql.BindJSON(
+			hff.Path{"payload"}, hffsql.Column("json_events", "payload"), hffsql.JSONB,
+		)),
+	)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Predicate built:", query.Where() != "")
+	fmt.Println("Parameter count:", len(query.Args()))
+}
+```
+
+Executing the predicate selects row 1 because its Timestamp is one nanosecond
+after the comparison value. The translator parses canonical UTC fields into
+exact PostgreSQL `numeric` total epoch nanoseconds. This representation keeps
+nanosecond precision and supports HFF years 0000 through 9999 without using
+the microsecond-precision `timestamptz` column representation. Schema-known
+JSON/JSONB support includes comparisons, `before()`, `after()`,
+`add(duration)`, `in()`, `exists()`, `type()`, UTC component methods, and
+zero-argument `string()`/`json()`. Schema-known lists of Timestamps can also
+use ascending `sort()`, ordered by exact instant. Other collection
+transformations may still fail to build if they require an unsupported
+materialized value. Time-zone arguments, data-dependent Timestamp parsing, and
+ambiguous string-backed unions are rejected by `Build`.
+The [PostgreSQL JSON guide](../backends/postgresql/json.md#timestamp-values-in-json-documents)
+describes the full binding contract and operation limits.
+
 ## Parse and measure durations
 
 Duration strings combine signed decimal components with `h`, `m`, `s`, `ms`,

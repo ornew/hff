@@ -189,13 +189,15 @@ func (b *builder) comparisonDocument(n hff.Node, raw string, format JSONFormat, 
 func (b *builder) dynamicJSONPair(n hff.Node, left, right expression, op hff.Operator) (expression, error) {
 	leftNode, _ := n.Child(0)
 	rightNode, _ := n.Child(1)
-	if jsonRecoverableDurationScalarUnion(b.jsonStoredType(leftNode)) && jsonRecoverableDurationScalarUnion(b.jsonStoredType(rightNode)) {
-		return b.dynamicJSONDurationScalarPair(n, left, right, op)
+	leftType, rightType := b.jsonStoredType(leftNode), b.jsonStoredType(rightNode)
+	if jsonRecoverableTaggedScalarUnion(leftType) && jsonRecoverableTaggedScalarUnion(rightType) &&
+		jsonRootHasKind(leftType, hff.TimestampType) == jsonRootHasKind(rightType, hff.TimestampType) {
+		return b.dynamicJSONTaggedScalarPair(n, left, right, op, jsonRootHasKind(leftType, hff.TimestampType))
 	}
 	for i := 0; i < 2; i++ {
 		child, _ := n.Child(i)
 		if jsonHasTaggedString(b.jsonStoredType(child)) {
-			return expression{}, b.failure(n, "dynamic JSON comparison cannot preserve Bytes or Duration type identity")
+			return expression{}, b.failure(n, "dynamic JSON comparison cannot preserve Bytes, Duration, or Timestamp type identity")
 		}
 	}
 	values := []expression{left, right}
@@ -233,10 +235,10 @@ func (b *builder) dynamicJSONPair(n hff.Node, left, right expression, op hff.Ope
 	return expression{"(" + code + " ELSE NULL::boolean END)", "TRUE", hff.BoolType}, nil
 }
 
-// Duration, Int, and Bool use different JSON categories. A declared union
+// Duration or Timestamp, Int, and Bool use different JSON categories. A declared union
 // containing only these families can compare two dynamic values without
 // external type metadata.
-func (b *builder) dynamicJSONDurationScalarPair(n hff.Node, left, right expression, op hff.Operator) (expression, error) {
+func (b *builder) dynamicJSONTaggedScalarPair(n hff.Node, left, right expression, op hff.Operator, timestamp bool) (expression, error) {
 	lf, leftOK := b.jsonValues[left.code]
 	rf, rightOK := b.jsonValues[right.code]
 	if !leftOK || !rightOK {
@@ -246,14 +248,20 @@ func (b *builder) dynamicJSONDurationScalarPair(n hff.Node, left, right expressi
 	rc := string(rf) + "_typeof(" + right.code + ")"
 	lt := "(" + left.code + " #>> '{}'::text[])"
 	rt := "(" + right.code + " #>> '{}'::text[])"
-	duration := b.scalarComparison(
-		expression{b.parseDurationInline(lt), "TRUE", hff.DurationType},
-		expression{b.parseDurationInline(rt), "TRUE", hff.DurationType}, op)
+	stringKind := hff.DurationType
+	parse := b.parseDurationInline
+	if timestamp {
+		stringKind = hff.TimestampType
+		parse = jsonTimestampNanoseconds
+	}
+	stringValue := b.scalarComparison(
+		expression{parse(lt), "TRUE", stringKind},
+		expression{parse(rt), "TRUE", stringKind}, op)
 	integer := b.scalarComparison(
 		expression{jsonScalarCast(lt, hff.IntType), "TRUE", hff.IntType},
 		expression{jsonScalarCast(rt, hff.IntType), "TRUE", hff.IntType}, op)
 	code := "(CASE WHEN NOT (" + both(left.present, right.present) + ") OR " + left.code + " IS NULL OR " + right.code + " IS NULL" +
-		" THEN FALSE WHEN " + both(lc+"='string'", rc+"='string'") + " THEN " + duration.code +
+		" THEN FALSE WHEN " + both(lc+"='string'", rc+"='string'") + " THEN " + stringValue.code +
 		" WHEN " + both(lc+"='number'", rc+"='number'") + " THEN " + integer.code
 	if op == hff.Equal || op == hff.NotEqual {
 		boolean := b.scalarComparison(

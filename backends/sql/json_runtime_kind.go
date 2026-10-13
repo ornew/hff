@@ -5,7 +5,7 @@ import (
 )
 
 // JSON's string class does not identify an HFF String by itself. A declared
-// union may instead use that class for Bytes or Duration. Resolve the class
+// union may instead use that class for Bytes, Duration, or Timestamp. Resolve the class
 // through the stored schema before exposing type() to a query.
 func (b *builder) jsonRuntimeTypeName(n hff.Node, code string, format JSONFormat, stored hff.Type) (string, error) {
 	if err := b.checkJSONStringSchemas(n, stored); err != nil {
@@ -22,6 +22,8 @@ func (b *builder) jsonRuntimeTypeName(n hff.Node, code string, format JSONFormat
 			stringName = "bytes"
 		case hff.DurationType:
 			stringName = "duration"
+		case hff.TimestampType:
+			stringName = "timestamp"
 		}
 	}
 	class := string(format) + "_typeof(" + code + ")"
@@ -37,7 +39,7 @@ func jsonUnionStringMatch(code string, format JSONFormat, source, target hff.Typ
 		return "", false
 	}
 	switch target.Kind() {
-	case hff.StringType, hff.BytesType, hff.DurationType:
+	case hff.StringType, hff.BytesType, hff.DurationType, hff.TimestampType:
 	default:
 		return "", false
 	}

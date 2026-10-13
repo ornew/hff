@@ -1,17 +1,17 @@
 # 020. PostgreSQL JSON Timestamp Values
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Author**: @ornew
 - **Date**: 2026-10-13
 
 ## Summary
 
-Schema-known HFF Timestamps stored in PostgreSQL JSON or JSONB should use the
-canonical UTC RFC 3339 string representation, with up to nine fractional-second
-digits. The translator should interpret a JSON string as a Timestamp only when
-the bound schema declares that type. It must preserve nanoseconds and HFF's
-year range, including year 0000, and reject plans whose active type or requested
-operation cannot be recovered faithfully.
+Schema-known HFF Timestamps stored in PostgreSQL JSON or JSONB use the canonical
+UTC RFC 3339 string representation, with up to nine fractional-second digits.
+The translator interprets a JSON string as a Timestamp only when the bound
+schema declares that type. It preserves nanoseconds and HFF's year range,
+including year 0000, and rejects plans whose active type or requested operation
+cannot be recovered faithfully.
 
 ## Motivation
 
@@ -72,37 +72,31 @@ not assign a special interpretation to such rows.
 
 ### Exact PostgreSQL translation
 
-The translator must not reduce a Timestamp to one integer containing total
-epoch nanoseconds: the full year range does not fit in `int64`. It should keep
-the instant as a pair of whole epoch seconds and a nanosecond fraction, with a
-normalized fraction in the range 0–999,999,999. Convert the canonical UTC date
-and time fields to whole seconds, then compare and add durations using exact
-integer arithmetic on the pair. Carry or borrow across a second boundary
-without rounding the fractional part.
+The translator represents an instant as exact PostgreSQL `numeric` containing
+total Unix epoch nanoseconds. This value is not restricted to `int64`; the
+complete HFF year range exceeds that integer range. Parse the canonical UTC
+fields and construct the total with exact arithmetic, without passing through
+`timestamptz`'s microsecond precision or a rounded quotient. Comparisons,
+membership, and duration addition use the exact value. PostgreSQL calendar
+operations that encounter HFF year 0000 map it to 1 BC and back without
+changing the HFF year.
 
-For pre-epoch instants, normalize a negative remainder by decrementing the
-whole-second quotient and adding one billion to the remainder. Map HFF year
-0000 to PostgreSQL 1 BC when using PostgreSQL calendar operations. This keeps
-the representation ordered and preserves the complete HFF year range without
-passing nanoseconds through `timestamptz`'s microsecond precision or through a
-rounded numeric division.
+### PostgreSQL operation subset
 
-### Initial PostgreSQL operation subset
+For schema-known JSON/JSONB Timestamp values, the supported subset is direct
+comparison, `before()`, `after()`, `add(duration)`, `in()`, `exists()`,
+`type()`, UTC component extraction, and canonical UTC serialization through
+zero-argument `any:string()` and `any:json()`. The separate
+`timestamp:string(tz)` overload takes a time-zone argument and is outside this
+subset. `sort()` is also supported for schema-known lists of Timestamps and
+orders them by exact instant. Other collection transformations are supported
+only where the binding and operation can be lowered without materializing an
+unsupported representation.
 
-For schema-known JSON/JSONB Timestamp values, the initial supported subset
-should include direct comparisons, `before()`, `after()`, `add(duration)`,
-`in()`, `exists()`, `type()`, UTC component extraction, and canonical UTC
-serialization through zero-argument `any:string()` and `any:json()`. The
-separate `timestamp:string(tz)` overload requires an explicit time-zone
-argument. Typed nested field and collection access is supported only where the
-corresponding JSON binding and operation can be lowered without materializing
-an unsupported representation. `string:timestamp` may convert a literal RFC
-3339 string; data-dependent string parsing is not included in this subset.
-
-Zone arguments, unsupported methods, ambiguous unions, and operations whose
-SQL lowering cannot preserve the active Timestamp representation are Build
-errors. The translator must not silently fall back to local evaluation or
-pretend that a JSON value has been validated at Build time.
+Zone arguments, data-dependent string parsing, ambiguous unions, and
+operations whose SQL lowering cannot preserve the active Timestamp
+representation are Build errors. Build performs no row validation and does
+not silently fall back to local evaluation.
 
 ### Null and presence
 
@@ -113,7 +107,7 @@ null, while a non-nullable field remains subject to normal input validation.
 
 ## Compatibility and backend support
 
-This proposal changes no HFF syntax or local evaluation semantics. JSON and
+This design changes no HFF syntax or local evaluation semantics. JSON and
 JSONB remain ordinary application-readable documents. Existing numeric JSONB
 metadata remains unchanged and cannot identify string-backed types. Native
 PostgreSQL `BindTimestamp` storage remains a separate representation with its
@@ -138,30 +132,25 @@ exact ordering.
 
 Type tags could disambiguate Timestamp from other string-backed types, but
 would expand the caller-owned metadata format and require a versioning and
-migration contract. This proposal keeps metadata version 1 numeric-only and
+migration contract. This design keeps metadata version 1 numeric-only and
 rejects genuinely ambiguous unions.
 
 ## Testing
 
-An implementation should compare PostgreSQL results with local evaluation for
-schema-known Timestamp values in JSON and JSONB. Include nullable and nested
-fields, typed collection elements, direct comparisons, arithmetic, component
-extraction, and serialization. Boundary cases should include nanoseconds just
-before and after a second boundary, pre-epoch instants, year 0000, year 9999,
-and timezone offsets normalized to the same instant.
-
-Tests should confirm that a JSON string under `Any` remains an HFF String; a
-Timestamp type guard on that value should fail with no-value rather than infer
-a Timestamp. Build tests should reject ambiguous `String|Timestamp` and
-`Bytes|Timestamp` operations, and operations outside the supported subset.
-Storage fixtures should use canonical values that satisfy the declared schema.
-Verify that null, missing members, and no-value remain distinct. These are
-proposed validation cases, not evidence that the backend implementation exists.
+Required conformance tests compare PostgreSQL results with local evaluation for
+schema-known Timestamp values in JSON and JSONB. They cover nullable and nested
+fields, typed collection elements where supported, the operation subset above,
+and canonical serialization. Boundary cases include nanoseconds on either
+side of a second boundary, pre-epoch instants, years 0000 and 9999, and
+different zone offsets normalized to the same instant. Tests confirm that a
+JSON string under `Any` remains an HFF String, that Build rejects ambiguous
+`String|Timestamp` and `Bytes|Timestamp` operations, and that null, missing
+members, and no-value remain distinct. Storage fixtures use canonical values
+consistent with their declared schema; Build does not validate stored rows.
 
 ## Limitations and open questions
 
-The exact SQL expression shape and performance remain to be implemented and
-measured. The supported operation list is an initial subset, not a promise that
+The supported operation list is an initial subset, not a promise that
 all JSON/JSONB collection or callback transformations can be lowered. Any
 extension of the metadata format or support for ambiguous string-backed unions
 requires a separate design.

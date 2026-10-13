@@ -22,7 +22,7 @@ func (b *builder) jsonAnyScalarEqual(n hff.Node, left string, lf JSONFormat, lt 
 		return "", false, nil
 	}
 	if jsonHasTaggedString(rt) {
-		return "", true, b.failure(n, "Any JSON equality cannot recover Bytes or Duration types")
+		return "", true, b.failure(n, "Any JSON equality cannot recover Bytes, Duration, or Timestamp types")
 	}
 	kind, known := jsonKind(rt)
 	if !known || structuredKind(kind) {

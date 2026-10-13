@@ -173,7 +173,7 @@ func (b *builder) checkRelation(binding Binding, typ hff.Type, kinds map[string]
 		_, err := b.timestampBindingCode(c.item, formats, kinds)
 		return err
 	}
-	if timestampSchema(c.typ) {
+	if timestampSchema(c.typ) && c.item.format == "" {
 		return configuration("Timestamp relation items require BindTimestamp")
 	}
 	if _, err := b.checkJSONMetadata(c.item); err != nil {

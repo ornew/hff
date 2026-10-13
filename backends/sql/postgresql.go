@@ -716,6 +716,17 @@ func (b *builder) call(n hff.Node) (expression, error) {
 	if receiver.kind == hff.TimestampType {
 		return b.timestampCall(n, name, values)
 	}
+	if receiver.kind == hff.AnyType && (name == "year" || name == "month" || name == "dayofmonth" || name == "dayofyear" || name == "hours" || name == "minutes" || name == "seconds" || name == "milliseconds" || name == "before" || name == "after" || name == "add") {
+		receiverNode, _ := n.Child(0)
+		if jsonRootHasKind(b.jsonStoredType(receiverNode), hff.TimestampType) {
+			if format, ok := b.jsonValues[receiver.code]; ok {
+				class := string(format) + "_typeof(" + receiver.code + ")"
+				text := "(CASE WHEN " + class + "='string' THEN " + receiver.code + " #>> '{}'::text[] ELSE NULL::text END)"
+				values[0] = expression{jsonTimestampNanoseconds(text), receiver.present, hff.TimestampType}
+				return b.timestampCall(n, name, values)
+			}
+		}
+	}
 	if name == "duration" || name == "hours" || name == "minutes" || name == "seconds" || name == "milliseconds" || name == "microseconds" || name == "nanoseconds" {
 		return b.durationCall(n, name, receiver)
 	}

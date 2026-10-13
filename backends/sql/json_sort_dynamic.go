@@ -51,7 +51,7 @@ func (b *builder) jsonSort(n hff.Node, value expression) (expression, error) {
 		return expression{}, b.failure(n, "sort requires an applicable list schema")
 	}
 	if jsonHasTaggedString(stored.Element()) {
-		return expression{}, b.failure(n, "dynamic JSON sort cannot recover Bytes or Duration type identity")
+		return expression{}, b.failure(n, "dynamic JSON sort cannot recover Bytes, Duration, or Timestamp type identity")
 	}
 	var raw string
 	if format == JSON && stored.Element().Kind() == hff.AnyType {

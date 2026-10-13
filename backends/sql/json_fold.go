@@ -110,7 +110,7 @@ func (b *builder) jsonFoldType(n hff.Node, typ hff.Type) (hff.Type, error) {
 		}
 		bodyType := b.jsonCallbackStoredType(callback, types)
 		if jsonTaggedStringStateAmbiguous(seedType, bodyType) {
-			return hff.Type{}, b.failure(n, "JSON fold state cannot distinguish String, Bytes, and Duration")
+			return hff.Type{}, b.failure(n, "JSON fold state cannot distinguish String, Bytes, Duration, and Timestamp")
 		}
 		stored := hff.NewUnionType(seedType, bodyType)
 		carrier := jsonNativeCarrierType(typ, stored)

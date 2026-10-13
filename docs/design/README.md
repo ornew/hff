@@ -25,6 +25,6 @@ These documents explain the rationale, contracts, and tradeoffs behind HFF's lan
 | [017\. PostgreSQL JSON Parsing](017-postgresql-json-parsing.md) | Accepted | 2026\-10\-13 | \@ornew |
 | [018\. PostgreSQL Timestamp Storage](018-postgresql-timestamp-storage.md) | Accepted | 2026\-10\-13 | \@ornew |
 | [019\. PostgreSQL JSON Union Dispatch](019-postgresql-json-union-dispatch.md) | Accepted | 2026\-10\-13 | \@ornew |
-| [020\. PostgreSQL JSON Timestamp Values](020-postgresql-json-timestamps.md) | Proposed | 2026\-10\-13 | \@ornew |
+| [020\. PostgreSQL JSON Timestamp Values](020-postgresql-json-timestamps.md) | Accepted | 2026\-10\-13 | \@ornew |
 
 Use the [record template](000-template.md) when adding a design record.

@@ -88,14 +88,15 @@ the general construction contract.
 
 For statically known values, the schema determines the HFF representation.
 Supported families are null, bool, int64, finite float64, string, Bytes,
-Duration, homogeneous lists, string-keyed maps, and structs; nullable variants
-are supported. JSON represents schema-known Bytes as standard padded base64
-strings and schema-known Durations as canonical duration strings. JSONB
-preserves those strings, so Duration values need no type metadata. JSONB
-metadata can restore numeric subtype and value when normalization would lose
-the distinction. The application must store data and metadata that satisfy the
-declared schema and remain consistent with each other. `Build` does not inspect
-rows, read the database, or validate stored documents or metadata.
+Duration, Timestamp, homogeneous lists, string-keyed maps, and structs;
+nullable variants are supported. JSON represents schema-known Bytes as
+standard padded base64 strings, Durations as canonical duration strings, and
+Timestamps as canonical UTC RFC 3339 strings. JSONB preserves those strings,
+so they need no numeric type metadata. JSONB metadata can restore numeric
+subtype and value when normalization would lose the distinction. The
+application must store data and metadata that satisfy the declared schema and
+remain consistent with each other. `Build` does not inspect rows, read the
+database, or validate stored documents or metadata.
 
 ### Duration values in JSON documents
 
@@ -243,6 +244,79 @@ canonical duration text, and `json()` returns that text as a JSON string. The
 [temporal guide](../../guides/temporal.md#parse-and-measure-durations) describes
 the canonical format and parser rules. Stored values must satisfy the declared
 schema; `Build` does not inspect JSON documents.
+
+### Timestamp values in JSON documents
+
+When the schema declares a Timestamp, JSON and JSONB store it as its canonical
+UTC RFC 3339 string. The canonical form uses a four-digit year, `Z`, at most
+nine fractional-second digits, and omits trailing fractional zeros. It
+represents an instant, not the source offset. A JSON string under `Any` remains
+a String; the schema supplies Timestamp identity. The caller guarantees that
+stored values are canonical and match the declared schema. `Build` does not
+read or validate stored documents.
+
+For example, this JSONB document stores a nanosecond-precision event time:
+
+```sql
+CREATE TABLE json_events (
+    id bigint PRIMARY KEY,
+    payload jsonb NOT NULL
+);
+INSERT INTO json_events VALUES
+    (1, '{"created":"2026-10-01T00:00:00.000000123Z"}'::jsonb),
+    (2, '{"created":"2026-10-01T00:00:00.000000122Z"}'::jsonb);
+```
+
+Declare the nested field as Timestamp and bind the complete document:
+
+```go
+payloadType := schema.Struct(schema.Nullable(schema.Timestamp("created")))
+e, err := engine.New(
+    engine.WithSchema(schema.Struct(schema.Field("payload", payloadType))),
+    engine.WithCapabilities(capabilities.Standard()),
+)
+if err != nil {
+    return err
+}
+program, err := e.Compile(ctx,
+    `payload.created:after("2026-10-01T00:00:00.000000122Z":timestamp)`,
+)
+if err != nil {
+    return err
+}
+query, err := hffsql.Build(ctx, program,
+    hffsql.WithDialect(hffsql.PostgreSQL),
+    hffsql.WithBindings(hffsql.BindJSON(
+        hff.Path{"payload"}, hffsql.Column("json_events", "payload"), hffsql.JSONB,
+    )),
+)
+if err != nil {
+    return err
+}
+rows, err := db.QueryContext(ctx,
+    `SELECT json_events.id FROM json_events WHERE `+query.Where(), query.Args()...)
+```
+
+Executing that predicate selects row 1: its Timestamp is one nanosecond after
+the comparison value. Translation parses the canonical string into exact
+PostgreSQL `numeric` total epoch nanoseconds. The value is not limited to
+`int64`, which preserves HFF years 0000 through 9999 without routing the
+fraction through PostgreSQL's microsecond-precision `timestamptz` storage.
+
+For schema-known JSON/JSONB Timestamps, the PostgreSQL subset supports direct
+comparisons, `before()`, `after()`, `add(duration)`, `in()`, `exists()`,
+`type()`, UTC component methods, and zero-argument `string()` and `json()`.
+Schema-known lists of Timestamps also support ascending `sort()` by exact
+instant. Other collection transformations may be rejected if their SQL
+lowering would need to materialize a Timestamp value the backend cannot
+represent. The output of `string()` and `json()` is canonical UTC text.
+Time-zone arguments—including
+`timestamp:string(tz)`—and data-dependent string parsing are unsupported.
+Ambiguous string-backed unions, such as `String|Timestamp` or
+`Duration|Timestamp`, are rejected when an operation needs the active type.
+JSONB metadata version 1 remains numeric-only and does not add Timestamp tags.
+For native `timestamptz` columns, use the separate `BindTimestamp` contract in
+the [temporal guide](../../guides/temporal.md#store-postgresql-timestamps).
 
 ### Bytes in JSON documents
 
@@ -617,7 +691,8 @@ schema and available representation information remain Build errors.
 
 `sort()` returns a stable ascending copy. Schema-known integer and float lists
 sort numerically; strings sort by Unicode code point using PostgreSQL's `C`
-collation. Equal values retain their input order. A runtime list containing
+collation; schema-known Timestamp lists sort by exact instant. Equal values
+retain their input order. A runtime list containing
 null or incompatible/non-orderable values produces null. A statically known
 type with no orderable member is rejected during compilation. A
 dynamic `Any` or list union can also be sorted when its stored list and
@@ -1134,9 +1209,9 @@ a source-located `hff.BackendError` from `Build`:
   Schema-known Bytes values in JSON arrays, objects, and callback-produced
   collections are supported; `frombase64()` can also produce a scalar Bytes
   value.
-- Timestamp conversions from JSON/JSONB values and JSON/JSONB Timestamp storage
-  remain unsupported; native Timestamp columns use the separate `BindTimestamp`
-  binding.
+- Timestamp zone arguments, data-dependent string parsing, and ambiguous
+  string-backed Timestamp unions remain unsupported for JSON/JSONB; native
+  `timestamptz` columns use the separate `BindTimestamp` binding.
 - Native Duration columns use `bigint` nanoseconds. Schema-known JSON/JSONB
   Duration values use canonical duration strings; `Any` strings remain Strings.
   The `Duration|Int|Null`, `Duration|Bool|Null`, and `Duration|Int|Bool|Null`

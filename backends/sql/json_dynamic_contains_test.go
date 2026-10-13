@@ -25,7 +25,7 @@ func TestDynamicContainsJSONBRequirements(t *testing.T) {
 		{"known string list", `data:contains(needle)`, schema.ListOf(schema.StringType), schema.AnyType, false, true},
 		{"string-list union", `data:contains(needle)`, schema.Union(schema.ListOf(schema.StringType), schema.StringType), schema.AnyType, false, true},
 		{"irrelevant scalar union", `data:contains(1)`, schema.Union(schema.ListOf(schema.IntType), schema.IntType, schema.FloatType), schema.AnyType, false, true},
-		{"non-JSON type", `data:contains(null)`, schema.ListOf(schema.TimestampType), schema.AnyType, false, false},
+		{"timestamp list with null needle", `data:contains(null)`, schema.ListOf(schema.TimestampType), schema.AnyType, false, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("data", tc.data), schema.Field("needle", tc.needle))), engine.WithCapabilities(capabilities.Standard()))

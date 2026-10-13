@@ -6,8 +6,8 @@ import "github.com/ornew/hff"
 // Keeping the projection outside this helper permits reuse of validated parses.
 func (b *builder) jsonDecodeProjected(n hff.Node, code string, format JSONFormat, typ hff.Type, present string) (expression, error) {
 	kind, ok := jsonKind(typ)
-	if !ok && jsonRootHasTaggedString(typ) && !jsonRecoverableDurationScalarUnion(typ) {
-		return expression{}, b.failure(n, "JSON decoding cannot preserve dynamic Bytes or Duration type identity")
+	if !ok && jsonRootHasTaggedString(typ) && !jsonRecoverableTaggedScalarUnion(typ) {
+		return expression{}, b.failure(n, "JSON decoding cannot preserve dynamic Bytes, Duration, or Timestamp type identity")
 	}
 	if !ok {
 		if typ.Kind() != hff.AnyType && typ.Kind() != hff.UnionType {
@@ -30,6 +30,9 @@ func (b *builder) jsonDecodeProjected(n hff.Node, code string, format JSONFormat
 	case hff.DurationType:
 		text := "(" + normalized + " #>> '{}'::text[])"
 		return expression{b.parseDurationInline(text), present, kind}, nil
+	case hff.TimestampType:
+		text := "(" + normalized + " #>> '{}'::text[])"
+		return expression{jsonTimestampNanoseconds(text), present, kind}, nil
 	default:
 		text := "(" + normalized + " #>> '{}'::text[])"
 		return expression{jsonScalarCast(text, kind), present, kind}, nil
@@ -37,7 +40,7 @@ func (b *builder) jsonDecodeProjected(n hff.Node, code string, format JSONFormat
 }
 
 func jsonRootHasTaggedString(typ hff.Type) bool {
-	return jsonRootHasKind(typ, hff.BytesType) || jsonRootHasKind(typ, hff.DurationType)
+	return jsonRootHasKind(typ, hff.BytesType) || jsonRootHasKind(typ, hff.DurationType) || jsonRootHasKind(typ, hff.TimestampType)
 }
 
 func jsonRootHasKind(typ hff.Type, kind hff.TypeKind) bool {
@@ -54,18 +57,21 @@ func jsonRootHasKind(typ hff.Type, kind hff.TypeKind) bool {
 	return false
 }
 
-// Duration, Int, and Bool occupy disjoint JSON categories, so a finite union
-// of these types can retain its runtime family without a custom type tag.
+// One string-backed scalar, Int, and Bool occupy disjoint JSON categories, so
+// a finite union of these types retains its runtime family without a type tag.
 // Other tagged unions stay rejected until each observer can dispatch them.
-func jsonRecoverableDurationScalarUnion(typ hff.Type) bool {
+func jsonRecoverableTaggedScalarUnion(typ hff.Type) bool {
 	if typ.Kind() != hff.UnionType {
 		return false
 	}
-	duration, other := false, false
+	tagged, other := false, false
 	for _, member := range typ.Members() {
 		switch member.Kind() {
-		case hff.DurationType:
-			duration = true
+		case hff.DurationType, hff.TimestampType:
+			if tagged {
+				return false
+			}
+			tagged = true
 		case hff.IntType, hff.BoolType:
 			other = true
 		case hff.NullType:
@@ -73,5 +79,5 @@ func jsonRecoverableDurationScalarUnion(typ hff.Type) bool {
 			return false
 		}
 	}
-	return duration && other
+	return tagged && other
 }

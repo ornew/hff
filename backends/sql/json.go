@@ -24,7 +24,8 @@ const (
 // configure metadata for distinctions that JSONB does not preserve.
 //
 // Schema-known Bytes use canonical padded standard-base64 JSON strings, and
-// schema-known Duration values use canonical duration strings. The same
+// schema-known Duration values use canonical duration strings, and schema-known
+// Timestamp values use canonical UTC RFC 3339 strings. The same
 // spelling under Any remains String; ambiguous string-family unions cannot
 // recover their type identity and are rejected when consumed.
 func BindJSON(path hff.Path, column ColumnRef, format JSONFormat, options ...JSONBindingOption) Binding {
@@ -63,7 +64,7 @@ func jsonKind(t hff.Type) (hff.TypeKind, bool) {
 		return kind, true
 	}
 	switch t.Kind() {
-	case hff.NullType, hff.BoolType, hff.IntType, hff.FloatType, hff.StringType, hff.BytesType, hff.DurationType, hff.ListType, hff.MapType, hff.StructType:
+	case hff.NullType, hff.BoolType, hff.IntType, hff.FloatType, hff.StringType, hff.BytesType, hff.DurationType, hff.TimestampType, hff.ListType, hff.MapType, hff.StructType:
 		return t.Kind(), true
 	}
 	return hff.InvalidType, false
