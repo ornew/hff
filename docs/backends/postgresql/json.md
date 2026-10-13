@@ -1235,13 +1235,18 @@ mismatch and a recursive structural mismatch.
 
 When both JSON-backed operands have definite roots in the same structured
 category, PostgreSQL can use typed recursive equality even when nested values
-are `Any`. An `Any` operand compared with a known scalar can use that scalar's
-category and comparison. Two unconstrained roots, an unconstrained root
-compared with a container, and ambiguous structural unions retain the generic
-recursive plan. Numeric representability checks and JSONB metadata
-requirements are unchanged. See the
-[measured comparison](../../optimizations/007-postgresql-guided-json-equality.md)
-for the tested shapes and controls.
+are `Any`. For root `=` and `!=` between finite compiled unions, the translator
+can also specialize overlapping alternatives at each reachable element or
+field position. Lists compare by ordinal; objects compare actual keys with
+per-key Map fallback. An unconstrained `Any` leaf retains generic recursive
+equality, and an unconstrained `Any` root compared with a container retains the
+generic root plan. Stored-value representability and JSONB metadata
+requirements remain in force; consistency between stored values and sidecar
+metadata is the caller's responsibility. This bounded specialization does not
+yet cover the shared equality paths used by `in()`, `contains()`, or
+`unique()`. See the [measured comparison](../../optimizations/007-postgresql-guided-json-equality.md)
+and [bounded container-union equality](../../optimizations/024-postgresql-container-union-equality.md)
+for tested shapes and controls.
 
 Dynamic-to-dynamic ordering is available for compatible strings and numbers;
 booleans support equality and inequality, while lists and objects support

@@ -49,7 +49,7 @@ func TestPairDispatchGeneratesOnlyIntersectingRootCategories(t *testing.T) {
 		{"string_float", schema.Union(schema.StringType, schema.FloatType), schema.Union(schema.StringType, schema.FloatType), false, false},
 		{"asymmetric_numeric", schema.Union(schema.StringType, schema.IntType), schema.Union(schema.StringType, schema.FloatType), true, false},
 		{"disjoint_containers", schema.Union(schema.StringType, schema.ListOf(schema.IntType)), schema.Union(schema.StringType, schema.MapOf(schema.IntType)), false, false},
-		{"object_cross_schema", schema.Union(schema.StringType, schema.MapOf(schema.IntType)), schema.Union(schema.StringType, schema.Struct(schema.Int("n"))), true, true},
+		{"object_cross_schema", schema.Union(schema.StringType, schema.MapOf(schema.IntType)), schema.Union(schema.StringType, schema.Struct(schema.Int("n"))), false, true},
 		{"array_union", schema.Union(schema.StringType, schema.ListOf(schema.IntType)), schema.Union(schema.StringType, schema.ListOf(schema.FloatType)), true, true},
 		{"any", schema.AnyType, schema.AnyType, true, true},
 	} {

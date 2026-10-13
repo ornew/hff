@@ -183,6 +183,10 @@ func (b *builder) dynamicJSONPair(n hff.Node, left, right expression, op hff.Ope
 	if !sharedJSONContainer(leftNode.Type(), rightNode.Type()) || (op != hff.Equal && op != hff.NotEqual) {
 		return b.scalarJSONPair(n, left, leftFormat, leftType, right, rightFormat, rightType, op)
 	}
+	if !makeComparisonShape(leftType).any && !makeComparisonShape(rightType).any {
+		code, err := b.schemaJSONEqual(n, left.code, leftFormat, leftType, leftNode.Type(), right.code, rightFormat, rightType, rightNode.Type(), both(left.present, right.present), op)
+		return expression{code, "TRUE", hff.BoolType}, err
+	}
 	for i := range values {
 		format, ok := b.jsonValues[values[i].code]
 		if !ok {
@@ -351,6 +355,10 @@ func (b *builder) dynamicJSONNumbers(left, right string, op hff.Operator, leftIn
 // reuse the same conversions in multiple branches. Never hoist these guarded
 // casts out of the numeric caller's CASE or callback scope.
 func (b *builder) jsonNumericPair(left, right string, op hff.Operator, l, r jsonNumericSide) string {
+	return b.decodedJSONNumericPair(left, right, op, l, r, "", "")
+}
+
+func (b *builder) decodedJSONNumericPair(left, right string, op hff.Operator, l, r jsonNumericSide, leftFloat, rightFloat string) string {
 	outer, paths := b.steps, b.sharedPaths
 	b.steps, b.sharedPaths = nil, nil
 	defer func() { b.steps, b.sharedPaths = outer, paths }()
@@ -372,7 +380,7 @@ func (b *builder) jsonNumericPair(left, right string, op hff.Operator, l, r json
 	if shared {
 		left, right = b.project(left), b.project(right)
 	}
-	families := func(text string, side jsonNumericSide) []family {
+	families := func(text string, side jsonNumericSide, floating string) []family {
 		var values []family
 		for _, candidate := range []struct {
 			kind    hff.TypeKind
@@ -390,6 +398,9 @@ func (b *builder) jsonNumericPair(left, right string, op hff.Operator, l, r json
 				condition = text + " " + operator + " '[.eE]'"
 			}
 			code := "(CASE WHEN " + condition + " THEN " + jsonScalarCast(text, candidate.kind) + " ELSE NULL END)"
+			if candidate.kind == hff.FloatType && floating != "" {
+				code = floating
+			}
 			if shared {
 				code = b.project(code)
 			}
@@ -397,7 +408,7 @@ func (b *builder) jsonNumericPair(left, right string, op hff.Operator, l, r json
 		}
 		return values
 	}
-	leftFamilies, rightFamilies := families(left, l), families(right, r)
+	leftFamilies, rightFamilies := families(left, l, leftFloat), families(right, r, rightFloat)
 	var branches []string
 	for _, leftFamily := range leftFamilies {
 		for _, rightFamily := range rightFamilies {

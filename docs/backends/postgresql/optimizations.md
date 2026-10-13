@@ -88,6 +88,22 @@ applies whenever a Float branch is possible. See the [dynamic pair category
 pruning record](../../optimizations/021-postgresql-json-pair-category-pruning.md)
 for SQL-shape examples and limits; no timing or speed claim is made.
 
+### Specialize reachable JSON container-union equality
+
+For finite compiled root unions in JSON-backed `=` and `!=`, recursive equality
+can use compiled types at each stored position. This includes overlapping
+alternatives such as `List<Int>|List<Float>`; lists compare by ordinal and
+objects compare actual keys, retaining Map/Struct cross-shape behavior and
+per-key Map fallback. Unconstrained `Any` leaves keep generic recursive
+equality. Stored-value representability and JSONB metadata requirements remain
+in force; consistency between stored values and sidecar metadata remains the
+caller's responsibility. Partially overlapping schemas may still require
+recursive metadata restoration. `in()`, `contains()`, and `unique()` retain
+their existing equality paths. The
+[container-union equality record](../../optimizations/024-postgresql-container-union-equality.md)
+gives the shape matrix and limits; these SQL reductions are not execution-time
+claims.
+
 ### Use PostgreSQL's native approximate Float model
 
 Scalar Float comparisons avoid a canonical JSON serialize/decode round-trip.
