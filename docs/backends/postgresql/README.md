@@ -78,10 +78,44 @@ Choose a physical binding from the way the application stores each HFF value:
 | Physical storage | Binding | What it maps |
 | --- | --- | --- |
 | Scalar SQL column | `Bind(path, Column(...))` | One HFF scalar field to one column. SQL `NULL` is an explicit HFF null. Duration columns use signed `bigint` nanoseconds. |
+| Timestamp columns | `BindTimestamp(path, instantColumn, options...)` | One schema-known Timestamp to `timestamptz`, optionally paired with a `smallint` nanosecond remainder. |
 | JSON/JSONB column | `BindJSON(path, column, JSON/JSONB)` | One complete schema-known HFF JSON value, including objects, maps, lists, and Bytes represented as base64 strings. Descendant paths are read inside that document. JSONB may add `WithTypeMetadata(metadataColumn)` for numeric types lost by normalization. |
 | Native composite column | `BindComposite(path, column)` | One HFF struct to a PostgreSQL composite. A SQL-null row is null; its attributes are always present. |
 | Struct spread across columns | `BindStruct(path, present, null, fields...)` | One HFF object with caller-supplied parent state and per-field bindings. |
 | Related rows | `BindRelation(path, relation)` | An HFF list whose items come from one caller-selected correlated row source. |
+
+Timestamp columns use the dedicated `BindTimestamp` binding rather than
+`Bind`. It maps the instant to `timestamptz`; add
+`WithNanosecondRemainder` when stored values may have sub-microsecond
+precision. The stored base is floored to a whole microsecond, including before
+the Unix epoch, and the `smallint` remainder stores 0–999 nanoseconds. With a
+remainder column, the caller guarantees that both columns are NULL together or
+non-NULL together and that the remainder is in range; without it, the caller
+guarantees microsecond-exact values. See the [temporal guide](../../guides/temporal.md#store-postgresql-timestamps)
+for the year mapping, supported Timestamp operations, and an end-to-end
+predicate example. HFF year 0000 maps to PostgreSQL 1 BC. Timestamp
+comparisons, `before()`, `after()`,
+`add(duration)`, `in()`, `exists()`, `type()`, UTC component methods, and UTC
+`string()`/`json()` are supported. `string:timestamp` accepts only a literal
+RFC 3339 string. Zone arguments, data-dependent Timestamp parsing, and
+JSON/JSONB Timestamp storage are not supported. The
+[runnable timestamp example](https://github.com/ornew/hff/tree/main/examples/sql-timestamps)
+shows schema setup,
+`BindTimestamp`, compilation, and reports whether the predicate was built and
+the number of parameters; it does not print the SQL fragment or connect to
+PostgreSQL. `BindTimestamp` can also be nested as a
+`BindStruct` child or used for a scalar or struct `BindRelation` item. A
+flattened struct supports direct Timestamp-field predicates; relation items
+support direct field access in `any()` and `all()` callbacks. Direct relation
+`size()` uses a correlated row count and `has(index)` checks statically known
+numeric or null/no-value indexes, including nullable numeric indexes and
+negative indexes, without materializing Timestamp items or requiring a unique
+order. Genuinely dynamic `Any` or mixed-union indexes use the JSON fallback
+and may be rejected for Timestamp items.
+Indexing or operations on guarded/computed relation receivers may still fail
+at `Build` if they require complete item or list values. Whole structs,
+relation items, lists, or objects containing a Timestamp cannot yet be
+materialized.
 
 These bindings are not interchangeable. A one-to-one value can be a composite
 or a flattened struct; `BindRelation` always represents a list, even if the

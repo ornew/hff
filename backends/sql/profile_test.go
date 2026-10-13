@@ -32,10 +32,8 @@ func TestSQLProfilesDoNotInventDatabaseGuarantees(t *testing.T) {
 			t.Fatalf("missing SQL support entry: %s", id)
 		}
 	}
-	for _, id := range []capabilities.ID{capabilities.Method("timestamp.year")} {
-		if support, _ := base.Feature(id); support.Level != hff.Unsupported {
-			t.Fatalf("unimplemented SQL feature advertised: %s", id)
-		}
+	if support, _ := base.Feature(capabilities.Method("timestamp.year")); support.Level != hff.Conditional {
+		t.Fatalf("UTC timestamp extraction is not advertised as conditional: %v", support)
 	}
 	e, err := engine.New(engine.WithSchema(schema.Struct(schema.String("name"))), engine.WithCapabilities(capabilities.Standard()))
 	if err != nil {

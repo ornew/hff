@@ -7,6 +7,35 @@ import (
 	"github.com/ornew/hff"
 )
 
+// Computed durations use integral nanoseconds, without defining a storage
+// binding. Keep this separate from scalarKind, which accepts native columns.
+func computedScalarKind(typ hff.Type) (hff.TypeKind, bool) {
+	if kind, ok := scalarKind(typ); ok {
+		return kind, true
+	}
+	if typ.Kind() == hff.DurationType {
+		return hff.DurationType, true
+	}
+	if typ.Kind() == hff.TimestampType {
+		return hff.TimestampType, true
+	}
+	if typ.Kind() == hff.UnionType {
+		kind := hff.NullType
+		for _, member := range typ.Members() {
+			if member.Kind() == hff.NullType {
+				continue
+			}
+			k, ok := computedScalarKind(member)
+			if !ok || (kind != hff.NullType && kind != k) {
+				return hff.InvalidType, false
+			}
+			kind = k
+		}
+		return kind, true
+	}
+	return hff.InvalidType, false
+}
+
 func (b *builder) durationCall(n hff.Node, name string, receiver expression) (expression, error) {
 	if n.Type().Kind() == hff.NullType || n.Type().Kind() == hff.NeverType || receiver.kind == hff.NullType {
 		return expression{"NULL", receiver.present, hff.NullType}, nil

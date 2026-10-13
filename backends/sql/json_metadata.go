@@ -171,6 +171,9 @@ func (b *builder) reserveBindingIdentifiers(binding Binding) {
 	if binding.metadata != nil {
 		reserve(*binding.metadata)
 	}
+	if binding.timestampRemainder != nil {
+		reserve(*binding.timestampRemainder)
+	}
 	reservePredicate := func(predicate SQLPredicate) {
 		for _, column := range predicate.references {
 			reserve(column)

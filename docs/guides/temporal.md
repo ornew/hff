@@ -26,6 +26,169 @@ omitting trailing fractional zeros. If a historical zone offset includes
 seconds or is outside the RFC 3339 range, formatting yields null rather than
 changing the represented instant.
 
+### Store PostgreSQL timestamps
+
+Bind a schema-known Timestamp to `timestamptz` with `BindTimestamp`. PostgreSQL
+stores timestamps at microsecond resolution, so use the optional
+`WithNanosecondRemainder` `smallint` column when HFF nanosecond precision is
+needed. The base timestamp is floored to a whole microsecond; the remainder
+stores the following 0–999 nanoseconds. This representation does not round the
+HFF instant during query translation. Flooring also applies before the Unix
+epoch, so the remainder is always nonnegative.
+The split uses exact integer arithmetic, including for instants immediately
+before a second boundary, so conversion does not round the query value.
+
+`BindTimestamp` also works as a child binding inside `BindStruct` and as a
+`BindRelation` item binding. A flattened struct supports direct predicates on
+the Timestamp field. A direct relation binding supports `size()` through a
+correlated row count, even when its item is a Timestamp. Direct `has(index)`
+also supports statically known numeric or null/no-value indexes, including
+nullable numeric types; negative indexes are checked from the end without
+materializing items or requiring a unique order. Relation items also support
+direct Timestamp-field access in `any()` and `all()` callbacks.
+Guarded or computed relation receivers and operations that need full item or
+list values, such as indexing or materialization, may still fail at `Build`.
+These bindings do not make a containing struct, relation item, list, or object
+with a Timestamp materializable.
+
+If the remainder column is omitted, the caller guarantees all stored values
+are microsecond-exact. If it is bound, the caller guarantees both columns are
+simultaneously NULL or non-NULL and the remainder is in the range 0–999. A pair
+of SQL NULL values maps to HFF null, and nullable schema fields accept it. Add
+constraints matching those storage requirements:
+
+```sql
+CREATE TABLE events (
+    id bigint PRIMARY KEY,
+    created_at timestamptz,
+    created_ns_remainder smallint,
+    CHECK ((created_at IS NULL) = (created_ns_remainder IS NULL)),
+    CHECK (created_ns_remainder IS NULL OR created_ns_remainder BETWEEN 0 AND 999)
+);
+INSERT INTO events VALUES
+    (101, '2026-10-01 00:00:00+00', 123),
+    (102, NULL, NULL);
+```
+
+The first row represents `2026-10-01T00:00:00.000000123Z`. HFF year 0000 maps
+to PostgreSQL 1 BC so the complete HFF year range remains representable. A
+`timestamptz` stores an instant, not its original offset; PostgreSQL normalizes
+it to UTC and displays it using the session time zone.
+
+Declare the HFF field and bind both columns together:
+
+```go
+schema.Struct(schema.Nullable(schema.Timestamp("created_at")))
+
+hffsql.BindTimestamp(
+    hff.Path{"created_at"},
+    hffsql.Column("events", "created_at"),
+    hffsql.WithNanosecondRemainder(hffsql.Column("events", "created_ns_remainder")),
+)
+```
+
+For example, `created_at:after("2026-10-01T00:00:00Z":timestamp)` matches
+row 101 by its retained nanoseconds. Compile and build the predicate, then pass
+`Query.Where()` and `Query.Args()` to the service's database call.
+
+For native timestamp bindings, PostgreSQL currently supports direct timestamp
+comparisons, `before()` and `after()`, `add(duration)`, `in()`, `exists()`, and
+`type()`. The component methods `year()`, `month()`, `dayofmonth()`,
+`dayofyear()`, `hours()`, `minutes()`, `seconds()`, and `milliseconds()` use
+UTC and take no zone argument. `string()` and `json()` also format in UTC.
+The `string:timestamp` conversion is accepted only for a literal RFC 3339
+string; parsing data-dependent strings and zone arguments are unsupported by
+this backend. `Build` rejects operations outside this subset. Timestamp
+storage in JSON or JSONB remains unsupported.
+
+The [timestamp binding example](https://github.com/ornew/hff/tree/main/examples/sql-timestamps)
+builds this kind of predicate and prints whether the predicate was built and
+how many parameters it produced; it does not print the SQL fragment or connect
+to a database. From the repository root, run:
+
+```sh
+go run ./examples/sql-timestamps
+```
+
+For example, a flattened profile can expose a nested Timestamp to a predicate
+without constructing the complete profile value:
+
+```sql
+CREATE TABLE records (
+    id bigint PRIMARY KEY,
+    profile_present boolean NOT NULL,
+    profile_null boolean NOT NULL,
+    created_at timestamptz,
+    created_ns_remainder smallint,
+    CHECK (NOT profile_null OR profile_present),
+    CHECK ((created_at IS NULL) = (created_ns_remainder IS NULL)),
+    CHECK (created_ns_remainder IS NULL OR created_ns_remainder BETWEEN 0 AND 999)
+);
+```
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    "github.com/ornew/hff"
+    hffsql "github.com/ornew/hff/backends/sql"
+    "github.com/ornew/hff/capabilities"
+    "github.com/ornew/hff/engine"
+    "github.com/ornew/hff/schema"
+)
+
+func main() {
+    ctx := context.Background()
+    e, err := engine.New(
+        engine.WithSchema(schema.Struct(schema.Nullable(schema.Field(
+            "profile", schema.Struct(schema.Timestamp("created")),
+        )))),
+        engine.WithCapabilities(capabilities.Standard()),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    profile := hffsql.BindStruct(hff.Path{"profile"},
+        hffsql.AsPredicate(hffsql.ColumnValue(hffsql.Column("records", "profile_present"), schema.BoolType)),
+        hffsql.AsPredicate(hffsql.ColumnValue(hffsql.Column("records", "profile_null"), schema.BoolType)),
+        hffsql.BindTimestamp(hff.Path{"created"}, hffsql.Column("records", "created_at"),
+            hffsql.WithNanosecondRemainder(hffsql.Column("records", "created_ns_remainder"))),
+    )
+    program, err := e.Compile(ctx,
+        `profile.created:after("2026-10-01T00:00:00Z":timestamp)`,
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    query, err := hffsql.Build(ctx, program,
+        hffsql.WithDialect(hffsql.PostgreSQL),
+        hffsql.WithBindings(profile),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println("WHERE", query.Where(), "Args", query.Args())
+}
+```
+
+For a relation item, use the direct Timestamp field in an `any()` or `all()`
+callback. For example,
+`events:any(event=>event.created:after("2026-10-01T00:00:00Z":timestamp))`
+filters related rows. A direct `events:size` query counts correlated rows
+without constructing Timestamp items. For example, `events:has(-1)` checks
+whether the relation contains an item at its final negative index. Direct
+`has(index)` supports statically known numeric or null/no-value indexes,
+including nullable numeric types. Genuinely dynamic `Any` or mixed-union
+indexes use the JSON fallback and may be rejected when the relation has
+Timestamp items. Indexing or operations on guarded or computed relation
+receivers may still fail to build when their SQL lowering requires complete
+item or list values.
+
 ## Parse and measure durations
 
 Duration strings combine signed decimal components with `h`, `m`, `s`, `ms`,

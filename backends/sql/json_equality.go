@@ -32,8 +32,8 @@ func (b *builder) jsonLiteral(n hff.Node) (expression, error) {
 			}
 			args = append(args, key.code)
 		}
-		if v.kind == hff.DurationType {
-			return expression{}, b.failure(child, "PostgreSQL JSON collections do not yet preserve duration values")
+		if v.kind == hff.DurationType || v.kind == hff.TimestampType {
+			return expression{}, b.failure(child, "PostgreSQL JSON collections do not yet preserve duration or timestamp values")
 		}
 		values = append(values, v)
 		code := v.code

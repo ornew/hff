@@ -23,5 +23,6 @@ These documents explain the rationale, contracts, and tradeoffs behind HFF's lan
 | [015\. Exact PostgreSQL Float Arithmetic](015-postgresql-float-arithmetic.md) | Accepted | 2026\-10\-13 | \@ornew |
 | [016\. Canonical PostgreSQL JSON Serialization](016-postgresql-json-serialization.md) | Accepted | 2026\-10\-13 | \@ornew |
 | [017\. PostgreSQL JSON Parsing](017-postgresql-json-parsing.md) | Accepted | 2026\-10\-13 | \@ornew |
+| [018\. PostgreSQL Timestamp Storage](018-postgresql-timestamp-storage.md) | Accepted | 2026\-10\-13 | \@ornew |
 
 Use the [record template](000-template.md) when adding a design record.

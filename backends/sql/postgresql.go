@@ -215,6 +215,13 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 				}
 				return expression{code: column, present: "TRUE", kind: hff.DurationType}, nil
 			}
+			if item.timestamp {
+				code, err := timestampBindingExpression(item)
+				if err != nil {
+					return expression{}, err
+				}
+				return expression{code: code, present: "TRUE", kind: hff.TimestampType}, nil
+			}
 			code, format, err := b.physicalItemJSON(n, item, parameter.typ)
 			if err != nil {
 				return expression{}, err
@@ -249,6 +256,9 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 			return expression{}, b.failure(n, "unbound schema path")
 		}
 		kind, ok := scalarKind(n.Type())
+		if !ok && timestampSchema(n.Type()) {
+			kind, ok = hff.TimestampType, true
+		}
 		if !ok {
 			return expression{}, b.failure(n, "SQL column requires one scalar type, optionally nullable")
 		}
@@ -322,7 +332,7 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 			}
 		}
 		value.present = both(value.present, test)
-		kind, ok := scalarKind(n.Type())
+		kind, ok := computedScalarKind(n.Type())
 		if !ok {
 			return expression{}, b.failure(n, "SQL type guards require a supported scalar result")
 		}
@@ -333,6 +343,8 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 			switch kind {
 			case hff.IntType, hff.DurationType:
 				value.code = "NULL::bigint"
+			case hff.TimestampType:
+				value.code = "NULL::numeric"
 			case hff.FloatType:
 				value.code = "NULL::double precision"
 			case hff.BoolType:
@@ -456,6 +468,8 @@ func truth(value expression) string {
 		test = "EXISTS(SELECT 1 FROM json_object_keys(" + value.code + "::json))"
 	case hff.BytesType:
 		test = "(octet_length(" + value.code + ")>0)"
+	case hff.TimestampType:
+		test = "(" + value.code + " IS NOT NULL)"
 	case hff.StringType:
 		test = "(" + value.code + " COLLATE \"C\" <> '' COLLATE \"C\")"
 	}
@@ -507,6 +521,13 @@ func (b *builder) parameter(n hff.Node, value hff.Value) (expression, error) {
 		bytes, _ := value.AsBytes()
 		b.args = append(b.args, hex.EncodeToString(bytes))
 		return expression{fmt.Sprintf("decode($%d::text,'hex')", len(b.args)), "TRUE", hff.BytesType}, nil
+	case hff.TimestampKind:
+		stamp, _ := value.AsTimestamp()
+		if stamp.UTC().Year() < 0 || stamp.UTC().Year() > 9999 {
+			return expression{"NULL::numeric", "TRUE", hff.TimestampType}, nil
+		}
+		b.args = append(b.args, timestampNanoseconds(stamp))
+		return expression{fmt.Sprintf("($%d::numeric)", len(b.args)), "TRUE", hff.TimestampType}, nil
 	default:
 		return expression{}, b.failure(n, "unsupported SQL parameter type")
 	}
@@ -625,8 +646,21 @@ func (b *builder) call(n hff.Node) (expression, error) {
 			return b.extension(n, method)
 		}
 	}
+	if name == "timestamp" {
+		return b.timestampLiteralCall(n)
+	}
 	if name == "any" || name == "all" {
 		return b.jsonPredicate(n, name)
+	}
+	if name == "size" {
+		if value, handled, err := b.relationSize(n); handled {
+			return value, err
+		}
+	}
+	if name == "has" {
+		if value, handled, err := b.relationHas(n); handled {
+			return value, err
+		}
 	}
 	if name == "map" || name == "flatmap" {
 		return b.jsonTransform(n, name)
@@ -645,9 +679,22 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		}
 	}
 	switch name {
-	case "duration", "hours", "minutes", "seconds", "milliseconds", "microseconds", "nanoseconds", "matches", "base64", "frombase64", "lower", "upper", "round", "ceil", "floor", "bool", "number", "fromjson", "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
+	case "duration", "hours", "minutes", "seconds", "milliseconds", "microseconds", "nanoseconds", "year", "month", "dayofmonth", "dayofyear", "before", "after", "add", "matches", "base64", "frombase64", "lower", "upper", "round", "ceil", "floor", "bool", "number", "fromjson", "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
 	default:
 		return expression{}, b.failure(n, "PostgreSQL does not yet support method "+name)
+	}
+	if n.Type().Kind() == hff.NullType || n.Type().Kind() == hff.NeverType {
+		switch name {
+		case "year", "month", "dayofmonth", "dayofyear", "before", "after", "add":
+			receiverNode, _ := n.Child(0)
+			if receiverNode.Type().Kind() == hff.NullType || receiverNode.Type().Kind() == hff.NeverType {
+				receiver, err := b.expression(receiverNode)
+				if err != nil {
+					return expression{}, err
+				}
+				return expression{"NULL", receiver.present, hff.NullType}, nil
+			}
+		}
 	}
 	values := make([]expression, n.ChildCount())
 	for i := range values {
@@ -659,6 +706,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		values[i] = value
 	}
 	receiver := values[0]
+	if receiver.kind == hff.TimestampType {
+		return b.timestampCall(n, name, values)
+	}
 	if name == "duration" || name == "hours" || name == "minutes" || name == "seconds" || name == "milliseconds" || name == "microseconds" || name == "nanoseconds" {
 		return b.durationCall(n, name, receiver)
 	}
@@ -732,6 +782,8 @@ func (b *builder) call(n hff.Node) (expression, error) {
 			typ = "bytes"
 		case hff.DurationType:
 			typ = "duration"
+		case hff.TimestampType:
+			typ = "timestamp"
 		}
 		return expression{"(CASE WHEN " + receiver.code + " IS NULL THEN 'null' ELSE '" + typ + "' END)", receiver.present, hff.StringType}, nil
 	}

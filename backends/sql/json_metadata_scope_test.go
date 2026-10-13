@@ -22,3 +22,15 @@ func TestMetadataReferencesRetainOuterCallbackScope(t *testing.T) {
 		t.Fatal("unrelated alias should retain direct relation lowering")
 	}
 }
+
+func TestTimestampRemainderRetainsOuterCallbackScope(t *testing.T) {
+	outer := BindTimestamp(hff.Path{"created"}, Column("events", "created_at"),
+		WithNanosecondRemainder(Column("r", "created_ns_remainder")))
+	b := builder{physicalBindings: []Binding{outer}}
+	if !b.shadowsOuterBinding("r") {
+		t.Fatal("relation alias would shadow the outer Timestamp remainder")
+	}
+	if b.shadowsOuterBinding("unrelated") {
+		t.Fatal("unrelated alias should retain direct relation lowering")
+	}
+}

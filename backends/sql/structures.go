@@ -40,7 +40,9 @@ type structBinding struct {
 // Unbound optional fields are absent, while required fields need a binding. A
 // bound scalar SQL NULL means an explicit null field, never omission. The caller
 // owns the truth and deterministic behavior of both predicates and the
-// schema/data contract.
+// schema/data contract. BindTimestamp may map a Timestamp child for direct
+// field predicates, but materializing the whole struct with that child is not
+// yet supported.
 func BindStruct(path hff.Path, present, null SQLPredicate, fields ...Binding) Binding {
 	return Binding{path: append(hff.Path(nil), path...), structure: &structBinding{
 		present: present, null: null, fields: append([]Binding(nil), fields...),
@@ -115,6 +117,18 @@ func (b *builder) checkStructBinding(binding Binding, typ hff.Type, kinds map[st
 			}
 			continue
 		}
+		if child.timestamp {
+			if !timestampSchema(field.Type) || child.format != "" || child.composite || child.metadata != nil {
+				return configuration("timestamp struct field requires one Timestamp type and native columns")
+			}
+			if _, err := b.timestampBindingCode(child, formats, kinds); err != nil {
+				return err
+			}
+			continue
+		}
+		if timestampSchema(field.Type) {
+			return configuration("Timestamp struct fields require BindTimestamp")
+		}
 		if _, err := b.checkJSONMetadata(child); err != nil {
 			return err
 		}
@@ -187,6 +201,8 @@ func (b *builder) structJSON(n hff.Node, binding Binding, typ hff.Type) (string,
 			value, err = b.structJSON(n, child, field.Type)
 		} else if child.relation != nil {
 			value, err = b.relationJSON(n, child)
+		} else if child.timestamp {
+			return "", b.failure(n, "whole struct materialization with a Timestamp field is not yet supported")
 		} else {
 			column, quoteErr := quoteColumn(child.column)
 			if quoteErr != nil {
@@ -324,6 +340,9 @@ func (b *builder) structPath(n hff.Node) (expression, bool, error) {
 			states = append(states, mapping.structure)
 			child, exists := structFieldBinding(mapping, name)
 			if !exists {
+				if timestampSchema(n.Type()) {
+					return expression{code: "NULL::numeric", present: "TRUE", kind: hff.TimestampType}, true, nil
+				}
 				if kind, ok := scalarKind(n.Type()); ok {
 					code := "NULL"
 					if kind != hff.NullType {
@@ -343,6 +362,13 @@ func (b *builder) structPath(n hff.Node) (expression, bool, error) {
 				absent = append(absent, "("+b.predicateCode(state.present)+") IS NOT TRUE", "("+b.predicateCode(state.null)+") IS TRUE")
 			}
 			condition := strings.Join(absent, " OR ")
+			if mapping.timestamp {
+				code, err := timestampBindingExpression(mapping)
+				if err != nil {
+					return expression{}, true, err
+				}
+				return expression{code: "(CASE WHEN " + condition + " THEN NULL::numeric ELSE " + code + " END)", present: "TRUE", kind: hff.TimestampType}, true, nil
+			}
 			if mapping.structure == nil && mapping.relation == nil && mapping.format == "" {
 				if kind, ok := scalarKind(n.Type()); ok {
 					column, err := quoteColumn(mapping.column)

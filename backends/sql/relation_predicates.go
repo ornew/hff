@@ -200,6 +200,8 @@ func (b *builder) physicalItemJSON(n hff.Node, mapping Binding, typ hff.Type) (s
 	case mapping.relation != nil:
 		code, err := b.relationJSON(n, mapping)
 		return code, JSON, err
+	case mapping.timestamp:
+		return "", JSON, b.failure(n, "whole Timestamp relation items require native predicate lowering")
 	case mapping.format != "":
 		return b.jsonBindingCode(mapping)
 	default:
@@ -233,6 +235,9 @@ func (b *builder) shadowsOuterBinding(alias string) bool {
 	return false
 }
 func bindingUsesAlias(mapping Binding, alias string) bool {
+	if mapping.timestampRemainder != nil && len(mapping.timestampRemainder.parts) > 1 && mapping.timestampRemainder.parts[0] == alias {
+		return true
+	}
 	if mapping.metadata != nil && len(mapping.metadata.parts) > 1 && mapping.metadata.parts[0] == alias {
 		return true
 	}

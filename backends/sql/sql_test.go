@@ -268,7 +268,7 @@ func TestRequiredNestedPathsAndUnrepresentableParents(t *testing.T) {
 func TestDeferredSQLTypesAndMethodsRejectAtBuild(t *testing.T) {
 	ctx := context.Background()
 	for _, typ := range []hff.Type{
-		schema.TimestampType, schema.ListOf(schema.IntType),
+		schema.ListOf(schema.IntType),
 		schema.MapOf(schema.StringType), schema.Struct(schema.String("name")), schema.AnyType, schema.Union(schema.StringType, schema.IntType),
 	} {
 		e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("x", typ))), engine.WithCapabilities(capabilities.Standard()))
@@ -285,6 +285,17 @@ func TestDeferredSQLTypesAndMethodsRejectAtBuild(t *testing.T) {
 			t.Fatal("type rejection lacks a source span")
 		}
 	}
+	timestampEngine, err := engine.New(engine.WithSchema(schema.Struct(schema.Timestamp("x"))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	timestampProgram, err := timestampEngine.Compile(ctx, "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = hffsql.Build(ctx, timestampProgram, hffsql.WithDialect(hffsql.PostgreSQL),
+		hffsql.WithBindings(hffsql.Bind(hff.Path{"x"}, hffsql.Column("x"))))
+	requireCode(t, err, hff.ConfigurationError)
 	for _, source := range []string{
 		`name:matches("(?i)A")`, `name!~"."`,
 		`name:timestamp`,

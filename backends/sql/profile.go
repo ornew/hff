@@ -47,6 +47,7 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 			{Name: "number.parsing", Value: "number() requires PostgreSQL 16+ input validation; JSON number spelling, int64 bounds, and finite binary64 results are checked"},
 			{Name: "json.parsing", Value: "fromjson requires PostgreSQL 16+ JSON validation; caller guarantees decoded JSON strings and keys contain no NUL"},
 			{Name: "duration", Value: "string parsing, computed durations, and native bigint nanosecond duration columns are supported; JSON and composite duration materialization are unavailable"},
+			{Name: "timestamp", Value: "schema-known timestamptz bindings use optional SMALLINT 0–999 nanosecond remainders; the caller guarantees whole-microsecond storage, null pairing, and finite years 0000–9999; literal RFC 3339 parsing and UTC methods are supported"},
 			{Name: "bytes", Value: "native bytea, computed bytes, and schema-known JSON/JSONB Bytes use strict standard base64; ambiguous Bytes representations are rejected"},
 			{Name: "regex", Value: "literal non-NUL ASCII RE2 subset translated to PostgreSQL 15+ ARE; dynamic patterns, case folding, line anchors, Unicode classes, dot and quantified anchors are unavailable"},
 			{Name: "extensions.contract", Value: "translators use typed expressions and parameter binding; caller guarantees trusted SQL templates and database function behavior"},
@@ -76,7 +77,7 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 // method names shared by unrelated receiver families.
 func profileSQLMethod(id string) bool {
 	switch id {
-	case "string.duration", "duration.hours", "duration.minutes", "duration.seconds", "duration.milliseconds", "duration.microseconds", "duration.nanoseconds", "any.type", "any.json", "any.string", "any.in", "any.exists",
+	case "string.duration", "duration.hours", "duration.minutes", "duration.seconds", "duration.milliseconds", "duration.microseconds", "duration.nanoseconds", "string.timestamp", "timestamp.year", "timestamp.month", "timestamp.dayofmonth", "timestamp.dayofyear", "timestamp.hours", "timestamp.minutes", "timestamp.seconds", "timestamp.milliseconds", "timestamp.before", "timestamp.after", "timestamp.add", "any.type", "any.json", "any.string", "any.in", "any.exists",
 		"bytes.len", "bytes.base64", "string.frombase64", "number.round", "number.ceil", "number.floor", "bool.and", "bool.or", "bool.not", "string.bool", "string.number", "string.fromjson", "string.matches", "string.lower", "string.upper", "string.len", "string.contains", "string.startswith", "string.endswith", "string.concat",
 		"list.size", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr",
 		"object.size", "object.has", "object.get", "object.keys", "object.values", "object.items":

@@ -27,17 +27,20 @@ type ColumnRef struct{ parts []string }
 func Column(parts ...string) ColumnRef { return ColumnRef{append([]string(nil), parts...)} }
 
 // Binding maps one literal HFF schema path to a physical SQL representation.
-// Construct bindings with Bind, BindJSON, BindComposite, BindStruct, or
-// BindRelation, then pass them to Build through WithBindings.
+// Construct bindings with Bind, BindTimestamp, BindJSON, BindComposite,
+// BindStruct, or BindRelation, then pass them to Build through WithBindings.
 type Binding struct {
-	path              hff.Path
-	column            ColumnRef
-	format            JSONFormat
-	composite         bool
-	structure         *structBinding
-	relation          *Relation
-	metadata          *ColumnRef
-	invalidJSONOption bool
+	path                   hff.Path
+	column                 ColumnRef
+	format                 JSONFormat
+	composite              bool
+	structure              *structBinding
+	relation               *Relation
+	metadata               *ColumnRef
+	timestamp              bool
+	timestampRemainder     *ColumnRef
+	invalidTimestampOption bool
+	invalidJSONOption      bool
 }
 
 // Bind maps a scalar HFF path to a SQL column. Path components are literal
@@ -174,6 +177,20 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 		key := pathKey(binding.path)
 		if _, exists := b.bindings[key]; exists {
 			return nil, configuration("duplicate schema binding path")
+		}
+		if binding.timestamp {
+			if !timestampSchema(typ) || binding.format != "" || binding.composite || binding.structure != nil || binding.relation != nil || binding.metadata != nil {
+				return nil, configuration("timestamp binding requires one Timestamp field and native columns")
+			}
+			code, err := b.timestampBindingCode(binding, columnFormats, columnKinds)
+			if err != nil {
+				return nil, err
+			}
+			b.bindings[key] = code
+			continue
+		}
+		if timestampSchema(typ) {
+			return nil, configuration("Timestamp fields require BindTimestamp to declare their precision contract")
 		}
 		if binding.relation != nil {
 			if err := b.checkRelation(binding, typ, columnKinds, columnFormats, columnJSONTypes); err != nil {

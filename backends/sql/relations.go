@@ -52,7 +52,8 @@ func WithRelationState(present, null SQLPredicate) RelationOption {
 // WithRelationItem declares the exact HFF element type and maps each source row
 // to one item. The Binding path must be empty because it is relative to that
 // row; use BindStruct for a flattened struct item or another binding for its
-// physical representation.
+// physical representation. BindTimestamp supports Timestamp item predicates;
+// materializing a whole relation containing Timestamp items is not yet supported.
 func WithRelationItem(typ hff.Type, item Binding) RelationOption {
 	return RelationOption{func(c *relationConfig) error { c.typ = typ; c.item = item; return nil }}
 }
@@ -165,6 +166,16 @@ func (b *builder) checkRelation(binding Binding, typ hff.Type, kinds map[string]
 	if c.item.relation != nil {
 		return b.checkRelation(c.item, c.typ, kinds, formats, types)
 	}
+	if c.item.timestamp {
+		if !timestampSchema(c.typ) || c.item.format != "" || c.item.composite || c.item.metadata != nil {
+			return configuration("timestamp relation item requires one Timestamp type and native columns")
+		}
+		_, err := b.timestampBindingCode(c.item, formats, kinds)
+		return err
+	}
+	if timestampSchema(c.typ) {
+		return configuration("Timestamp relation items require BindTimestamp")
+	}
 	if _, err := b.checkJSONMetadata(c.item); err != nil {
 		return err
 	}
@@ -189,6 +200,8 @@ func (b *builder) relationJSON(n hff.Node, binding Binding) (string, error) {
 		item, err = b.structJSON(n, c.item, c.typ)
 	} else if c.item.relation != nil {
 		item, err = b.relationJSON(n, c.item)
+	} else if c.item.timestamp {
+		return "", b.failure(n, "whole relation materialization with Timestamp items is not yet supported")
 	} else {
 		column, _ := quoteColumn(c.item.column)
 		if c.item.format != "" {
