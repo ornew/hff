@@ -16,6 +16,17 @@ null is SQL `NULL`; query values are not interpolated into SQL text. Computed
 expressions and guards retain projection barriers where they need a named
 value or a separate presence state.
 
+### Emit eligible scalar predicates directly
+
+For eligible comparisons between a directly bound native scalar column and a
+literal, the backend can retain the comparison as a direct column predicate.
+Boolean composition, null tests, and scalar truth tests can use this path when
+their leaves are eligible. Nullable fields keep explicit non-null tests;
+unsupported expressions retain the general lowering. The measured fixture
+shortened one predicate and removed its projection barriers, but no execution
+speedup was measured. See [direct scalar predicate shape](../../optimizations/013-postgresql-scalar-predicate-shape.md)
+for the exact fixture and its limits.
+
 ### Project computed steps once
 
 Computed expressions are lowered through relational `LATERAL` projections.

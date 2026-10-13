@@ -281,16 +281,24 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 	if err := b.checkRelationOrder(program.Root(), hff.Node{}, 0); err != nil {
 		return nil, err
 	}
-	root, err := b.expression(program.Root())
-	if err != nil {
-		return nil, err
-	}
-	if b.predicateFailure != nil {
-		return nil, b.predicateFailure
-	}
-	where := b.truth(program.Root(), root)
-	if len(b.steps) > 0 {
-		where = "(SELECT " + where + " FROM " + strings.Join(b.steps, " CROSS JOIN LATERAL ") + ")"
+	var where string
+	if b.directScalarWhereEligible(program.Root()) {
+		where, err = b.directScalarWhere(program.Root())
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		root, err := b.expression(program.Root())
+		if err != nil {
+			return nil, err
+		}
+		if b.predicateFailure != nil {
+			return nil, b.predicateFailure
+		}
+		where = b.truth(program.Root(), root)
+		if len(b.steps) > 0 {
+			where = "(SELECT " + where + " FROM " + strings.Join(b.steps, " CROSS JOIN LATERAL ") + ")"
+		}
 	}
 	profile, err := queryProfile(config.Dialect, program, methods)
 	if err != nil {
