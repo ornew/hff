@@ -43,11 +43,12 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 			return true
 		}
 		_, kind, ok := b.directScalarColumn(left)
-		if !ok || (kind != hff.IntType && kind != hff.StringType && kind != hff.BoolType) {
+		if !ok {
 			return false
 		}
 		value, _ := right.Literal()
 		return (kind == hff.IntType && value.Kind() == hff.IntKind) ||
+			(kind == hff.FloatType && value.Kind() == hff.FloatKind) ||
 			(kind == hff.StringType && value.Kind() == hff.StringKind) ||
 			(kind == hff.BoolType && value.Kind() == hff.BoolKind)
 	case hff.NullTestNode:
@@ -139,6 +140,7 @@ func (b *builder) directScalarInEligible(n hff.Node) bool {
 			continue
 		}
 		if (kind != hff.IntType || value.Kind() != hff.IntKind) &&
+			(kind != hff.FloatType || value.Kind() != hff.FloatKind) &&
 			(kind != hff.StringType || value.Kind() != hff.StringKind) &&
 			(kind != hff.BoolType || value.Kind() != hff.BoolKind) {
 			return false
@@ -170,7 +172,7 @@ func (b *builder) directScalarColumn(n hff.Node) (string, hff.TypeKind, bool) {
 		return "", hff.InvalidType, false
 	}
 	kind, ok := scalarKind(n.Type())
-	if !ok || (kind != hff.IntType && kind != hff.StringType && kind != hff.BoolType) {
+	if !ok || (kind != hff.IntType && kind != hff.FloatType && kind != hff.StringType && kind != hff.BoolType) {
 		return "", hff.InvalidType, false
 	}
 	return column, kind, true
@@ -236,7 +238,7 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 		column, kind, _ := b.directScalarColumn(child)
 		var test string
 		switch kind {
-		case hff.IntType:
+		case hff.IntType, hff.FloatType:
 			test = column + " <> 0"
 		case hff.StringType:
 			test = column + " COLLATE \"C\" <> '' COLLATE \"C\""

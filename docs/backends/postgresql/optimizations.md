@@ -27,6 +27,17 @@ shortened one predicate and removed its projection barriers, but no execution
 speedup was measured. See [direct scalar predicate shape](../../optimizations/013-postgresql-scalar-predicate-shape.md)
 for the exact fixture and its limits.
 
+Direct native Float comparisons are also available for schema-valid finite
+Float columns and literals, with scalar truth/null tests and same-Float-literal
+`in()` covered by the same focused path. Mixed Int/Float comparisons, computed
+expressions, guards, JSON, and structured values retain the general lowering.
+The focused cases remove `OFFSET 0` barriers, but no plan or runtime-speed
+claim follows from SQL shape alone. Plain `EXPLAIN` on an empty temporary
+indexed Float table showed a Bitmap Index Scan for `factor<1.5`; this is a
+fixture-specific plan observation, with no timing measurement. See [direct
+native Float predicates](../../optimizations/018-postgresql-float-predicate-shape.md)
+for the measured filters and evidence limits.
+
 ### Lower homogeneous scalar membership directly
 
 For eligible same-type scalar membership, the translator can use SQL
