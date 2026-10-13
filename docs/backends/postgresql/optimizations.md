@@ -128,6 +128,16 @@ structural sort keys still use exact Float decomposition. See the
 [native Float lowering record](../../optimizations/023-postgresql-native-float-lowering.md)
 and [backend-native Float design](../../design/021-backend-native-float-semantics.md).
 
+### Remove proven arithmetic identities
+
+For statically known Int and Float expressions, PostgreSQL Build removes only
+the proven literal-zero and positive-one identities. Required Int-to-Float
+casts, signed-zero behavior, null/no-value handling, and callback scope remain
+intact. Float addition by zero, dynamic numeric dispatch, multiplication by
+zero, and reassociation retain their existing lowering. The [arithmetic
+identity record](../../optimizations/026-postgresql-arithmetic-identities.md)
+reports SQL and plain-plan shape only; no timing was measured.
+
 ### Compare scalar JSON pairs without canonical JSON conversion
 
 When two JSON-backed dynamic values can only compare as scalars, the translator

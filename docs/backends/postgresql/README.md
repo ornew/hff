@@ -315,6 +315,30 @@ are identity operations. These methods preserve the input numeric subtype. For
 JSONB values, an ambiguous integer/float subtype requires the metadata
 described in the JSON guide.
 
+For statically known Int and Float expressions, PostgreSQL `Build` removes a
+narrow set of arithmetic identities while preserving the surviving operand's
+null, no-value, and type behavior:
+
+```hff
+age+0>18
+0+age>18
+age-0>18
+age*1>18
+1*age>18
+age/1>18.0
+ratio*1>18.0
+ratio/1>18.0
+ratio-0.0>18.0
+```
+
+Int division by one still returns Float, so required Int-to-Float casts remain.
+Float multiplication or division by positive one and subtraction of positive
+zero are safe; Float addition by zero is not simplified because it can change signed
+zero. Dynamic `Any`/Int|Float arithmetic, multiplication by zero, and
+reassociation retain the general lowering. See [arithmetic identity
+lowering](optimizations.md#remove-proven-arithmetic-identities)
+for the complete subset and SQL-shape evidence; no execution speed is implied.
+
 For mixed numeric ordering, the builder partitions float values around the
 int64 range, floors only in the safely castable range, and compares the integer
 with that bigint value before considering the fractional part. It never converts

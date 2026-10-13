@@ -36,6 +36,7 @@ type builder struct {
 	activeRelationAliases map[string]int
 	orderBlind            map[hff.Node]bool
 	literalConversions    map[hff.Node]literalConversion
+	identityAliases       map[hff.Node]bool
 }
 
 // present tracks HFF's internal no-value separately from SQL NULL.
@@ -106,8 +107,9 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 	}
 	// A typed parameter reference is already an immutable SQL value. Keep it
 	// bound directly; projecting it adds a relation without preventing any
-	// duplicated computation. Computed expressions still need their barriers.
-	if n.Kind() == hff.LiteralNode || b.literalConversions[n].handled {
+	// duplicated computation. Identity aliases reuse their surviving operand's
+	// projection; other computed expressions still need their barriers.
+	if n.Kind() == hff.LiteralNode || b.literalConversions[n].handled || b.identityAliases[n] {
 		return value, nil
 	}
 	// Give each value and any dynamic no-value flag a relational name. Parent
@@ -550,12 +552,16 @@ func (b *builder) parameter(n hff.Node, value hff.Value) (expression, error) {
 }
 
 func (b *builder) binary(n hff.Node) (expression, error) {
+	delete(b.identityAliases, n)
 	op, _ := n.Operator()
 	switch op {
 	case hff.Match, hff.NotMatch, hff.Equal, hff.NotEqual, hff.Less, hff.LessEqual, hff.Greater, hff.GreaterEqual:
 	case hff.Add, hff.Subtract, hff.Multiply, hff.Divide, hff.Remainder:
 	default:
 		return expression{}, b.failure(n, "PostgreSQL does not yet support operator "+string(op))
+	}
+	if identity, ok := b.identityPlan(n); ok {
+		return b.lowerIdentity(n, identity)
 	}
 	l, _ := n.Child(0)
 	r, _ := n.Child(1)

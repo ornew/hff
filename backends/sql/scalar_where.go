@@ -154,6 +154,16 @@ func (b *builder) directScalarInEligible(n hff.Node) bool {
 }
 
 func (b *builder) directScalarColumn(n hff.Node) (string, hff.TypeKind, bool) {
+	if identity, ok := b.identityPlan(n); ok {
+		column, kind, direct := b.directScalarColumn(identity.operand)
+		if !direct {
+			return "", hff.InvalidType, false
+		}
+		if identity.kind == hff.FloatType && kind == hff.IntType {
+			column = "(" + column + "::double precision)"
+		}
+		return column, identity.kind, true
+	}
 	if n.Kind() != hff.VariableNode && n.Kind() != hff.FieldNode {
 		return "", hff.InvalidType, false
 	}
