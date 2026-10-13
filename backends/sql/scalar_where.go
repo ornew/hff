@@ -2,6 +2,7 @@ package sql
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"github.com/ornew/hff"
 )
@@ -38,6 +39,9 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 		if right.Kind() != hff.LiteralNode {
 			return false
 		}
+		if b.directScalarLengthEligible(left, right) {
+			return true
+		}
 		_, kind, ok := b.directScalarColumn(left)
 		if !ok || (kind != hff.IntType && kind != hff.StringType && kind != hff.BoolType) {
 			return false
@@ -53,13 +57,65 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 	case hff.BoolNode:
 		child, _ := n.Child(0)
 		if child.Kind() == hff.CallNode {
-			return b.directScalarInEligible(child)
+			return b.directScalarInEligible(child) || b.directScalarStringCallEligible(child)
 		}
 		_, _, ok := b.directScalarColumn(child)
 		return ok
 	default:
 		return false
 	}
+}
+
+func (b *builder) directScalarLengthEligible(call, right hff.Node) bool {
+	if call.Kind() != hff.CallNode || call.ChildCount() != 1 {
+		return false
+	}
+	method, ok := call.Method()
+	if !ok || method.Name() != "len" {
+		return false
+	}
+	receiver, _ := call.Child(0)
+	_, kind, ok := b.directScalarColumn(receiver)
+	if !ok || kind != hff.StringType {
+		return false
+	}
+	value, _ := right.Literal()
+	return value.Kind() == hff.IntKind
+}
+
+func (b *builder) directScalarStringCallEligible(n hff.Node) bool {
+	method, ok := n.Method()
+	if !ok {
+		return false
+	}
+	switch method.Name() {
+	case "contains":
+		if n.ChildCount() < 2 {
+			return false
+		}
+	case "startswith", "endswith":
+		if n.ChildCount() != 2 {
+			return false
+		}
+	default:
+		return false
+	}
+	receiver, _ := n.Child(0)
+	_, kind, ok := b.directScalarColumn(receiver)
+	if !ok || kind != hff.StringType {
+		return false
+	}
+	for i := 1; i < n.ChildCount(); i++ {
+		argument, _ := n.Child(i)
+		if argument.Kind() != hff.LiteralNode {
+			return false
+		}
+		value, _ := argument.Literal()
+		if value.Kind() != hff.StringKind && value.Kind() != hff.NullKind {
+			return false
+		}
+	}
+	return true
 }
 
 func (b *builder) directScalarInEligible(n hff.Node) bool {
@@ -165,7 +221,10 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 	if n.Kind() == hff.BoolNode {
 		child, _ := n.Child(0)
 		if child.Kind() == hff.CallNode {
-			return b.directScalarIn(child)
+			if b.directScalarInEligible(child) {
+				return b.directScalarIn(child)
+			}
+			return b.directScalarStringCall(child)
 		}
 		column, kind, _ := b.directScalarColumn(child)
 		var test string
@@ -184,6 +243,9 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 	}
 	left, _ := n.Child(0)
 	right, _ := n.Child(1)
+	if b.directScalarLengthEligible(left, right) {
+		return b.directScalarLengthComparison(n, left, right)
+	}
 	column, kind, _ := b.directScalarColumn(left)
 	value, err := b.literal(right)
 	if err != nil {
@@ -202,6 +264,75 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 	if acceptsKind(left.Type(), hff.NullType) {
 		// FALSE AND NULL is FALSE in PostgreSQL, so this stays a two-valued
 		// Boolean without hiding the direct comparison from the planner.
+		test = column + " IS NOT NULL AND " + test
+	}
+	return "(" + test + ")", nil
+}
+
+func (b *builder) directScalarLengthComparison(n, call, right hff.Node) (string, error) {
+	receiver, _ := call.Child(0)
+	column, _, _ := b.directScalarColumn(receiver)
+	value, err := b.literal(right)
+	if err != nil {
+		return "", err
+	}
+	op, _ := n.Operator()
+	operator := string(op)
+	if op == hff.NotEqual {
+		operator = "<>"
+	}
+	test := "char_length(" + column + ")::bigint " + operator + " " + value.code
+	if acceptsKind(receiver.Type(), hff.NullType) {
+		test = column + " IS NOT NULL AND " + test
+	}
+	return "(" + test + ")", nil
+}
+
+// Literal string predicates need neither a method-result projection nor an
+// HFF presence projection. A null receiver or argument is false in filter
+// context, including inside a surrounding NOT.
+func (b *builder) directScalarStringCall(n hff.Node) (string, error) {
+	receiver, _ := n.Child(0)
+	column, _, _ := b.directScalarColumn(receiver)
+	method, _ := n.Method()
+	name := method.Name()
+	nullArgument := false
+	for i := 1; i < n.ChildCount(); i++ {
+		argument, _ := n.Child(i)
+		value, _ := argument.Literal()
+		if value.Kind() == hff.NullKind {
+			nullArgument = true
+			continue
+		}
+		str, _ := value.AsString()
+		if !utf8.ValidString(str) || strings.ContainsRune(str, 0) {
+			return "", b.failure(argument, "PostgreSQL text cannot encode invalid UTF-8 or NUL")
+		}
+	}
+	if nullArgument {
+		return "FALSE", nil
+	}
+	parts := make([]string, 0, n.ChildCount()-1)
+	for i := 1; i < n.ChildCount(); i++ {
+		argument, _ := n.Child(i)
+		literal, err := b.literal(argument)
+		if err != nil {
+			return "", err
+		}
+		needle := literal.code
+		switch name {
+		case "contains":
+			parts = append(parts, "(strpos("+column+" COLLATE \"C\", "+needle+" COLLATE \"C\") > 0)")
+		case "startswith", "endswith":
+			function := "left"
+			if name == "endswith" {
+				function = "right"
+			}
+			parts = append(parts, "("+function+"("+column+", char_length("+needle+")) COLLATE \"C\" = "+needle+" COLLATE \"C\")")
+		}
+	}
+	test := strings.Join(parts, " AND ")
+	if acceptsKind(receiver.Type(), hff.NullType) {
 		test = column + " IS NOT NULL AND " + test
 	}
 	return "(" + test + ")", nil

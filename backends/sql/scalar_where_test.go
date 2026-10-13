@@ -43,6 +43,17 @@ func TestDirectScalarWhereKeepsSimpleFiltersIndexable(t *testing.T) {
 		`name:in("Alice","Bob",null)`,
 		`!active:in(true)`,
 		`age:in(18,21) name="Alice"`,
+		`name:contains("Ali")`,
+		`name:contains("A","ice")`,
+		`name:startswith("Al")`,
+		`name:endswith("ce")`,
+		`name:len>3`,
+		`!name:len=0`,
+		`!name:contains("Ali")`,
+		`age>18 name:startswith("Al")`,
+		`age>18 name:len>=5`,
+		`name:contains(null)`,
+		`name:contains("Ali",null)`,
 	} {
 		program, err := e.Compile(ctx, source)
 		if err != nil {
@@ -55,11 +66,17 @@ func TestDirectScalarWhereKeepsSimpleFiltersIndexable(t *testing.T) {
 		if strings.Contains(query.Where(), "SELECT") || strings.Contains(query.Where(), "OFFSET 0") || strings.Contains(query.Where(), "LATERAL") {
 			t.Fatalf("simple predicate still has projection barriers: %s", query.Where())
 		}
+		if query.Where() == "FALSE" {
+			if len(query.Args()) != 0 {
+				t.Fatalf("constant false predicate kept unused parameters: %s %#v", source, query.Args())
+			}
+			continue
+		}
 		if !strings.Contains(query.Where(), `"records".`) {
 			t.Fatalf("predicate lost direct column reference: %s", query.Where())
 		}
 	}
-	for _, source := range []string{`age+1>20`, `name~"Alice"`} {
+	for _, source := range []string{`age+1>20`, `name~"Alice"`, `name:contains(name)`} {
 		program, err := e.Compile(ctx, source)
 		if err != nil {
 			t.Fatal(source, err)
@@ -106,5 +123,30 @@ func TestDirectScalarWhereLeavesNullableStructRepresentationToGeneralPath(t *tes
 	}
 	if !strings.Contains(query.Where(), "SELECT") {
 		t.Fatal("nullable parent state was flattened into a direct column predicate:", query.Where())
+	}
+}
+
+func TestDirectStringPredicateValidatesArgumentsBeforeNullFolding(t *testing.T) {
+	ctx := context.Background()
+	e, err := engine.New(
+		engine.WithSchema(schema.Struct(schema.Nullable(schema.String("name")))),
+		engine.WithCapabilities(capabilities.Standard()),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range []string{
+		`name:contains("\u0000",null)`,
+		`name:contains(null,"\u0000")`,
+	} {
+		program, err := e.Compile(ctx, source)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		_, err = hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL),
+			hffsql.WithBindings(hffsql.Bind(hff.Path{"name"}, hffsql.Column("records", "name"))))
+		if err == nil || !strings.Contains(err.Error(), "NUL") {
+			t.Fatalf("%s: expected PostgreSQL NUL error, got %v", source, err)
+		}
 	}
 }

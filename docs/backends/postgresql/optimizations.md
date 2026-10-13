@@ -48,6 +48,18 @@ speed was measured. See
 [homogeneous scalar membership](../../optimizations/014-postgresql-scalar-in.md)
 for scope and limits.
 
+### Emit eligible native String method predicates directly
+
+For `contains()`, `startswith()`, and `endswith()` on a directly bound native
+String column with literal String or null arguments, the translator can emit
+the predicate directly without intermediate projections. It can also lower
+`len()` comparisons against integer literals directly. These paths preserve
+null handling and `COLLATE "C"`; computed, dynamic/Any, JSON, and nonliteral
+argument shapes retain the general lowering. The measured predicates were
+shorter and had no `OFFSET 0` barriers, but no plan or execution timing was
+collected. The [native String predicate shape](../../optimizations/015-postgresql-string-predicate-shape.md)
+record gives the exact filters and limits.
+
 ### Project computed steps once
 
 Computed expressions are lowered through relational `LATERAL` projections.

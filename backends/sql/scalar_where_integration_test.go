@@ -43,7 +43,7 @@ func TestPostgreSQLDirectScalarWhereMatchesLocal(t *testing.T) {
 		hffsql.Bind(hff.Path{"active"}, hffsql.Column("records", "active")),
 	}
 	ages := []hff.Value{hff.Null(), hff.Int(0), hff.Int(18), hff.Int(19)}
-	names := []hff.Value{hff.Null(), hff.String("Alice"), hff.String("Bob"), hff.String("é")}
+	names := []hff.Value{hff.Null(), hff.String(""), hff.String("Alice"), hff.String("Bob"), hff.String("é"), hff.String("A\u0301")}
 	actives := []hff.Value{hff.Null(), hff.Bool(false), hff.Bool(true)}
 	sources := []string{
 		`age>18 name="Alice"`,
@@ -61,6 +61,21 @@ func TestPostgreSQLDirectScalarWhereMatchesLocal(t *testing.T) {
 		`age|name`,
 		`!age>18`,
 		`!(age>18|name="Alice")`,
+		`name:contains("Ali")`,
+		`name:contains("A","ice")`,
+		`name:contains("")`,
+		`name:contains("Ali",null)`,
+		`name:startswith("Al")`,
+		`name:startswith("")`,
+		`name:endswith("ce")`,
+		`name:endswith("")`,
+		`name:len>3`,
+		`name:len=0`,
+		`!name:len>3`,
+		`!name:contains("Ali")`,
+		`!name:contains(null)`,
+		`age>18 name:startswith("Al")`,
+		`age>18 name:len>=5`,
 	}
 	var script strings.Builder
 	var expected []bool
