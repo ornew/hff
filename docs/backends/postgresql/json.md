@@ -908,6 +908,18 @@ observable. See the [storage requirements](#storage-requirements-and-limits)
 for the sidecar format. The scoped Build and database measurements are in the
 [dynamic sorting record](../../optimizations/011-postgresql-dynamic-json-sort.md).
 
+Schema-known list element unions such as
+`Timestamp|Int|Float|Null` and `Duration|Int|Float|Null` can also use
+`sort()`. A list whose elements are all temporal strings sorts by exact
+Timestamp or Duration value; a list whose elements are all numbers sorts
+numerically, including mixed Int and Float values. Equal numeric values retain
+their input order and representation, including signed zero. A list mixing a
+temporal string with a number, or containing null or another non-orderable
+value, produces ordinary null. JSONB mixed Int/Float values require numeric
+type metadata when their subtype is needed; raw JSONB mixed-subtype bindings
+remain Build errors. This support applies to `sort()` and does not imply that
+arbitrary callbacks over these unions are supported.
+
 `concat(list)` preserves left-to-right order, duplicates, and null elements.
 JSON- or JSONB-backed lists can be concatenated with schema-compatible list
 values, including a list from the other physical format, or query-side list

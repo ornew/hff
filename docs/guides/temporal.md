@@ -324,6 +324,21 @@ data-dependent Timestamp parsing, and ambiguous string-backed unions such as
 The [PostgreSQL JSON guide](../backends/postgresql/json.md#timestamp-values-in-json-documents)
 describes the full binding contract and operation limits.
 
+These schema-known temporal/numeric list unions also support `sort()` when the
+runtime list is homogeneous by JSON category: all temporal strings sort by
+exact instant or duration, and all numbers sort numerically across Int and
+Float. Equal numeric values preserve their order and representation. A list
+mixing temporal strings and numbers, or containing null or another
+non-orderable value, produces ordinary null. For mixed Int/Float JSONB lists,
+provide the numeric metadata needed to recover the stored subtype; raw JSONB
+without it is rejected when that distinction is required. This is a list
+sorting operation, not general callback support for temporal/numeric unions.
+For example, `observed_items:sort:json="[9007199254740992.0,9007199254740993]"`
+checks the numerically sorted Float/Int list. The [runnable JSON-union
+example](https://github.com/ornew/hff/blob/main/examples/sql-json-unions/main.go)
+builds this sort predicate separately from its other predicates; it does not
+execute a database query.
+
 ## Parse and measure durations
 
 Duration strings combine signed decimal components with `h`, `m`, `s`, `ms`,

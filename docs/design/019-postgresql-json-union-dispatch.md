@@ -98,6 +98,17 @@ This does not make every collection or serialization operation available. Raw
 JSONB mixed-numeric unions do not have a metadata-free lowering for operations
 that require the numeric subtype.
 
+For schema-known list element unions containing one temporal alternative and
+numeric alternatives, `sort()` dispatches from each stored element's JSON
+category. A list containing only temporal strings sorts by exact Timestamp or
+Duration value; one containing only numbers sorts numerically across Int and
+Float. Equal numeric values retain input order and representation. A mixed
+temporal/numeric list, null element, or other non-orderable element produces
+ordinary null. Mixed Int/Float JSONB sorting requires metadata when the
+operation needs the erased subtype; raw JSONB remains a Build error in that
+case. This operation-specific support does not imply arbitrary callback
+support for the union.
+
 Support remains operation-specific: category-disjointness alone does not
 make every result representable. Metadata-free JSONB does not reveal whether
 a stored number is Int or Float. Serialization of a JSONB Float branch also

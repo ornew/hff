@@ -112,6 +112,15 @@ can be compared with a mixed-union value bound as native JSON, because its own
 numeric type is fixed by schema. HFF `type()` reports `"number"` for Int and
 Float; use `[int]` or `[float]` for subtype guards.
 
+List `sort()` also supports these temporal/numeric element unions when every
+runtime element belongs to one sortable JSON category: temporal strings sort
+by exact instant or duration, and numeric elements sort across Int and Float.
+Equal numeric values preserve input order and their HFF representation. A
+list mixing temporal strings and numbers, or containing null or another
+non-orderable value, produces ordinary null. JSONB metadata is required when
+sorting must recover an Int/Float distinction erased by JSONB. This does not
+make arbitrary callbacks over the union available.
+
 The JSONB sidecar remains numeric-only and is not extended with temporal tags.
 Unions whose alternatives share a JSON representation category, such as
 `String|Timestamp` or `Duration|Timestamp`, remain ambiguous; `Build` rejects

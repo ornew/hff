@@ -68,4 +68,25 @@ func main() {
 	}
 	fmt.Println("Predicate built:", query.Where() != "")
 	fmt.Println("Parameter count:", len(query.Args()))
+
+	sortProgram, err := e.Compile(ctx,
+		`observed_items:sort:json="[9007199254740992.0,9007199254740993]"`,
+	)
+	if err != nil {
+		panic(err)
+	}
+	sortQuery, err := hffsql.Build(ctx, sortProgram,
+		hffsql.WithDialect(hffsql.PostgreSQL),
+		hffsql.WithBindings(hffsql.BindJSON(
+			hff.Path{"observed_items"},
+			hffsql.Column("records", "observed_items"),
+			hffsql.JSONB,
+			hffsql.WithTypeMetadata(hffsql.Column("records", "observed_items_types")),
+		)),
+	)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Sort predicate built:", sortQuery.Where() != "")
+	fmt.Println("Sort parameter count:", len(sortQuery.Args()))
 }

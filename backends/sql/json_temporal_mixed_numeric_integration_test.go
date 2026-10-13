@@ -29,9 +29,12 @@ func TestPostgreSQLJSONTemporalMixedNumericUnionMatchesLocal(t *testing.T) {
 	defer cancel()
 	timestamp := hff.Timestamp(time.Date(2026, 1, 1, 0, 0, 0, 123, time.UTC))
 	type row struct {
-		value hff.Value
-		json  string
-		meta  string
+		value     hff.Value
+		json      string
+		meta      string
+		items     []hff.Value
+		itemsJSON string
+		itemsMeta string
 	}
 	for _, tc := range []struct {
 		name   string
@@ -42,24 +45,37 @@ func TestPostgreSQLJSONTemporalMixedNumericUnionMatchesLocal(t *testing.T) {
 			name:   "timestamp",
 			typeOf: schema.Union(schema.TimestampType, schema.IntType, schema.FloatType, schema.NullType),
 			rows: []row{
-				{timestamp, `"2026-01-01T00:00:00.000000123Z"`, `{"version":1,"types":{}}`},
-				{hff.Timestamp(time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC)), `"0000-01-01T00:00:00Z"`, `{"version":1,"types":{}}`},
-				{hff.Timestamp(time.Date(9999, 12, 31, 23, 59, 59, 999999999, time.UTC)), `"9999-12-31T23:59:59.999999999Z"`, `{"version":1,"types":{}}`},
-				{hff.Int(9007199254740993), `9007199254740993`, `{"version":1,"types":{"":{"type":"int"}}}`},
-				{hff.Float(9007199254740992), `9007199254740992.0`, `{"version":1,"types":{"":{"type":"float","text":"9007199254740992.0"}}}`},
-				{hff.Float(math.Copysign(0, -1)), `-0.0`, `{"version":1,"types":{"":{"type":"float","text":"-0.0"}}}`},
-				{hff.Null(), `null`, `{"version":1,"types":{}}`},
+				{value: timestamp, json: `"2026-01-01T00:00:00.000000123Z"`, meta: `{"version":1,"types":{}}`},
+				{value: hff.Timestamp(time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC)), json: `"0000-01-01T00:00:00Z"`, meta: `{"version":1,"types":{}}`},
+				{value: hff.Timestamp(time.Date(9999, 12, 31, 23, 59, 59, 999999999, time.UTC)), json: `"9999-12-31T23:59:59.999999999Z"`, meta: `{"version":1,"types":{}}`},
+				{value: hff.Int(9007199254740993), json: `9007199254740993`, meta: `{"version":1,"types":{"":{"type":"int"}}}`},
+				{value: hff.Float(9007199254740992), json: `9007199254740992.0`, meta: `{"version":1,"types":{"":{"type":"float","text":"9007199254740992.0"}}}`},
+				{
+					value: hff.Float(math.Copysign(0, -1)), json: `-0.0`,
+					meta:      `{"version":1,"types":{"":{"type":"float","text":"-0.0"}}}`,
+					items:     []hff.Value{hff.Float(math.Copysign(0, -1)), hff.Int(0), hff.Float(0)},
+					itemsJSON: `[-0.0,0,0.0]`,
+					itemsMeta: `{"version":1,"types":{"/0":{"type":"float","text":"-0.0"},"/1":{"type":"int"},"/2":{"type":"float","text":"0.0"}}}`,
+				},
+				{
+					value: hff.Int(1), json: `1`, meta: `{"version":1,"types":{"":{"type":"int"}}}`,
+					items:     []hff.Value{hff.Int(9007199254740993), hff.Float(9007199254740992)},
+					itemsJSON: `[9007199254740993,9007199254740992.0]`,
+					itemsMeta: `{"version":1,"types":{"/0":{"type":"int"},"/1":{"type":"float","text":"9007199254740992.0"}}}`,
+				},
+				{value: hff.Null(), json: `null`, meta: `{"version":1,"types":{}}`},
 			},
 		},
 		{
 			name:   "duration",
 			typeOf: schema.Union(schema.DurationType, schema.IntType, schema.FloatType, schema.NullType),
 			rows: []row{
-				{hff.Duration(time.Hour), `"1h"`, `{"version":1,"types":{}}`},
-				{hff.Int(9007199254740993), `9007199254740993`, `{"version":1,"types":{"":{"type":"int"}}}`},
-				{hff.Float(9007199254740992), `9007199254740992.0`, `{"version":1,"types":{"":{"type":"float","text":"9007199254740992.0"}}}`},
-				{hff.Float(math.Copysign(0, -1)), `-0.0`, `{"version":1,"types":{"":{"type":"float","text":"-0.0"}}}`},
-				{hff.Null(), `null`, `{"version":1,"types":{}}`},
+				{value: hff.Duration(time.Hour), json: `"1h"`, meta: `{"version":1,"types":{}}`},
+				{value: hff.Duration(2 * time.Hour), json: `"2h"`, meta: `{"version":1,"types":{}}`},
+				{value: hff.Int(9007199254740993), json: `9007199254740993`, meta: `{"version":1,"types":{"":{"type":"int"}}}`},
+				{value: hff.Float(9007199254740992), json: `9007199254740992.0`, meta: `{"version":1,"types":{"":{"type":"float","text":"9007199254740992.0"}}}`},
+				{value: hff.Float(math.Copysign(0, -1)), json: `-0.0`, meta: `{"version":1,"types":{"":{"type":"float","text":"-0.0"}}}`},
+				{value: hff.Null(), json: `null`, meta: `{"version":1,"types":{}}`},
 			},
 		},
 	} {
@@ -82,11 +98,18 @@ func TestPostgreSQLJSONTemporalMixedNumericUnionMatchesLocal(t *testing.T) {
 				`value=value`, `value:in(9007199254740992.0,9007199254740993)`,
 				`value:in(null,9007199254740993)`, `value:string="-0.0"`,
 				`value:json="-0.0"`, `items:contains(9007199254740993)`, `items:unique`,
+				`items:sort=null`,
+				`items:sort[0]:[float]:exists`, `items:sort[0]:string="-0.0"`,
+				`items:sort[1]:[int]:exists`,
+				`items:sort:json="[9007199254740992.0,9007199254740993]"`,
+				`items:sort:json="[-0.0,0,0.0]"`,
 			}
 			if tc.name == "timestamp" {
-				sources = append(sources, `value:[timestamp]:year=2026`, `value:in("2026-01-01T00:00:00.000000123Z":timestamp,1)`)
+				sources = append(sources, `value:[timestamp]:year=2026`, `value:in("2026-01-01T00:00:00.000000123Z":timestamp,1)`,
+					`items:sort[0]:[timestamp]:year=0`, `items:sort[0]:[timestamp]:year=2026`)
 			} else {
-				sources = append(sources, `value:[duration]:hours=1`, `value:in("1h":duration,1)`)
+				sources = append(sources, `value:[duration]:hours=1`, `value:in("1h":duration,1)`,
+					`items:sort[0]:[duration]:hours=1`)
 			}
 			for _, mode := range []struct {
 				name   string
@@ -128,6 +151,9 @@ func TestPostgreSQLJSONTemporalMixedNumericUnionMatchesLocal(t *testing.T) {
 						var values []string
 						for ri, row := range tc.rows {
 							items := hff.List(row.value, taggedValue)
+							if row.items != nil {
+								items = hff.List(row.items...)
+							}
 							match, err := filter.Match(ctx, hff.Object(map[string]hff.Value{"value": row.value, "items": items}))
 							if err != nil {
 								t.Fatal(source, ri, err)
@@ -136,6 +162,9 @@ func TestPostgreSQLJSONTemporalMixedNumericUnionMatchesLocal(t *testing.T) {
 							labels = append(labels, fmt.Sprintf("%s row%d", source, ri))
 							itemsJSON := "[" + row.json + "," + taggedJSON + "]"
 							itemsMeta := strings.Replace(row.meta, `"":`, `"/0":`, 1)
+							if row.itemsJSON != "" {
+								itemsJSON, itemsMeta = row.itemsJSON, row.itemsMeta
+							}
 							values = append(values, "("+sqlFixtureString(row.json)+"::"+string(mode.format)+","+sqlFixtureString(row.meta)+"::jsonb,"+
 								sqlFixtureString(itemsJSON)+"::"+string(mode.format)+","+sqlFixtureString(itemsMeta)+"::jsonb)")
 						}

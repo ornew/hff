@@ -50,8 +50,16 @@ func (b *builder) jsonSort(n hff.Node, value expression) (expression, error) {
 	if stored.Kind() != hff.ListType {
 		return expression{}, b.failure(n, "sort requires an applicable list schema")
 	}
+	temporal := hff.InvalidType
 	if jsonHasTaggedString(stored.Element()) {
-		return expression{}, b.failure(n, "dynamic JSON sort cannot recover Bytes, Duration, or Timestamp type identity")
+		if !jsonRecoverableTaggedScalarUnion(stored.Element(), format) {
+			return expression{}, b.failure(n, "dynamic JSON sort cannot recover Bytes, Duration, or Timestamp type identity")
+		}
+		if jsonRootHasKind(stored.Element(), hff.TimestampType) {
+			temporal = hff.TimestampType
+		} else {
+			temporal = hff.DurationType
+		}
 	}
 	var raw string
 	if format == JSON && stored.Element().Kind() == hff.AnyType {
@@ -83,11 +91,19 @@ func (b *builder) jsonSort(n hff.Node, value expression) (expression, error) {
 	floatKey := "(SELECT CASE WHEN " + floatValue + "=0 THEN 0::numeric ELSE " + b.floatNumeric(floatValue) + " END FROM LATERAL (SELECT " + f + " AS v OFFSET 0) AS " + floatAlias + ")"
 	number := "(CASE WHEN " + integer + " THEN " + i + " WHEN " + floating + " THEN " + floatKey + " END)"
 	stringKey := "(CASE WHEN " + category + "='string' THEN " + text + " END) COLLATE \"C\""
+	if temporal != hff.InvalidType {
+		key := b.parseDurationInline(text)
+		if temporal == hff.TimestampType {
+			key = jsonTimestampNanoseconds(text)
+		}
+		stringKey = "(CASE WHEN " + category + "='string' THEN " + key + " END)"
+	}
 	from := "json_array_elements(" + raw + ") WITH ORDINALITY AS " + alias + "(value,ord)"
 	invalid := "EXISTS(SELECT 1 FROM " + from + " WHERE " + category + " NOT IN ('number','string'))"
 	mixed := "(SELECT count(DISTINCT " + category + ")>1 FROM " + from + ")"
 	// Int/Float and signed-zero ties keep their normalized original spelling,
 	// so stable ordering is observable even though their numeric keys coincide.
+	// Temporal strings sort by the parsed instant or duration, not their text.
 	aggregate := "(SELECT COALESCE(json_agg(" + item + " ORDER BY " + number + "," + stringKey + "," + alias + ".ord),'[]'::json) FROM " + from + ")"
 	code := "(CASE WHEN " + raw + " IS NULL OR " + invalid + " OR " + mixed + " THEN NULL::json ELSE " + aggregate + " END)"
 	b.jsonValues[code] = JSON
