@@ -27,6 +27,27 @@ shortened one predicate and removed its projection barriers, but no execution
 speedup was measured. See [direct scalar predicate shape](../../optimizations/013-postgresql-scalar-predicate-shape.md)
 for the exact fixture and its limits.
 
+### Lower homogeneous scalar membership directly
+
+For eligible same-type scalar membership, the translator can use SQL
+`IN` rather than encoding and decoding each value through JSON. The direct
+predicate path handles literal membership on supported native scalar columns;
+the expression path also avoids JSON conversion for homogeneous native scalar
+values. Null candidates do not match, nullable receiver behavior is preserved,
+and mixed numeric equality stays on the exact general path. For the eligible
+root filter `age:in(18,21)`, direct composition with scalar predicates
+shortened the `WHERE` expression from 1,627 to 80 characters and removed all
+three projection barriers; it binds two arguments. A same-type dynamic
+membership expression is not measured here. For the same literal filter, an
+intermediate native-`IN` lowering generated a 399-character `WHERE` and
+retained three barriers; the direct root-predicate lowering generates 80
+characters with no barriers and two arguments. Plain `EXPLAIN` on an empty
+temporary table with an age index selected a Bitmap Index Scan for the direct
+literal-root predicate. This plan result is fixture-specific; no execution
+speed was measured. See
+[homogeneous scalar membership](../../optimizations/014-postgresql-scalar-in.md)
+for scope and limits.
+
 ### Project computed steps once
 
 Computed expressions are lowered through relational `LATERAL` projections.

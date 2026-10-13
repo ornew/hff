@@ -43,6 +43,9 @@ func (b *builder) jsonIn(n hff.Node, values []expression) (expression, error) {
 	if receiver.kind == hff.NullType {
 		return expression{"NULL", receiver.present, hff.NullType}, nil
 	}
+	if value, ok := nativeScalarIn(values); ok {
+		return value, nil
+	}
 	left, lf, err := b.jsonRepresentation(n, receiver)
 	if err != nil {
 		return expression{}, err
@@ -63,6 +66,43 @@ func (b *builder) jsonIn(n hff.Node, values []expression) (expression, error) {
 	}
 	code := "(CASE WHEN " + receiver.code + " IS NULL THEN NULL ELSE (" + strings.Join(matches, " OR ") + ") END)"
 	return expression{code, membershipPresence(values), hff.BoolType}, nil
+}
+
+// Native scalar values already have the same representation on both sides of
+// equality. Avoid encoding each needle as JSON and decoding it again. Null
+// needles never match a non-null receiver, while the receiver's own null still
+// propagates as a method result. Argument no-value flags remain in presence.
+func nativeScalarIn(values []expression) (expression, bool) {
+	receiver := values[0]
+	switch receiver.kind {
+	case hff.BoolType, hff.IntType, hff.FloatType, hff.StringType, hff.BytesType:
+	default:
+		return expression{}, false
+	}
+	var needles []string
+	for _, arg := range values[1:] {
+		if arg.kind == hff.NullType {
+			continue
+		}
+		if arg.kind != receiver.kind {
+			return expression{}, false
+		}
+		code := arg.code
+		if receiver.kind == hff.StringType {
+			code += " COLLATE \"C\""
+		}
+		needles = append(needles, code)
+	}
+	match := "FALSE"
+	if len(needles) > 0 {
+		left := receiver.code
+		if receiver.kind == hff.StringType {
+			left += " COLLATE \"C\""
+		}
+		match = "COALESCE((" + left + " IN (" + strings.Join(needles, ",") + ")),FALSE)"
+	}
+	code := "(CASE WHEN " + receiver.code + " IS NULL THEN NULL ELSE " + match + " END)"
+	return expression{code, membershipPresence(values), hff.BoolType}, true
 }
 
 func (b *builder) jsonMembership(n hff.Node, name string, values []expression, format JSONFormat) (expression, error) {

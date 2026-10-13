@@ -39,6 +39,10 @@ func TestDirectScalarWhereKeepsSimpleFiltersIndexable(t *testing.T) {
 		`active`,
 		`!active`,
 		`!age>18`,
+		`age:in(18,21)`,
+		`name:in("Alice","Bob",null)`,
+		`!active:in(true)`,
+		`age:in(18,21) name="Alice"`,
 	} {
 		program, err := e.Compile(ctx, source)
 		if err != nil {

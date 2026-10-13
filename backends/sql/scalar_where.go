@@ -52,11 +52,42 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 		return ok
 	case hff.BoolNode:
 		child, _ := n.Child(0)
+		if child.Kind() == hff.CallNode {
+			return b.directScalarInEligible(child)
+		}
 		_, _, ok := b.directScalarColumn(child)
 		return ok
 	default:
 		return false
 	}
+}
+
+func (b *builder) directScalarInEligible(n hff.Node) bool {
+	method, ok := n.Method()
+	if !ok || method.Name() != "in" || n.ChildCount() < 2 {
+		return false
+	}
+	receiver, _ := n.Child(0)
+	_, kind, ok := b.directScalarColumn(receiver)
+	if !ok {
+		return false
+	}
+	for i := 1; i < n.ChildCount(); i++ {
+		argument, _ := n.Child(i)
+		if argument.Kind() != hff.LiteralNode {
+			return false
+		}
+		value, _ := argument.Literal()
+		if value.Kind() == hff.NullKind {
+			continue
+		}
+		if (kind != hff.IntType || value.Kind() != hff.IntKind) &&
+			(kind != hff.StringType || value.Kind() != hff.StringKind) &&
+			(kind != hff.BoolType || value.Kind() != hff.BoolKind) {
+			return false
+		}
+	}
+	return true
 }
 
 func (b *builder) directScalarColumn(n hff.Node) (string, hff.TypeKind, bool) {
@@ -133,6 +164,9 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 	}
 	if n.Kind() == hff.BoolNode {
 		child, _ := n.Child(0)
+		if child.Kind() == hff.CallNode {
+			return b.directScalarIn(child)
+		}
 		column, kind, _ := b.directScalarColumn(child)
 		var test string
 		switch kind {
@@ -168,6 +202,40 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 	if acceptsKind(left.Type(), hff.NullType) {
 		// FALSE AND NULL is FALSE in PostgreSQL, so this stays a two-valued
 		// Boolean without hiding the direct comparison from the planner.
+		test = column + " IS NOT NULL AND " + test
+	}
+	return "(" + test + ")", nil
+}
+
+func (b *builder) directScalarIn(n hff.Node) (string, error) {
+	receiver, _ := n.Child(0)
+	column, kind, _ := b.directScalarColumn(receiver)
+	var needles []string
+	for i := 1; i < n.ChildCount(); i++ {
+		argument, _ := n.Child(i)
+		value, _ := argument.Literal()
+		if value.Kind() == hff.NullKind {
+			continue
+		}
+		literal, err := b.literal(argument)
+		if err != nil {
+			return "", err
+		}
+		needle := literal.code
+		if kind == hff.StringType {
+			needle += " COLLATE \"C\""
+		}
+		needles = append(needles, needle)
+	}
+	if len(needles) == 0 {
+		return "FALSE", nil
+	}
+	test := column
+	if kind == hff.StringType {
+		test += " COLLATE \"C\""
+	}
+	test += " IN (" + strings.Join(needles, ",") + ")"
+	if acceptsKind(receiver.Type(), hff.NullType) {
 		test = column + " IS NOT NULL AND " + test
 	}
 	return "(" + test + ")", nil
