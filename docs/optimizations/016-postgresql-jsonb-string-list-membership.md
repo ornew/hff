@@ -40,7 +40,8 @@ the SQL uses one `jsonb_build_array` expression with two bound text values:
 The comparison measures the one-needle HFF filter `tags:contains("auth")`
 and a direct physical binding of `tags` to the JSONB column `records.tags`,
 declared as `List<String>`. The baseline is commit
-[a498cde](https://github.com/ornew/hff/commit/a498cde); the implementation is in
+[a498cde](https://github.com/ornew/hff/commit/a498cde); the implementation is
+commit [c5d6fed](https://github.com/ornew/hff/commit/c5d6fed). The code is in
 `backends/sql/direct_jsonb_membership.go` and its focused tests. The lengths
 below are generated `WHERE` expression character counts; barriers count
 `OFFSET 0` projections in the expression. One bound text parameter is used

@@ -42,7 +42,8 @@ The SQL-shape comparison uses `tags:any(tag=>tag="auth")` and the direct
 physical binding of `tags` to JSONB column `records.tags`, declared as
 `List<String>`. The baseline is commit
 [c5d6fed](https://github.com/ornew/hff/commit/c5d6fed); the implementation is
-in `backends/sql/direct_jsonb_membership.go`, `backends/sql/scalar_where.go`,
+commit [8ad3fd9](https://github.com/ornew/hff/commit/8ad3fd9). The code is in
+`backends/sql/direct_jsonb_membership.go`, `backends/sql/scalar_where.go`,
 and its focused tests. The reported lengths count generated `WHERE` expression
 characters; barriers count `OFFSET 0` projections. Both forms bind one text
 parameter.

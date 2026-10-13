@@ -1,6 +1,6 @@
 # 013. Emit eligible scalar predicates directly
 
-- **Status**: Proposed
+- **Status**: Implemented
 - **Date**: 2026-10-14
 
 ## Problem and mechanism
@@ -40,8 +40,10 @@ CREATE INDEX ON records(name);
 ```
 
 The baseline generated five `OFFSET 0` barriers; the direct candidate generated
-none. To inspect the generated plan shape without executing the query, prepare
-the exact direct candidate against the same indexed fixture:
+none. The implementation is commit
+[3116dfa](https://github.com/ornew/hff/commit/3116dfa). To inspect the generated
+plan shape without executing the query, prepare the exact direct candidate
+against the same indexed fixture:
 
 ```sql
 PREPARE hff(bigint, text) AS

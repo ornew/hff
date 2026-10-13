@@ -1,6 +1,6 @@
 # 015. Emit direct predicates for native String operations
 
-- **Status**: Proposed
+- **Status**: Implemented
 - **Date**: 2026-10-14
 
 ## Problem and mechanism
@@ -42,7 +42,8 @@ The SQL-shape comparison uses a directly bound `records.name` text column,
 literal String/null method arguments, and integer literals for `len()`
 comparisons. Combined queries add a directly bound `records.age` integer
 column. Baseline revision is
-[88d1bb8](https://github.com/ornew/hff/commit/88d1bb8); the candidate changes
+[88d1bb8](https://github.com/ornew/hff/commit/88d1bb8); the implementation is
+commit [a498cde](https://github.com/ornew/hff/commit/a498cde). The code is in
 `backends/sql/scalar_where.go` and its focused tests. The reported lengths are
 the generated `WHERE` expression lengths; barriers count `OFFSET 0`
 projections in those expressions.

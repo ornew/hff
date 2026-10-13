@@ -1,6 +1,6 @@
 # 014. Lower homogeneous scalar membership directly
 
-- **Status**: Proposed
+- **Status**: Implemented
 - **Date**: 2026-10-14
 
 ## Problem and mechanism
@@ -37,8 +37,9 @@ intermediate native-`IN` lowering that retained projection barriers, and
 the direct root-predicate path. SQL text lengths and projection-barrier
 counts are structural measurements, not database execution measurements.
 
-The baseline is commit [3116dfa](https://github.com/ornew/hff/commit/3116dfa).
-The candidate changes are the scalar-membership lowering in
+The baseline is commit [3116dfa](https://github.com/ornew/hff/commit/3116dfa);
+the implementation is commit
+[88d1bb8](https://github.com/ornew/hff/commit/88d1bb8). The code is in
 `backends/sql/scalar_where.go` and `backends/sql/json_membership.go`.
 Correctness fixtures compare local and PostgreSQL results for nullable
 Int, String, Bool, Float, and Bytes receivers, including null candidates,
