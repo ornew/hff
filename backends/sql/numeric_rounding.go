@@ -21,14 +21,13 @@ func (b *builder) numericRounding(n hff.Node, name string, value expression) (ex
 	if err != nil {
 		return expression{}, err
 	}
-	var branches []string
+	var branches []numericBranch
 	if operand.integerPossible {
-		branches = append(branches, "WHEN "+operand.isInteger+" THEN to_json("+operand.integer.code+")")
+		branches = append(branches, numericBranch{operand.isInteger, operand.integer})
 	}
 	if operand.floatPossible {
 		floating := b.roundedFloat(operand.floating.code, name)
-		branches = append(branches, "WHEN "+operand.isFloat+" THEN "+b.floatText(floating)+"::json")
+		branches = append(branches, numericBranch{operand.isFloat, expression{floating, value.present, hff.FloatType}})
 	}
-	code := numericJSONBranches(branches)
-	return b.jsonDecode(n, code, JSON, n.Type(), value.present)
+	return b.numericResult(n, branches, value.present)
 }

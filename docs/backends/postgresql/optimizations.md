@@ -111,6 +111,20 @@ no runtime measurement was made. See the [schema-guided arithmetic branch
 record](../../optimizations/028-postgresql-schema-numeric-arithmetic.md) for
 filters and limits.
 
+### Keep single-family JSON arithmetic results typed
+
+When a compiled JSON arithmetic expression has one non-null numeric result
+family and all reachable branches return that family, the translator can
+return `bigint` or `double precision` directly instead of serializing the
+result as JSON and decoding it again. Representation checks, JSONB metadata
+recovery, presence, typed SQL-null carriers, Int overflow and promotion, and
+the PostgreSQL Float Profile remain in place. Int division still returns
+Float. Results with multiple possible numeric families retain JSON; Null-only
+and Never results keep their existing null carrier.
+The [typed numeric result record](../../optimizations/029-postgresql-typed-numeric-results.md)
+reports generated SQL and fixture-specific plain `EXPLAIN` structure; no
+runtime timing was measured.
+
 ### Prune impossible categories in dynamic JSON pair comparisons
 
 For dynamic-versus-dynamic comparisons, the translator intersects the JSON

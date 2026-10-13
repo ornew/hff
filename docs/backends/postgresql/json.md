@@ -751,6 +751,24 @@ PostgreSQL-native Float Profile or promise an execution-speed improvement.
 See [PostgreSQL translation optimizations](optimizations.md#prune-numeric-arithmetic-branches-excluded-by-json-schema)
 for the shape evidence and applicability limits.
 
+When the compiled result type is exactly one non-null numeric family, SQL
+arithmetic can keep that result as `bigint` or `double precision`. For example,
+`i+2` with `i: String|Int|Null` has an Int result, while `i/2` has a Float
+result even though both inputs are Int. A mixed expression such as `i+f` also
+has one Float result after the required promotion. In these cases the
+translator can skip serializing the computed result to JSON and decoding it
+again. It retains the original representation checks, JSONB metadata recovery,
+presence, and arithmetic kernels.
+
+Nullable Int and nullable Float results also use this path. Expressions with
+multiple numeric subtypes retain JSON to recover their runtime subtype;
+Null-only and Never results keep their existing untyped null carrier.
+This changes generated SQL shape, not
+the PostgreSQL Float Profile or HFF arithmetic rules. See [typed JSON numeric
+results](optimizations.md#keep-single-family-json-arithmetic-results-typed)
+for filters, comparison limits, and plan-shape evidence; no execution timing
+was measured.
+
 Float arithmetic lowering follows the PostgreSQL `float.*` Profile, including
 the documented extreme-magnitude fallback. It does not promise a particular
 SQL size or execution time. The earlier exact-decomposition reuse measurement

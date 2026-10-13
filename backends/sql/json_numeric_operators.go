@@ -12,6 +12,11 @@ type jsonNumericOperand struct {
 	integerPossible, floatPossible bool
 }
 
+type numericBranch struct {
+	condition string
+	value     expression
+}
+
 func (b *builder) numericOperand(n hff.Node, value expression) (jsonNumericOperand, error) {
 	out := jsonNumericOperand{integer: expression{"NULL::bigint", value.present, hff.IntType}, floating: expression{"NULL::double precision", value.present, hff.FloatType}, isInteger: "FALSE", isFloat: "FALSE"}
 	switch value.kind {
@@ -75,7 +80,7 @@ func (b *builder) dynamicJSONArithmetic(n hff.Node, left, right expression, op h
 	if err != nil {
 		return expression{}, err
 	}
-	var branches []string
+	var branches []numericBranch
 	integers := a.integerPossible && c.integerPossible
 	bothIntegers := both(a.isInteger, c.isInteger)
 	if integers {
@@ -83,11 +88,7 @@ func (b *builder) dynamicJSONArithmetic(n hff.Node, left, right expression, op h
 		if err != nil {
 			return expression{}, err
 		}
-		intJSON, _, err := b.jsonRepresentation(n, integer)
-		if err != nil {
-			return expression{}, err
-		}
-		branches = append(branches, "WHEN "+bothIntegers+" THEN "+intJSON)
+		branches = append(branches, numericBranch{bothIntegers, integer})
 	}
 	floating := (a.integerPossible || a.floatPossible) && (c.integerPossible || c.floatPossible) && (a.floatPossible || c.floatPossible)
 	if op != hff.Remainder && floating {
@@ -101,16 +102,11 @@ func (b *builder) dynamicJSONArithmetic(n hff.Node, left, right expression, op h
 		if err != nil {
 			return expression{}, err
 		}
-		floatJSON, _, err := b.jsonRepresentation(n, value)
-		if err != nil {
-			return expression{}, err
-		}
-		branches = append(branches, "WHEN "+both(a.numericCondition(), c.numericCondition())+" THEN "+floatJSON)
+		branches = append(branches, numericBranch{both(a.numericCondition(), c.numericCondition()), value})
 	}
-	code := numericJSONBranches(branches)
 	// A nonnumeric left value does not skip the right operand. Only actual
 	// null/no-value propagation can settle evaluation before its type check.
-	return b.jsonDecode(n, code, JSON, n.Type(), ordinaryPresence([]expression{left, right}))
+	return b.numericResult(n, branches, ordinaryPresence([]expression{left, right}))
 }
 
 func (b *builder) dynamicJSONNegation(n hff.Node, value expression) (expression, error) {
@@ -119,17 +115,16 @@ func (b *builder) dynamicJSONNegation(n hff.Node, value expression) (expression,
 	if err != nil {
 		return expression{}, err
 	}
-	var branches []string
+	var branches []numericBranch
 	if operand.integerPossible {
 		integer := "(CASE WHEN " + operand.integer.code + "='-9223372036854775808'::bigint THEN NULL::bigint ELSE -(" + operand.integer.code + ") END)"
-		branches = append(branches, "WHEN "+operand.isInteger+" THEN to_json("+integer+")")
+		branches = append(branches, numericBranch{operand.isInteger, expression{integer, value.present, hff.IntType}})
 	}
 	if operand.floatPossible {
 		floating := "(-(" + operand.floating.code + "))"
-		branches = append(branches, "WHEN "+operand.isFloat+" THEN "+b.floatText(floating)+"::json")
+		branches = append(branches, numericBranch{operand.isFloat, expression{floating, value.present, hff.FloatType}})
 	}
-	code := numericJSONBranches(branches)
-	return b.jsonDecode(n, code, JSON, n.Type(), value.present)
+	return b.numericResult(n, branches, value.present)
 }
 
 func (operand jsonNumericOperand) numericCondition() string {
@@ -147,4 +142,43 @@ func numericJSONBranches(branches []string) string {
 		return "NULL::json"
 	}
 	return "(CASE " + strings.Join(branches, " ") + " ELSE NULL::json END)"
+}
+
+// A single compiled numeric result family already has the carrier that JSON
+// decoding would restore. Keep that native value rather than formatting and
+// reparsing it. Storage validation and branch arithmetic happen before this
+// helper; result presence belongs to the original operands, not their numeric
+// views. Numeric unions and Null/Never keep the existing JSON decoding path.
+func (b *builder) numericResult(n hff.Node, branches []numericBranch, present string) (expression, error) {
+	kind, native := jsonKind(n.Type())
+	native = native && (kind == hff.IntType || kind == hff.FloatType)
+	for _, branch := range branches {
+		if branch.value.kind != kind {
+			native = false
+		}
+	}
+	if native {
+		carrier := "bigint"
+		if kind == hff.FloatType {
+			carrier = "double precision"
+		}
+		code := "NULL::" + carrier
+		if len(branches) > 0 {
+			var cases []string
+			for _, branch := range branches {
+				cases = append(cases, "WHEN "+branch.condition+" THEN "+branch.value.code)
+			}
+			code = "(CASE " + strings.Join(cases, " ") + " ELSE " + code + " END)"
+		}
+		return expression{code, present, kind}, nil
+	}
+	var cases []string
+	for _, branch := range branches {
+		code, _, err := b.jsonRepresentation(n, branch.value)
+		if err != nil {
+			return expression{}, err
+		}
+		cases = append(cases, "WHEN "+branch.condition+" THEN "+code)
+	}
+	return b.jsonDecode(n, numericJSONBranches(cases), JSON, n.Type(), present)
 }

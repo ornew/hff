@@ -324,6 +324,17 @@ reduces some generated SQL without changing the Float Profile or promising a
 runtime speedup. See the [JSON numeric arithmetic guide](json.md#numeric-arithmetic)
 for examples and limits.
 
+For a JSON-backed arithmetic result whose compiled type contains one numeric
+subtype after excluding Null, the translator can keep the computed value as a typed SQL
+`bigint` or `double precision` result instead of converting it to JSON and
+decoding it again. This also applies to nullable results: after excluding Null,
+every reachable branch must return the same numeric subtype. Results with
+multiple numeric subtypes retain runtime subtype recovery.
+Int division still returns Float. Existing representation and JSONB metadata
+checks, presence, Int overflow, and the PostgreSQL Float Profile are unchanged.
+This SQL-shape reduction is not a runtime-speed claim. See the
+[typed numeric result details](optimizations.md#keep-single-family-json-arithmetic-results-typed).
+
 For statically known Int and Float expressions, PostgreSQL `Build` removes a
 narrow set of arithmetic identities while preserving the surviving operand's
 null, no-value, and type behavior:
