@@ -686,7 +686,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		}
 	}
 	switch name {
-	case "duration", "hours", "minutes", "seconds", "milliseconds", "microseconds", "nanoseconds", "year", "month", "dayofmonth", "dayofyear", "before", "after", "add", "matches", "base64", "frombase64", "lower", "upper", "round", "ceil", "floor", "bool", "number", "fromjson", "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
+	case "duration", "hours", "minutes", "seconds", "milliseconds", "microseconds", "nanoseconds", "year", "month", "dayofmonth", "dayofyear", "before", "after", "add", "matches", "base64", "base64r", "frombase64", "frombase64r", "lower", "upper", "round", "ceil", "floor", "bool", "number", "fromjson", "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
 	default:
 		return expression{}, b.failure(n, "PostgreSQL does not yet support method "+name)
 	}
@@ -736,7 +736,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 	if name == "matches" {
 		return b.regexCall(n, "", receiver, values[1])
 	}
-	if name == "base64" || name == "frombase64" || (name == "len" && receiver.kind == hff.BytesType) {
+	if name == "base64" || name == "base64r" || name == "frombase64" || name == "frombase64r" || (name == "len" && receiver.kind == hff.BytesType) {
 		return b.bytesCall(n, name, receiver)
 	}
 	if name == "round" || name == "ceil" || name == "floor" {

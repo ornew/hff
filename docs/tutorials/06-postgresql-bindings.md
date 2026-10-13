@@ -220,7 +220,9 @@ go run ./examples/sql-relations
 
 The same scalar binding pattern maps a logical HFF `Bytes` field to a
 PostgreSQL `bytea` column. `bytes:len()` counts bytes, `bytes:base64()` encodes
-the value, and `string:frombase64()` strictly decodes standard padded base64.
+standard padded base64, and `bytes:base64r()` encodes standard base64 without
+padding. `string:frombase64()` and `string:frombase64r()` strictly decode their
+respective forms.
 The decoded result can be compared directly with a bound `bytea` field.
 
 ```sql
@@ -297,6 +299,8 @@ This function uses the imports and HFF APIs shown at the start of the tutorial;
 the caller supplies an initialized database handle. Only row 1 matches. Row 2
 has the wrong byte length, and row 3 has unpadded, invalid base64. Invalid
 decoding yields null, so it does not match the byte comparison.
+For raw unpadded standard base64, use `frombase64r()` instead; the padded
+decoder deliberately rejects row 3.
 
 To build the same predicate without a database connection, run
 `go run ./examples/sql-bytes`. It prints whether predicate construction

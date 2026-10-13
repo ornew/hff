@@ -11,18 +11,27 @@ func (b *builder) bytesCall(n hff.Node, name string, receiver expression) (expre
 	if n.Type().Kind() == hff.NullType || n.Type().Kind() == hff.NeverType || receiver.kind == hff.NullType {
 		return expression{"NULL", receiver.present, hff.NullType}, nil
 	}
-	if name == "frombase64" {
+	if name == "frombase64" || name == "frombase64r" {
 		text, err := b.stringConversionInput(n, receiver)
 		if err != nil {
 			return expression{}, err
 		}
 		input := b.project(text)
-		// Sanitize before decode, including when the input is a SQL constant.
-		// The canonical round trip additionally rejects nonzero padding bits.
+		// PostgreSQL's decoder accepts noncanonical spellings and can throw on
+		// malformed input. Sanitize first, then verify the exact round trip.
 		valid := "(" + input + " COLLATE \"C\" ~ '^[A-Za-z0-9+/]*={0,2}$' AND length(" + input + ")%4=0)"
-		safe := b.project("(CASE WHEN " + valid + " THEN " + input + " ELSE NULL::text END)")
+		payload := input
+		if name == "frombase64r" {
+			valid = "(" + input + " COLLATE \"C\" ~ '^[A-Za-z0-9+/]*$' AND length(" + input + ")%4<>1)"
+			payload = "(" + input + " || repeat('=',(4-length(" + input + ")%4)%4))"
+		}
+		safe := b.project("(CASE WHEN " + valid + " THEN " + payload + " ELSE NULL::text END)")
 		decoded := b.project("decode(" + safe + ",'base64')")
-		code := "(CASE WHEN " + postgresBase64(decoded) + " COLLATE \"C\"=" + input + " COLLATE \"C\" THEN " + decoded + " ELSE NULL::bytea END)"
+		encoded := postgresBase64(decoded)
+		if name == "frombase64r" {
+			encoded = "rtrim(" + encoded + ",'=')"
+		}
+		code := "(CASE WHEN " + encoded + " COLLATE \"C\"=" + input + " COLLATE \"C\" THEN " + decoded + " ELSE NULL::bytea END)"
 		return expression{code, receiver.present, hff.BytesType}, nil
 	}
 	if receiver.kind != hff.BytesType {
@@ -31,7 +40,11 @@ func (b *builder) bytesCall(n hff.Node, name string, receiver expression) (expre
 	if name == "len" {
 		return expression{"octet_length(" + receiver.code + ")::bigint", receiver.present, hff.IntType}, nil
 	}
-	return expression{postgresBase64(receiver.code), receiver.present, hff.StringType}, nil
+	encoded := postgresBase64(receiver.code)
+	if name == "base64r" {
+		encoded = "rtrim(" + encoded + ",'=')"
+	}
+	return expression{encoded, receiver.present, hff.StringType}, nil
 }
 
 // postgresDecodeBase64 rejects malformed input before invoking PostgreSQL's

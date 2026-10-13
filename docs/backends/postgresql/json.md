@@ -1109,11 +1109,11 @@ are not restored by type tags. Dynamic serialization is limited to JSON-native
 values whose numeric representation is recoverable; it does not make arbitrary
 `Any` values serializable.
 
-`string.frombase64()` is an explicit conversion for string fields and
-recoverable JSON string values. It produces a scalar Bytes expression without
-metadata. It does not infer Bytes for an untyped JSON string; stored
-schema-known Bytes use the declared schema and canonical base64 representation
-described [above](#bytes-in-json-documents). See the
+`string.frombase64()` and `string.frombase64r()` are explicit conversions for
+string fields and recoverable JSON string values. They produce a scalar Bytes
+expression without metadata. They do not infer Bytes for an untyped JSON
+string; stored schema-known Bytes use the declared schema and canonical base64
+representation described [above](#bytes-in-json-documents). See the
 [PostgreSQL bytea support](README.md#bytes-and-base64) for native column
 methods and null rules.
 
@@ -1436,8 +1436,8 @@ a source-located `hff.BackendError` from `Build`:
   when both integer and float candidates remain possible or an operation needs
   a numeric distinction lost during JSONB normalization.
 - Dynamic string methods other than `len()`, `lower()`, `upper()`, `bool()`,
-  `number()`, `duration()`, `fromjson()`, `frombase64()`, `startswith()`,
-  `endswith()`,
+  `number()`, `duration()`, `fromjson()`, `frombase64()`, `frombase64r()`,
+  `startswith()`, `endswith()`,
   String/List `contains()`, and String/List `concat()` described above.
 - Other dynamic operations whose result cannot be resolved from schema
   candidates, a supported type guard, or a statically typed string/numeric

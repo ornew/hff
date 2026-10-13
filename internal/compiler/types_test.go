@@ -36,7 +36,7 @@ func TestTypeUnionsAndAccess(t *testing.T) {
 	}
 }
 func TestBuiltinDeclarations(t *testing.T) {
-	tests := map[string]int{"contains": 2, "size": 2, "concat": 2, "len": 2, "hours": 2, "frombase64": 1, "base64": 1, "any": 1, "type": 1, "not-a-method": 0}
+	tests := map[string]int{"contains": 2, "size": 2, "concat": 2, "len": 2, "hours": 2, "frombase64": 1, "frombase64r": 1, "base64": 1, "base64r": 1, "any": 1, "type": 1, "not-a-method": 0}
 	for name, want := range tests {
 		if got := len(builtins(name)); got != want {
 			t.Fatalf("%s: %d declarations, want %d", name, got, want)

@@ -60,16 +60,24 @@ boolean semantics on the method result. See the
 
 `string:frombase64()` decodes standard padded base64 into an immutable bytes
 value. `bytes:base64()` encodes bytes with the standard alphabet and required
-padding. URL-safe and unpadded forms, embedded CR/LF, and non-canonical pad bits
-are rejected; an invalid decode returns null. Null inputs propagate as null.
-The PostgreSQL backend supports `bytes:len()` and `bytes:base64()` for native
-`bytea` and computed Bytes values, plus `string:frombase64()` for supported
-string receivers. Its SQL profile also supports schema-known Bytes in
-JSON/JSONB collections as canonical padded base64 strings. A base64-looking
-`Any` string is not inferred to be Bytes, and a `String|Bytes` union remains
-ambiguous. See the
+padding. `string:frombase64r()` and `bytes:base64r()` use the same standard
+alphabet without padding; empty input represents empty bytes. Each decoder
+accepts only its matching form and rejects URL-safe characters, embedded
+CR/LF, and non-canonical pad bits. Invalid decoding returns null, and null
+inputs propagate as null.
+The PostgreSQL backend supports `bytes:len()`, `bytes:base64()`, and
+`bytes:base64r()` for native `bytea` and computed Bytes values, plus both
+decoders for supported string receivers. Its SQL profile also supports
+schema-known Bytes in JSON/JSONB collections as canonical padded base64 strings.
+A base64-looking `Any` string is not inferred to be Bytes, and a `String|Bytes`
+union remains ambiguous. See the
 [PostgreSQL bytea guide](../backends/postgresql/README.md#bytes-and-base64) and
 [JSON Bytes guide](../backends/postgresql/json.md#bytes-in-json-documents).
+
+Use the `r` methods when a protocol requires standard base64 without `=`
+padding. For example, the bytes `01 02 03 04` encode as `AQIDBA` with
+`base64r()` and `AQIDBA==` with `base64()`. The two decoders accept only their
+matching form; neither method guesses whether padding was omitted.
 
 The PostgreSQL JSON backend also supports the schema-known
 `Bytes|Int|Float|Null` and `Bytes|Bool|Int|Float|Null` subsets in native JSON
@@ -104,6 +112,23 @@ It prints:
 "AQIDBA==" -> true
 "AQIDBA" -> false
 "AQIDBA==\n" -> false
+```
+
+The raw-encoding example checks local behavior and builds the corresponding
+PostgreSQL predicate without connecting to a database:
+
+```sh
+go run ./examples/base64-raw
+```
+
+It prints:
+
+```text
+"AQIDBA" -> true
+"AQIDBA==" -> false
+"AQIDBB" -> false
+PostgreSQL predicate built: true
+Parameter count: 1
 ```
 
 See the [local backend configuration](../backends/local/configuration.md) for limit behavior.

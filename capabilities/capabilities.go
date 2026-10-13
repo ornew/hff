@@ -65,7 +65,7 @@ func init() {
 	for _, name := range []string{"list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr"} {
 		builtins[Method(name)] = []ID{Callbacks}
 	}
-	for _, name := range []string{"string.frombase64", "bytes.base64"} {
+	for _, name := range []string{"string.frombase64", "string.frombase64r", "bytes.base64", "bytes.base64r"} {
 		builtins[Method(name)] = nil
 	}
 }

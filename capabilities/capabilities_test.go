@@ -33,7 +33,7 @@ func TestSelectionDoesNotMutateProfiles(t *testing.T) {
 }
 
 func TestBase64MethodsCanBeSelected(t *testing.T) {
-	for _, name := range []string{"string.frombase64", "bytes.base64"} {
+	for _, name := range []string{"string.frombase64", "string.frombase64r", "bytes.base64", "bytes.base64r"} {
 		id := capabilities.Method(name)
 		if !capabilities.Standard().Has(id) {
 			t.Fatalf("standard profile omits %s", name)

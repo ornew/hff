@@ -52,11 +52,14 @@ Numeric rounding preserves int64 versus float64 subtype. See
 | `string:fromjson() -> any` | Parse strict JSON into HFF values. |
 | `string:concat(string) -> string` | Append the argument to the receiver. |
 | `string:frombase64() -> bytes` | Decode standard padded base64. |
+| `string:frombase64r() -> bytes` | Decode unpadded standard base64. |
 | `bytes:len() -> number` | Byte count. |
 | `bytes:base64() -> string` | Encode standard padded base64. |
+| `bytes:base64r() -> string` | Encode unpadded standard base64. |
 
 The PostgreSQL backend supports scalar Bytes values backed by `bytea`, including
-`len()`, `base64()`, equality, and decoding with `string:frombase64()`. It also
+`len()`, both base64 encoders, equality, and decoding with either string
+decoder. It also
 supports schema-known Bytes values in JSON/JSONB collections, represented as
 canonical padded base64 strings. An `Any` string is not inferred to be Bytes,
 and an ambiguous `String|Bytes` union cannot recover the distinction. Typed
@@ -73,8 +76,10 @@ type metadata. See the
 supported profile.
 
 Invalid conversions and invalid regular expressions yield null. The HFF regex
-reference is RE2 except `\\C`, which is rejected. Base64 decoding rejects
-URL-safe or unpadded forms, embedded line breaks, and non-canonical pad bits.
+reference is RE2 except `\\C`, which is rejected. Padded base64 methods require
+canonical padding; the `r` methods require canonical unpadded standard base64.
+Both decoders reject URL-safe characters and embedded line breaks, and reject
+non-canonical pad bits or padding for their respective forms.
 See [string and byte rules](../../spec/methods.md#strings-and-bytes).
 
 ## List

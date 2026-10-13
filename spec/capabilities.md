@@ -9,9 +9,11 @@ operations as the implementation is designed.
 Built-in method capability IDs use the `method:` prefix, receiver family, and
 method name. For example, the common `any:string()` conversion is
 `method:any.string`, JSON serialization is `method:any.json`, the required-zone
-`timestamp:string(tz)` overload is `method:timestamp.string`, and base64
-encoding is `method:bytes.base64`. In Go, pass the suffix such as
-`any.string` to `capabilities.Method`; the helper adds the prefix.
+`timestamp:string(tz)` overload is `method:timestamp.string`; base64 encoding
+uses `method:bytes.base64` or `method:bytes.base64r`, and decoding uses
+`method:string.frombase64` or `method:string.frombase64r`. In Go, pass the
+suffix such as `any.string` to `capabilities.Method`; the helper adds the
+prefix.
 
 Structural equality uses `comparison:list-equality` and
 `comparison:object-equality` permissions. `group:structural-equality` selects

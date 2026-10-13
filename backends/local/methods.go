@@ -16,7 +16,7 @@ func supportedMethod(id string) bool {
 		return true
 	case "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr":
 		return true
-	case "string.frombase64", "bytes.base64":
+	case "string.frombase64", "string.frombase64r", "bytes.base64", "bytes.base64r":
 		return true
 	case "string.timestamp", "string.duration", "timestamp.year", "timestamp.month", "timestamp.dayofmonth", "timestamp.dayofyear", "timestamp.hours", "timestamp.minutes", "timestamp.seconds", "timestamp.milliseconds", "timestamp.string", "timestamp.after", "timestamp.before", "timestamp.add", "duration.hours", "duration.minutes", "duration.seconds", "duration.milliseconds", "duration.microseconds", "duration.nanoseconds":
 		return true
@@ -174,7 +174,7 @@ func (e *evaluation) call(n plan.Node) (result, error) {
 	return ordinary(value), nil
 }
 func (e *evaluation) scalarCost(id string, receiver core.Value, args []core.Value) error {
-	if id == "bytes.base64" {
+	if id == "bytes.base64" || id == "bytes.base64r" {
 		data, _ := receiver.BytesView()
 		return e.charge(len(data))
 	}

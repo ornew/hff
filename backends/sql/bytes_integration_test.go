@@ -32,6 +32,7 @@ func TestPostgreSQLBytesParity(t *testing.T) {
 		all[i] = byte(i)
 	}
 	encoded := base64.StdEncoding.EncodeToString(all)
+	rawEncoded := base64.RawStdEncoding.EncodeToString(all)
 	var script strings.Builder
 	var wants []bool
 	var labels []string
@@ -41,13 +42,16 @@ func TestPostgreSQLBytesParity(t *testing.T) {
 		values  []hff.Value
 		sources []string
 	}
-	texts := []hff.Value{hff.Null(), hff.String(encoded)}
+	texts := []hff.Value{hff.Null(), hff.String(encoded), hff.String(rawEncoded)}
 	for _, s := range []string{"", "AA==", "AAA=", "AAAA", "AB==", "AAB=", "A===", "AA", "AAAA=", "AA==\n", "AA==\r", "AA== ", "-w==", "_w==", "é===", "====", "AAAA\nAAAA"} {
 		texts = append(texts, hff.String(s))
 	}
+	for _, s := range []string{"Zg", "Zm8", "Zh", "Zm9", "Z", "AAEC/w", "Zg=", "Zg\n", "Z\rg", " Zg", "Zg ", "Zg\t", "_w", "-w", "é"} {
+		texts = append(texts, hff.String(s))
+	}
 	fixtures := []fixture{
-		{schema.Union(schema.BytesType, schema.NullType), "bytea", []hff.Value{hff.Null(), hff.Bytes(nil), hff.Bytes([]byte{0}), hff.Bytes(all)}, []string{`data`, `!data`, `data:type="bytes"`, `data:len=256`, `data:base64:string=data:string`, `data:base64:frombase64=data`, `data:base64:frombase64:len=data:len`, `data:json=data:base64:json`, `data!:base64:exists`, `data!:json="null"`, `data:base64=""`, `data:base64:frombase64=null`, `data:exists=([null:frombase64]:json="[null]")`, `data:exists=[(null!):frombase64]:exists`}},
-		{schema.Union(schema.StringType, schema.NullType), "text", texts, []string{`data:frombase64`, `data:frombase64=null`, `data:frombase64:base64=data`, `data:frombase64:type="bytes"`, `data:frombase64:len=256`, `data:frombase64:string=""`, `data:frombase64:json="null"`, `data!:frombase64:exists`, `data:frombase64=("AB==":frombase64)`, `data:frombase64=("AA==\n":frombase64)`}},
+		{schema.Union(schema.BytesType, schema.NullType), "bytea", []hff.Value{hff.Null(), hff.Bytes(nil), hff.Bytes([]byte{0}), hff.Bytes(all)}, []string{`data`, `!data`, `data:type="bytes"`, `data:len=256`, `data:base64:string=data:string`, `data:base64:frombase64=data`, `data:base64r:frombase64r=data`, `data:base64r:frombase64r:len=data:len`, `data:base64r=""`, `data:json=data:base64:json`, `data!:base64:exists`, `data!:json="null"`, `data:base64=""`, `data:base64:frombase64=null`, `data:exists=([null:frombase64]:json="[null]")`, `data:exists=[(null!):frombase64]:exists`}},
+		{schema.Union(schema.StringType, schema.NullType), "text", texts, []string{`data:frombase64`, `data:frombase64r`, `data:frombase64=null`, `data:frombase64r=null`, `data:frombase64:base64=data`, `data:frombase64r:base64r=data`, `data:frombase64:type="bytes"`, `data:frombase64r:type="bytes"`, `data:frombase64:len=256`, `data:frombase64r:len=256`, `data:frombase64:string=""`, `data:frombase64:json="null"`, `data!:frombase64:exists`, `data:frombase64=("AB==":frombase64)`, `data:frombase64r=("Zh":frombase64r)`, `data:frombase64=("AA==\n":frombase64)`}},
 		{schema.AnyType, "json", append(append([]hff.Value{}, texts...), hff.Int(1), hff.Bool(false), hff.List(), hff.Object(nil)), []string{`data:frombase64=null`, `data:frombase64:base64=data`, `data:frombase64:type="bytes"`, `data!:frombase64:exists`, `data:frombase64:json="null"`}},
 		{schema.AnyType, "jsonb", texts, []string{`data:frombase64:base64=data`, `data:frombase64=null`}},
 	}

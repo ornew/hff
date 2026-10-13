@@ -66,9 +66,9 @@ func builtins(name string) []declaration {
 	case "concat":
 		fixed("string", str, str, str)
 		fixed("list", list, list, list)
-	case "frombase64":
+	case "frombase64", "frombase64r":
 		fixed("string", str, bytes)
-	case "base64":
+	case "base64", "base64r":
 		fixed("bytes", bytes, str)
 	case "size":
 		fixed("list", list, integer)

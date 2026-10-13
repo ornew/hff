@@ -61,23 +61,31 @@ func scalarMethod(id string, receiver core.Value, args []core.Value) (core.Value
 			return core.Null(), true
 		}
 		return core.Int(int64(len(b))), true
-	case "bytes.base64":
+	case "bytes.base64", "bytes.base64r":
 		data, ok := receiver.BytesView()
 		if !ok {
 			return core.Null(), true
 		}
+		if id == "bytes.base64r" {
+			return core.String(base64.RawStdEncoding.EncodeToString(data)), true
+		}
 		return core.String(base64.StdEncoding.EncodeToString(data)), true
-	case "string.frombase64":
+	case "string.frombase64", "string.frombase64r":
 		text, ok := receiver.AsString()
 		if !ok {
 			return core.Null(), true
 		}
-		// Go's decoder deliberately ignores CR/LF; HFF accepts only the canonical
-		// standard alphabet and padding, including canonical zero padding bits.
+		// Go's decoder deliberately ignores CR/LF. HFF accepts only the
+		// canonical standard alphabet and zero padding bits; the selected
+		// method determines whether padding is required or forbidden.
 		if strings.ContainsAny(text, "\r\n") {
 			return core.Null(), true
 		}
-		data, err := base64.StdEncoding.Strict().DecodeString(text)
+		encoding := base64.StdEncoding.Strict()
+		if id == "string.frombase64r" {
+			encoding = base64.RawStdEncoding.Strict()
+		}
+		data, err := encoding.DecodeString(text)
 		if err != nil {
 			return core.Null(), true
 		}

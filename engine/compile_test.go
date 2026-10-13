@@ -234,7 +234,7 @@ func TestCompileStepBudget(t *testing.T) {
 func TestCompileBuiltinFamilies(t *testing.T) {
 	typ := schema.Struct(schema.Bool("b"), schema.Int("n"), schema.Float("f"), schema.String("s"), schema.Bytes("bytes"), schema.List("ls", schema.IntType), schema.Map("obj", schema.IntType), schema.Timestamp("ts"), schema.Duration("d"))
 	e := newEngine(t, typ)
-	queries := []string{`s:type()`, `s:string()`, `s:json()`, `s:in("x")`, `s:exists()`, `b:and(true)`, `b:or(false)`, `b:not()`, `n:round()`, `f:ceil()`, `f:floor()`, `s:len()`, `bytes:len()`, `s:contains("a","b")`, `s:matches("x")`, `s:startswith("x")`, `s:endswith("x")`, `s:lower()`, `s:upper()`, `s:timestamp()`, `s:duration()`, `s:bool()`, `s:number()`, `s:fromjson()`, `s:concat("x")`, `s:frombase64()`, `bytes:base64()`, `ls:size()`, `ls:has(1.0)`, `ls:contains(1,2)`, `ls:unique()`, `ls:sort()`, `ls:concat([1.0])`, `ls:map(x=>x)`, `ls:flatmap(x=>[x])`, `ls:any(x=>x>0)`, `ls:all(x=>x>0)`, `ls:foldl(0,(a,x)=>a+x)`, `ls:foldr(0,(x,a)=>x+a)`, `obj:size()`, `obj:has("a")`, `obj:get("a")`, `obj:keys()`, `obj:values()`, `obj:items()`, `ts:year()`, `ts:month("Asia/Tokyo")`, `ts:dayofmonth()`, `ts:dayofyear()`, `ts:hours()`, `ts:minutes()`, `ts:seconds()`, `ts:milliseconds()`, `ts:string("UTC")`, `ts:after(ts)`, `ts:before(ts)`, `ts:add(d)`, `d:hours()`, `d:minutes()`, `d:seconds()`, `d:milliseconds()`, `d:microseconds()`, `d:nanoseconds()`}
+	queries := []string{`s:type()`, `s:string()`, `s:json()`, `s:in("x")`, `s:exists()`, `b:and(true)`, `b:or(false)`, `b:not()`, `n:round()`, `f:ceil()`, `f:floor()`, `s:len()`, `bytes:len()`, `s:contains("a","b")`, `s:matches("x")`, `s:startswith("x")`, `s:endswith("x")`, `s:lower()`, `s:upper()`, `s:timestamp()`, `s:duration()`, `s:bool()`, `s:number()`, `s:fromjson()`, `s:concat("x")`, `s:frombase64()`, `s:frombase64r()`, `bytes:base64()`, `bytes:base64r()`, `ls:size()`, `ls:has(1.0)`, `ls:contains(1,2)`, `ls:unique()`, `ls:sort()`, `ls:concat([1.0])`, `ls:map(x=>x)`, `ls:flatmap(x=>[x])`, `ls:any(x=>x>0)`, `ls:all(x=>x>0)`, `ls:foldl(0,(a,x)=>a+x)`, `ls:foldr(0,(x,a)=>x+a)`, `obj:size()`, `obj:has("a")`, `obj:get("a")`, `obj:keys()`, `obj:values()`, `obj:items()`, `ts:year()`, `ts:month("Asia/Tokyo")`, `ts:dayofmonth()`, `ts:dayofyear()`, `ts:hours()`, `ts:minutes()`, `ts:seconds()`, `ts:milliseconds()`, `ts:string("UTC")`, `ts:after(ts)`, `ts:before(ts)`, `ts:add(d)`, `d:hours()`, `d:minutes()`, `d:seconds()`, `d:milliseconds()`, `d:microseconds()`, `d:nanoseconds()`}
 	for _, source := range queries {
 		t.Run(source, func(t *testing.T) {
 			p, err := e.Compile(context.Background(), source)
@@ -281,6 +281,26 @@ func TestConversionMethodNamesAndTimestampOverloads(t *testing.T) {
 	for _, id := range []string{"any.tostring", "any.tojson", "bytes.tobase64"} {
 		if err := capabilities.Standard().Allow(capabilities.Method(id)).Check(); err == nil {
 			t.Fatal("legacy method ID accepted", id)
+		}
+	}
+}
+
+func TestRawBase64CapabilitiesAreIndependent(t *testing.T) {
+	ctx := context.Background()
+	shape := schema.Struct(schema.String("text"), schema.Bytes("raw"))
+	for _, tc := range []struct {
+		id      string
+		query   string
+		allowed string
+	}{
+		{"string.frombase64r", `text:frombase64r`, `text:frombase64`},
+		{"bytes.base64r", `raw:base64r`, `raw:base64`},
+	} {
+		e := newEngine(t, shape, engine.WithCapabilities(capabilities.Standard().Without(capabilities.Method(tc.id))))
+		_, err := e.Compile(ctx, tc.query)
+		requireCode(t, err, hff.CapabilityError)
+		if _, err := e.Compile(ctx, tc.allowed); err != nil {
+			t.Fatalf("disabling %s also disabled %s: %v", tc.id, tc.allowed, err)
 		}
 	}
 }

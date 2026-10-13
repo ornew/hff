@@ -18,7 +18,7 @@ func TestBytesProfileAndJSONMaterialization(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"bytes.len", "bytes.base64", "string.frombase64"} {
+	for _, id := range []string{"bytes.len", "bytes.base64", "bytes.base64r", "string.frombase64", "string.frombase64r"} {
 		feature, ok := profile.Feature(capabilities.Method(id))
 		if !ok || feature.Level != hff.Conditional {
 			t.Fatalf("%s: %+v", id, feature)
@@ -40,7 +40,7 @@ func TestBytesProfileAndJSONMaterialization(t *testing.T) {
 			t.Fatalf("%s rejected schema-known JSON Bytes: %v", format, err)
 		}
 	}
-	for _, source := range []string{`data:base64`, `data:len>0`, `data:string`, `data:json`, `data:base64:frombase64=data`, `data:[bytes]:exists`, `data:exists=([null:frombase64]:json="[null]")`, `data:exists=[(null!):frombase64]:exists`} {
+	for _, source := range []string{`data:base64`, `data:base64r`, `data:len>0`, `data:string`, `data:json`, `data:base64:frombase64=data`, `data:base64r:frombase64r=data`, `data:[bytes]:exists`, `data:exists=([null:frombase64]:json="[null]")`, `data:exists=[(null!):frombase64]:exists`} {
 		p, err := e.Compile(ctx, source)
 		if err != nil {
 			t.Fatal(source, err)

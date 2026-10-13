@@ -182,8 +182,8 @@ later. They also support `fromjson()` on PostgreSQL 16 and later; see the JSON
 guide for parsing rules and its NUL precondition.
 Supported string methods include `len()`, `matches()` for the regex subset
 below, `lower()`, `upper()`, `contains()`, `startswith()`, `endswith()`,
-`concat()`, and `frombase64()`; boolean `not()`, `and()`, and `or()` are
-supported.
+`concat()`, `frombase64()`, and `frombase64r()`; boolean `not()`, `and()`, and
+`or()` are supported.
 
 ### Regular expressions
 
@@ -223,18 +223,30 @@ for the measured Build and database profile.
 
 ### Bytes and base64
 
-For native `bytea` or computed Bytes values, `len()` counts bytes and
-`base64()` returns canonical padded base64. `frombase64()` converts a
-schema-known string or supported dynamic JSON string to Bytes; invalid or
-non-canonical input returns null. Schema-known Bytes values can also be read
-from and written to JSON/JSONB collections as canonical padded base64 strings;
+For native `bytea` or computed Bytes values, `len()` counts bytes. `base64()`
+returns canonical padded base64, while `base64r()` returns canonical unpadded
+standard base64. `frombase64()` and `frombase64r()` convert a schema-known
+string or supported dynamic JSON string to Bytes using their respective
+formats; invalid or non-canonical input returns null. Empty bytes encode as
+empty text, which both decoders accept. Schema-known Bytes values can also be
+read from and written to JSON/JSONB collections as canonical padded base64
+strings;
 the declared schema supplies their Bytes type. A base64-looking string in
 `Any` is not inferred as Bytes, and a `String|Bytes` union cannot distinguish
 its alternatives; operations requiring Bytes from either representation are
 rejected. See the [JSON guide](json.md#bytes-in-json-documents) for the storage
 shape and runnable example. Bytes equality is supported; empty bytes are false
 in boolean context, `type()` returns `"bytes"`, `string()` returns unquoted
-base64, and `json()` returns a JSON string containing base64.
+base64, and `json()` returns a JSON string containing padded base64.
+
+The padded and raw methods have separate capabilities:
+`method:bytes.base64`, `method:bytes.base64r`, `method:string.frombase64`, and
+`method:string.frombase64r`. Raw methods still use the standard `A-Z`, `a-z`,
+`0-9`, `+`, `/` alphabet. `frombase64r()` rejects `=`, whitespace, URL-safe
+characters, and nonzero unused pad bits; `frombase64()` enforces canonical
+padding and rejects whitespace and URL-safe characters. JSON/JSONB Bytes
+storage and `json()` serialization continue to use canonical padded base64
+strings.
 
 `in()` supports Bytes receivers and needles when their types are statically
 known. Comparisons between dynamic `Any` and Bytes values remain unsupported.
@@ -292,9 +304,10 @@ An unsupported operation or type returns a source-located `hff.BackendError`
 from `Build`. For scalar bindings, the current subset rejects regex patterns
 outside the literal subset above, most collection operations (native Duration
 membership and direct scalar Duration relation `any()`/`all()`, `size()`, and
-`has(index)` are supported), `Any` and non-null mixed unions, conversions outside the JSON
-guide's `bool()`, `number()`, `duration()`, `fromjson()`, and `frombase64()`
-profile, and guarded access through nullable parents.
+`has(index)` are supported), `Any` and non-null mixed unions, conversions
+outside the JSON guide's `bool()`, `number()`, `duration()`, `fromjson()`,
+`frombase64()`, and `frombase64r()` profile, and guarded access through
+nullable parents.
 JSON bindings support the
 schema-known access and inspection described in the [JSON guide](json.md).
 JSONB metadata supports selected numeric type

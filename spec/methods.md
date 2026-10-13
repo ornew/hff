@@ -90,8 +90,10 @@ the numeric subtype.
 | `string:fromjson() -> any` | Parse JSON |
 | `string:concat(string) -> string` | Concatenation |
 | `string:frombase64() -> bytes` | Decode base64 |
+| `string:frombase64r() -> bytes` | Decode unpadded standard base64 |
 | `bytes:len() -> number` | Byte count |
 | `bytes:base64() -> string` | Encode base64 |
+| `bytes:base64r() -> string` | Encode unpadded standard base64 |
 
 String length counts Unicode code points. Case conversion uses locale-independent
 Unicode simple mappings, without multi-code-point expansions;
@@ -101,10 +103,13 @@ matching; anchors select full-string matching. Invalid patterns and invalid
 conversions yield null. HFF's regex reference syntax follows RE2 except the
 byte escape `\C`, which is excluded and therefore invalid. A backend may
 support a smaller regex subset only when its support matrix or compatibility
-profile documents the restriction. Base64 uses the standard alphabet and
-required padding; URL-safe and unpadded alternatives are not accepted. Decoding
-also rejects embedded CR/LF and non-canonical pad bits. Invalid base64 returns
-null, and null propagates through both conversion methods.
+profile documents the restriction. `base64()` and `frombase64()` use the
+standard alphabet with required padding. `base64r()` and `frombase64r()` use
+the same standard alphabet without padding; an empty string represents empty
+bytes. The encoders emit canonical output for their respective forms. The
+decoders reject URL-safe characters, embedded CR/LF, and non-canonical pad
+bits. Invalid base64 returns null, and null propagates through the conversion
+methods.
 
 `bool()` accepts exactly `true` or `false`. `number()` accepts JSON numeric
 spelling and follows literal subtype selection. Neither trims surrounding
