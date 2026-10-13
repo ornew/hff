@@ -18,7 +18,9 @@ For a quick browser experiment, try the [Playground](../playground.md).
    typed local filter from an application record type.
 6. [Bind PostgreSQL data to HFF records](06-postgresql-bindings.md): map
    related database rows to an HFF list, bind native `bytea` values, and
-   execute generated predicates with caller-owned SQL.
+   execute generated predicates with caller-owned SQL. Continue with the
+   [PostgreSQL cookbook recipes](../cookbook/README.md) for flattened nullable
+   parents, nested relations, JSONB metadata, and many-to-many views.
 
 Run each complete example from the repository root:
 

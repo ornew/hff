@@ -11,5 +11,13 @@ step-by-step [tutorials](../tutorials/README.md) and semantic
   dynamic JSON fields, including nested structures and exact large integers.
 - [Search dynamic JSON labels](search-dynamic-json-labels.md): search a label
   stored as either one string or a list of strings in plain JSONB.
+- [Filter flattened nullable profiles](postgresql-flattened-profile.md): map
+  scalar columns and explicit missing/null parent state to one HFF record.
+- [Filter nested order relations](postgresql-nested-relations.md): correlate
+  line items and their adjustments without losing which rows belong together.
+- [Filter JSONB numeric thresholds](postgresql-jsonb-numeric-thresholds.md):
+  compare dynamically typed numeric fields with caller-maintained type metadata.
+- [Filter many-to-many memberships](postgresql-many-to-many-view.md): expose
+  a join through one PostgreSQL view and bind the view rows as an HFF list.
 
 For exact operator and method contracts, see the [reference](../reference/README.md).

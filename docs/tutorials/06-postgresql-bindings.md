@@ -308,6 +308,19 @@ collections cannot store HFF Bytes values. The backend builds a predicate and
 does not execute it or inspect table types; the application passes `Where()`
 and `Args()` to its database driver.
 
+## Continue with other SQL shapes
+
+The
+[flattened-profile recipe](../cookbook/postgresql-flattened-profile.md)
+shows how explicit parent-state columns preserve missing, null, and present
+struct values. The
+[nested-relations recipe](../cookbook/postgresql-nested-relations.md)
+correlates child rows at two levels. For a JSONB document with numeric type
+metadata, see
+[JSONB numeric thresholds](../cookbook/postgresql-jsonb-numeric-thresholds.md);
+for many-to-many membership, see
+[a relation over a view](../cookbook/postgresql-many-to-many-view.md).
+
 ## Filter with a literal regular expression
 
 The PostgreSQL backend can translate a literal pattern such as `^A` on
