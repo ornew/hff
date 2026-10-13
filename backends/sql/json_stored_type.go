@@ -46,6 +46,22 @@ func (b *builder) jsonStoredType(n hff.Node) hff.Type {
 			// Successfully lowered folds have normalized JSON-native state.
 			typ, _ := b.jsonFoldType(n, n.Type())
 			return typ
+		case "map", "flatmap":
+			receiver, _ := n.Child(0)
+			callback, _ := n.Child(1)
+			item := jsonStoredMemberType(b.jsonStoredType(receiver), "", false, true)
+			result := b.jsonCallbackStoredType(callback, []hff.Type{item})
+			if method.Name() == "flatmap" {
+				list := nonnullJSONType(containsListType(result))
+				if list.Kind() == hff.ListType {
+					result = list.Element()
+				} else if list.Kind() == hff.AnyType {
+					result = list
+				} else {
+					result = hff.PrimitiveType(hff.NeverType)
+				}
+			}
+			return hff.NewListType(result)
 		case "get", "values", "items":
 			parent, _ := n.Child(0)
 			key, known := "", false
@@ -146,22 +162,32 @@ func jsonStoredMemberType(typ hff.Type, key string, known, indexed bool) hff.Typ
 // Seeds and callback results are validated separately. Recursive state can
 // therefore narrow inferred alternatives to its established storage domain,
 // including refinements nested inside constructed collections.
-func jsonNativeCarrierType(typ hff.Type) hff.Type {
+func jsonNativeCarrierType(typ, stored hff.Type) hff.Type {
 	switch typ.Kind() {
+	case hff.AnyType:
+		if jsonHasBytes(stored) {
+			return stored
+		}
+		return typ
+	case hff.BytesType:
+		if jsonHasBytes(stored) {
+			return typ
+		}
+		return hff.PrimitiveType(hff.NeverType)
 	case hff.UnionType:
 		var members []hff.Type
 		for _, member := range typ.Members() {
-			members = append(members, jsonNativeCarrierType(member))
+			members = append(members, jsonNativeCarrierType(member, stored))
 		}
 		return hff.NewUnionType(members...)
 	case hff.ListType:
-		return hff.NewListType(jsonNativeCarrierType(typ.Element()))
+		return hff.NewListType(jsonNativeCarrierType(typ.Element(), jsonStoredMemberType(stored, "", false, typ.Kind() == hff.ListType)))
 	case hff.MapType:
-		return hff.NewMapType(jsonNativeCarrierType(typ.Element()))
+		return hff.NewMapType(jsonNativeCarrierType(typ.Element(), jsonStoredMemberType(stored, "", false, typ.Kind() == hff.ListType)))
 	case hff.StructType:
 		fields := typ.Fields()
 		for i := range fields {
-			fields[i].Type = jsonNativeCarrierType(fields[i].Type)
+			fields[i].Type = jsonNativeCarrierType(fields[i].Type, jsonStoredMemberType(stored, fields[i].Name, true, false))
 		}
 		return hff.NewStructType(fields...)
 	default:
@@ -170,4 +196,32 @@ func jsonNativeCarrierType(typ hff.Type) hff.Type {
 		}
 		return hff.PrimitiveType(hff.NeverType)
 	}
+}
+
+// Recover a callback value's storage type in its lexical parameter scope.
+// No SQL is built here; existing code/provenance fields remain unchanged.
+func (b *builder) jsonCallbackStoredType(callback hff.Node, types []hff.Type) hff.Type {
+	parameters, _ := callback.Parameters()
+	if b.parameters == nil {
+		b.parameters = make(map[hff.BindingID]jsonParameter)
+	}
+	old := make([]jsonParameter, len(parameters))
+	existed := make([]bool, len(parameters))
+	for i, p := range parameters {
+		old[i], existed[i] = b.parameters[p.ID()]
+		value := old[i]
+		value.typ = types[i]
+		b.parameters[p.ID()] = value
+	}
+	defer func() {
+		for i, p := range parameters {
+			if existed[i] {
+				b.parameters[p.ID()] = old[i]
+			} else {
+				delete(b.parameters, p.ID())
+			}
+		}
+	}()
+	body, _ := callback.Child(0)
+	return b.jsonStoredType(body)
 }

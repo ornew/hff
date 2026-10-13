@@ -66,6 +66,9 @@ func jsonMayContainNumbers(typ hff.Type) bool {
 // tree walk. Any and ambiguous numbers require preserved JSON spelling; plain
 // JSONB cannot recover those distinctions from value magnitude.
 func (b *builder) comparisonDocument(n hff.Node, raw string, format JSONFormat, typ hff.Type) (string, error) {
+	if err := b.checkJSONBytesSchema(n, typ); err != nil {
+		return "", err
+	}
 	if err := checkContext(b.ctx); err != nil {
 		return "", err
 	}
@@ -120,6 +123,8 @@ func (b *builder) comparisonDocument(n hff.Node, raw string, format JSONFormat, 
 				value = b.floatText(jsonScalarCast(text, member.Kind()))
 			}
 			value = "(" + value + ")::json"
+		case hff.BytesType:
+			value = "COALESCE(to_json(" + postgresBase64(jsonScalarCast("("+raw+" #>> '{}')", hff.BytesType)) + "),'null'::json)"
 		case hff.StringType, hff.BoolType:
 			value = raw + "::json"
 		default:
@@ -180,6 +185,12 @@ func (b *builder) comparisonDocument(n hff.Node, raw string, format JSONFormat, 
 }
 
 func (b *builder) dynamicJSONPair(n hff.Node, left, right expression, op hff.Operator) (expression, error) {
+	for i := 0; i < 2; i++ {
+		child, _ := n.Child(i)
+		if jsonHasBytes(b.jsonStoredType(child)) {
+			return expression{}, b.failure(n, "dynamic JSON comparison cannot preserve Bytes type identity")
+		}
+	}
 	values := []expression{left, right}
 	for i := range values {
 		format, ok := b.jsonValues[values[i].code]

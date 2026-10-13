@@ -27,6 +27,7 @@ func TestPostgreSQLSchemaGuidedEquality(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	var script strings.Builder
+	script.WriteString("SET jit=off;\n")
 	var expected [][]bool
 	var descriptions []string
 	for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {

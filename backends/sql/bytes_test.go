@@ -36,9 +36,8 @@ func TestBytesProfileAndJSONMaterialization(t *testing.T) {
 			t.Fatal(err)
 		}
 		_, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindJSON(hff.Path{"data"}, hffsql.Column("data"), format)))
-		var detail *hff.Error
-		if !errors.As(err, &detail) || detail.Code != hff.BackendError {
-			t.Fatalf("%s accepted stored JSON Bytes: %v", format, err)
+		if err != nil {
+			t.Fatalf("%s rejected schema-known JSON Bytes: %v", format, err)
 		}
 	}
 	for _, source := range []string{`data:base64`, `data:len>0`, `data:string`, `data:json`, `data:base64:frombase64=data`, `data:[bytes]:exists`, `data:exists=([null:frombase64]:json="[null]")`, `data:exists=[(null!):frombase64]:exists`} {
@@ -56,9 +55,8 @@ func TestBytesProfileAndJSONMaterialization(t *testing.T) {
 			t.Fatal(source, err)
 		}
 		_, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings...))
-		var detail *hff.Error
-		if !errors.As(err, &detail) || detail.Code != hff.BackendError {
-			t.Fatalf("%s accepted unrepresentable bytes: %v", source, err)
+		if err != nil {
+			t.Fatalf("%s rejected Bytes construction: %v", source, err)
 		}
 	}
 }
@@ -102,5 +100,36 @@ func TestBytesExtensionParametersStayImmutable(t *testing.T) {
 	args[0] = "changed"
 	if q.Args()[0] != "00ff" {
 		t.Fatal("argument slice mutation changed the query")
+	}
+}
+
+func TestJSONBytesRejectsUnrecoverableIdentity(t *testing.T) {
+	ctx := context.Background()
+	for _, test := range []struct {
+		typ     hff.Type
+		sources []string
+	}{
+		{schema.ListOf(schema.BytesType), []string{`data=other`, `other=data`, `other:contains(data)`, `data:in(other)`, `[data[0],"AA=="]:size>0`}},
+		{schema.ListOf(schema.Union(schema.Struct(schema.Bytes("v")), schema.Struct(schema.String("v")))), []string{`data:[list[map[string]]]:exists`, `data:[list[map[bytes]]]:exists`}},
+		{schema.ListOf(schema.Union(schema.BytesType, schema.StringType)), []string{`data:json`, `data:sort:json`, `data:unique`}},
+		{schema.MapOf(schema.BytesType), []string{`data:items:json`}},
+		{schema.MapOf(schema.Union(schema.BytesType, schema.StringType)), []string{`data:json`, `data:values:unique`}},
+		{schema.Union(schema.BytesType, schema.StringType), []string{`data:json`, `data:[bytes]:exists`}},
+	} {
+		e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("data", test.typ), schema.Any("other"))), engine.WithCapabilities(capabilities.Standard()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, source := range test.sources {
+			p, err := e.Compile(ctx, source)
+			if err != nil {
+				t.Fatal(source, err)
+			}
+			_, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindJSON(hff.Path{"data"}, hffsql.Column("data"), hffsql.JSON), hffsql.BindJSON(hff.Path{"other"}, hffsql.Column("other"), hffsql.JSON)))
+			var detail *hff.Error
+			if !errors.As(err, &detail) || detail.Code != hff.BackendError {
+				t.Fatalf("%s accepted unrecoverable Bytes identity: %v", source, err)
+			}
+		}
 	}
 }

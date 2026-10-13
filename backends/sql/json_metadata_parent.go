@@ -25,7 +25,7 @@ func (b *builder) restoredMetadataParent(n hff.Node, boundDepth int) (expression
 				}
 				code = "(CASE WHEN json_typeof(" + code + ")='object' THEN " + code + " -> " + key.code + "::text ELSE NULL END)"
 			}
-			result, err := b.jsonDecode(n, code, JSON, n.Type(), value.present)
+			result, err := b.jsonDecode(n, code, JSON, b.jsonStoredType(n), value.present)
 			return result, true, err
 		}
 		parent, _ = parent.Child(0)

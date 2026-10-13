@@ -30,7 +30,7 @@ func (b *builder) jsonObjectAccess(n hff.Node, name string, values []expression)
 		arg := values[1]
 		if arg.kind == hff.NullType {
 			present = ordinaryPresence([]expression{{object, r.present, hff.MapType}, arg})
-			return b.jsonDecode(n, "NULL::json", JSON, n.Type(), present)
+			return b.jsonDecode(n, "NULL::json", JSON, b.jsonStoredType(n), present)
 		}
 		key := arg.code
 		if arg.kind == hff.AnyType {
@@ -72,7 +72,7 @@ func (b *builder) jsonObjectAccess(n hff.Node, name string, values []expression)
 		}
 		code = "(CASE WHEN " + object + " IS NULL THEN NULL::json ELSE (SELECT COALESCE(json_agg(" + item + " ORDER BY " + alias + ".key COLLATE \"C\"),'[]'::json) FROM json_each(" + object + ") AS " + alias + "(key,value)) END)"
 	}
-	return b.jsonDecode(n, code, JSON, n.Type(), present)
+	return b.jsonDecode(n, code, JSON, b.jsonStoredType(n), present)
 }
 
 // Other union members cannot receive object accessors. They must not impose

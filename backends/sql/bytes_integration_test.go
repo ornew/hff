@@ -51,6 +51,24 @@ func TestPostgreSQLBytesParity(t *testing.T) {
 		{schema.AnyType, "json", append(append([]hff.Value{}, texts...), hff.Int(1), hff.Bool(false), hff.List(), hff.Object(nil)), []string{`data:frombase64=null`, `data:frombase64:base64=data`, `data:frombase64:type="bytes"`, `data!:frombase64:exists`, `data:frombase64:json="null"`}},
 		{schema.AnyType, "jsonb", texts, []string{`data:frombase64:base64=data`, `data:frombase64=null`}},
 	}
+
+	for _, storage := range []string{"json", "jsonb"} {
+		fixtures = append(fixtures,
+			fixture{schema.MapOf(schema.Union(schema.BytesType, schema.NullType)), storage, []hff.Value{hff.Object(nil), hff.Object(map[string]hff.Value{"a": hff.Bytes([]byte{0}), "nil": hff.Null()})}, []string{`data`, `data:has("a")`, `data:get("a"):type="bytes"`, `data:get("missing")=null`, `data:values:contains("AA==":frombase64)`, `data:values:contains(null)`, `data:values:map(x=>x:base64):json=data:values:map(x=>x:string):json`, `data:json="{\"a\":\"AA==\",\"nil\":null}"`, `data:keys:json="[\"a\",\"nil\"]"`}},
+			fixture{fixtures[0].typ, storage, fixtures[0].values, append(append([]string{}, fixtures[0].sources...), `[data]:json="[null]"`, `[data]:contains(data)`, `[data]:unique`, `[data]=[data]`, `[data]!=[data:base64]`, `[data]:map(x=>x:base64)[0]=data:base64`)},
+			fixture{schema.ListOf(schema.Union(schema.BytesType, schema.NullType)), storage, []hff.Value{hff.List(), hff.List(hff.Bytes(nil)), hff.List(hff.Bytes([]byte{0}), hff.Null(), hff.Bytes([]byte{0})), hff.List(hff.Bytes(all))}, []string{`data`, `data:json="[]"`, `data[0]:type="bytes"`, `data[-1]:len=256`, `data:contains("AA==":frombase64)`, `data:contains(null)`, `data:unique`, `data:map(x=>x:base64):json=data:map(x=>x:string):json`, `data:map(x=>x)=data`, `data:flatmap(x=>[x])=data`, `data:all(x=>x=null|x:type="bytes")`, `data:[list[bytes|null]]:exists`, `data:map(x=>x!):exists`, `data:concat(data):size=data:size*2`, `data:foldl("AA==":frombase64,(a,x)=>a):base64="AA=="`, `data:foldr("AA==":frombase64,(x,a)=>a):base64="AA=="`, `data:foldl(["AA==":frombase64],(a,x)=>a):json="[\"AA==\"]"`, `data:foldr(["AA==":frombase64],(x,a)=>a):json="[\"AA==\"]"`}},
+			fixture{schema.Struct(schema.Bytes("raw"), schema.String("text")), storage, []hff.Value{hff.Object(map[string]hff.Value{"raw": hff.Bytes([]byte{0}), "text": hff.String("AA==")})}, []string{`data.raw:type="bytes"`, `data.text:type="string"`, `data:json="{\"raw\":\"AA==\",\"text\":\"AA==\"}"`, `[data.raw]!=[data.text]`, `data.raw:in(data.raw)`, `data.raw:in(data.text)=false`}},
+		)
+	}
+
+	fixtures = append(fixtures, fixture{schema.Struct(schema.Bytes("raw"), schema.Any("text")), "json", []hff.Value{hff.Object(map[string]hff.Value{"raw": hff.Bytes([]byte{0}), "text": hff.String("AA==")}), hff.Object(map[string]hff.Value{"raw": hff.Bytes([]byte{0}), "text": hff.Float(1.5)})}, []string{
+		`[1]:foldl({"b":data.raw,"v":data.text!},(a,x)=>a).b:type="bytes"`,
+		`[1]:foldl({"b":data.raw,"v":data.text!},(a,x)=>a).v:type=data.text:type`,
+		`[1]:foldl({"v":data.text!},(a,x)=>{"v":a!.v!}):json={"v":data.text!}:json`,
+		`[1]:foldl([data.text!],(a,x)=>[a![0]!]):json=[data.text!]:json`,
+		`[1]:foldl({"v":data.text!},(a,x)=>{"v":a!:get("v")!}):json={"v":data.text!}:json`,
+		`[1,2]:foldl({"a":data.raw,"b":null,"c":null},(a,x)=>{"a":a.c,"b":a.a,"c":a.b}).c:base64=data.raw:base64`,
+	}})
 	for fi, fixture := range fixtures {
 		e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("data", fixture.typ))), engine.WithCapabilities(capabilities.Standard()))
 		if err != nil {

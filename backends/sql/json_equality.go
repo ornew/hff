@@ -13,6 +13,9 @@ func structuredKind(k hff.TypeKind) bool {
 // Query collections use JSON, retaining their children as typed SQL arguments.
 // No text from the query is inserted into the SQL source.
 func (b *builder) jsonLiteral(n hff.Node) (expression, error) {
+	if err := b.checkJSONBytesSchema(n, b.jsonStoredType(n)); err != nil {
+		return expression{}, err
+	}
 	var values []expression
 	var args []string
 	keys, _ := n.Keys()
@@ -29,17 +32,15 @@ func (b *builder) jsonLiteral(n hff.Node) (expression, error) {
 			}
 			args = append(args, key.code)
 		}
-		if v.kind == hff.BytesType || v.kind == hff.DurationType {
-			kind := "bytes"
-			if v.kind == hff.DurationType {
-				kind = "duration"
-			}
-			return expression{}, b.failure(child, "PostgreSQL JSON collections do not yet preserve "+kind+" values")
+		if v.kind == hff.DurationType {
+			return expression{}, b.failure(child, "PostgreSQL JSON collections do not yet preserve duration values")
 		}
 		values = append(values, v)
 		code := v.code
 		if v.kind == hff.NullType {
 			code = "NULL::text"
+		} else if v.kind == hff.BytesType {
+			code = postgresBase64(code)
 		} else if v.kind == hff.FloatType {
 			code = b.floatText(code) + "::json"
 		} else if format, ok := b.jsonValues[code]; ok {
@@ -94,7 +95,7 @@ func jsonCategory(k hff.TypeKind) string {
 		return "number"
 	case hff.BoolType:
 		return "boolean"
-	case hff.StringType:
+	case hff.StringType, hff.BytesType:
 		return "string"
 	case hff.ListType:
 		return "array"
@@ -130,6 +131,9 @@ func (b *builder) jsonEqualValue(n hff.Node, left string, lf JSONFormat, lt hff.
 		return code, err
 	}
 	if (needsDynamicJSONEquality(lt) || needsDynamicJSONEquality(rt)) && !definiteJSONContainerPair(lt, rt) {
+		if jsonHasBytes(lt) || jsonHasBytes(rt) {
+			return "", b.failure(n, "dynamic JSON comparison cannot preserve Bytes type identity")
+		}
 		l, err := b.comparisonDocumentAgainst(n, left, lf, lt, rt)
 		if err != nil {
 			return "", err
@@ -156,6 +160,9 @@ func (b *builder) jsonEqualValue(n hff.Node, left string, lf JSONFormat, lt hff.
 	for _, a := range lmembers {
 		for _, c := range rmembers {
 			if jsonCategory(a.Kind()) != jsonCategory(c.Kind()) {
+				continue
+			}
+			if a.Kind() != c.Kind() && (a.Kind() == hff.BytesType || c.Kind() == hff.BytesType) {
 				continue
 			}
 			value, err := b.jsonEqualTyped(n, left, lf, a, right, rf, c)
@@ -327,4 +334,54 @@ func (b *builder) jsonObjectEqual(n hff.Node, left string, lf JSONFormat, lt hff
 	}
 	from := string(lf) + "_each(" + left + ") AS " + la + "(key,value) FULL JOIN " + string(rf) + "_each(" + right + ") AS " + ra + "(key,value) ON " + la + ".key COLLATE \"C\"=" + ra + ".key COLLATE \"C\""
 	return "(NOT EXISTS(SELECT 1 FROM " + from + " WHERE " + la + ".key IS NULL OR " + ra + ".key IS NULL OR NOT " + equal + "))", nil
+}
+
+func jsonHasBytes(typ hff.Type) bool {
+	switch typ.Kind() {
+	case hff.BytesType:
+		return true
+	case hff.ListType, hff.MapType:
+		return jsonHasBytes(typ.Element())
+	case hff.StructType:
+		for _, field := range typ.Fields() {
+			if jsonHasBytes(field.Type) {
+				return true
+			}
+		}
+	case hff.UnionType:
+		for _, member := range typ.Members() {
+			if jsonHasBytes(member) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// A string spelling alone cannot distinguish Bytes from String or Any. Check
+// constructed/consumed values; unrelated fields need not be materialized.
+func (b *builder) checkJSONBytesSchema(n hff.Node, typ hff.Type) error {
+	switch typ.Kind() {
+	case hff.UnionType:
+		bytes, strings := false, false
+		for _, member := range typ.Members() {
+			bytes = bytes || member.Kind() == hff.BytesType
+			strings = strings || member.Kind() == hff.StringType || member.Kind() == hff.AnyType
+			if err := b.checkJSONBytesSchema(n, member); err != nil {
+				return err
+			}
+		}
+		if bytes && strings {
+			return b.failure(n, "JSON cannot distinguish Bytes from String or Any")
+		}
+	case hff.ListType, hff.MapType:
+		return b.checkJSONBytesSchema(n, typ.Element())
+	case hff.StructType:
+		for _, field := range typ.Fields() {
+			if err := b.checkJSONBytesSchema(n, field.Type); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

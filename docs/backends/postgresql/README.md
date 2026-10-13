@@ -78,7 +78,7 @@ Choose a physical binding from the way the application stores each HFF value:
 | Physical storage | Binding | What it maps |
 | --- | --- | --- |
 | Scalar SQL column | `Bind(path, Column(...))` | One HFF scalar field to one column. SQL `NULL` is an explicit HFF null. |
-| JSON/JSONB column | `BindJSON(path, column, JSON/JSONB)` | One complete schema-known HFF object, map, or list value. Descendant paths are read inside that document. JSONB may add `WithTypeMetadata(metadataColumn)` for numeric types lost by normalization. |
+| JSON/JSONB column | `BindJSON(path, column, JSON/JSONB)` | One complete schema-known HFF JSON value, including objects, maps, lists, and Bytes represented as base64 strings. Descendant paths are read inside that document. JSONB may add `WithTypeMetadata(metadataColumn)` for numeric types lost by normalization. |
 | Native composite column | `BindComposite(path, column)` | One HFF struct to a PostgreSQL composite. A SQL-null row is null; its attributes are always present. |
 | Struct spread across columns | `BindStruct(path, present, null, fields...)` | One HFF object with caller-supplied parent state and per-field bindings. |
 | Related rows | `BindRelation(path, relation)` | An HFF list whose items come from one caller-selected correlated row source. |
@@ -171,13 +171,18 @@ for the measured Build and database profile.
 For native `bytea` or computed Bytes values, `len()` counts bytes and
 `base64()` returns canonical padded base64. `frombase64()` converts a
 schema-known string or supported dynamic JSON string to Bytes; invalid or
-non-canonical input returns null. Bytes remain scalar values: JSON collection
-construction and stored JSON/JSONB Bytes representations are unsupported.
-Bytes equality is supported; empty bytes are false in boolean context,
-`type()` returns `"bytes"`, `string()` returns unquoted base64, and `json()`
-returns a JSON string containing base64.
+non-canonical input returns null. Schema-known Bytes values can also be read
+from and written to JSON/JSONB collections as canonical padded base64 strings;
+the declared schema supplies their Bytes type. A base64-looking string in
+`Any` is not inferred as Bytes, and a `String|Bytes` union cannot distinguish
+its alternatives; operations requiring Bytes from either representation are
+rejected. See the [JSON guide](json.md#bytes-in-json-documents) for the storage
+shape and runnable example. Bytes equality is supported; empty bytes are false
+in boolean context, `type()` returns `"bytes"`, `string()` returns unquoted
+base64, and `json()` returns a JSON string containing base64.
 
-Bytes receivers and needles are not supported by `in()`.
+`in()` supports Bytes receivers and needles when their types are statically
+known. Comparisons between dynamic `Any` and Bytes values remain unsupported.
 
 ### Numeric arithmetic
 
@@ -225,7 +230,8 @@ The database must use UTF-8 encoding for HFF string ordering with `C` collation
 to agree with HFF's Unicode codepoint ordering. `Build` does not inspect the
 database schema or data: the service must ensure the bound columns have the
 declared HFF types and nullability, and that stored values meet these encoding
-and finiteness constraints. Bytes fields must bind to PostgreSQL `bytea`.
+and finiteness constraints. Scalar-column Bytes fields bind to PostgreSQL
+`bytea`; Bytes inside JSON/JSONB use schema-known canonical base64 strings.
 
 An unsupported operation or type returns a source-located `hff.BackendError`
 from `Build`. For scalar bindings, the current subset rejects regex patterns
@@ -246,11 +252,11 @@ capabilities are enabled. `sort()` also supports recoverable dynamic `Any` and
 list-union values; see the JSON guide for its conditions.
 `map()` and `flatmap()` are supported when callback result types are known.
 Folds are supported for known accumulator types; see the JSON guide for their
-type and null rules. Bytes values cannot be materialized inside JSON/JSONB
-collections; `frombase64()` can instead produce a scalar Bytes result from a
-string. `duration()` parses strings into computed durations, but stored Duration
-bindings and JSON/JSONB Duration materialization remain unavailable. Timestamp
-conversions, float64 serialization when JSONB has lost required numeric
+type and null rules. Schema-known Bytes values can be materialized inside
+JSON/JSONB collections as base64 strings; ambiguous dynamic Bytes remain
+unsupported. `duration()` parses strings into computed durations, but stored
+Duration bindings and JSON/JSONB Duration materialization remain unavailable.
+Timestamp conversions, float64 serialization when JSONB has lost required numeric
 representation, and other unsupported types remain unsupported.
 Unsupported operations do not fall back to local evaluation.
 PostgreSQL is the only currently supported SQL dialect.
@@ -348,9 +354,10 @@ PostgreSQL profile reports the Go Unicode table version used for
 locale-independent simple `lower()`/`upper()` mappings and the Go `regexp`
 parser version used to validate and translate literal patterns. The actual
 PostgreSQL regex engine and version remain unknown. Its `bytes` detail reports
-native `bytea` and computed Bytes support, and that JSON collection storage of
-Bytes is unavailable. The `duration` detail reports computed parsing and unit
-operations, while native and JSON Duration storage bindings are unavailable.
+native `bytea`, computed Bytes, and schema-known JSON/JSONB Bytes support, while
+dynamic ambiguous Bytes remain unavailable. The `duration` detail reports
+computed parsing and unit operations, while native and JSON Duration storage
+bindings are unavailable.
 
 ```go
 profile, err := hffsql.Profile(hffsql.PostgreSQL)

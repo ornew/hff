@@ -88,7 +88,38 @@ func (b *builder) jsonFoldType(n hff.Node, typ hff.Type) (hff.Type, error) {
 	// Actual seeds and results are checked before entering recursive state.
 	// Removing null from Any can expand its static type to every HFF family;
 	// this backend's JSON-native storage contract still bounds runtime values.
-	return jsonNativeCarrierType(typ), nil
+	seed, _ := n.Child(1)
+	callback, _ := n.Child(2)
+	parameters, _ := callback.Parameters()
+	method, _ := n.Method()
+	acc := 0
+	if method.Name() == "foldr" {
+		acc = 1
+	}
+	receiver, _ := n.Child(0)
+	seedType := b.jsonStoredType(seed)
+	itemType := jsonStoredMemberType(b.jsonStoredType(receiver), "", false, true)
+	accumulator := seedType
+	for attempt := 0; attempt < 64; attempt++ {
+		types := make([]hff.Type, len(parameters))
+		for i := range types {
+			types[i] = itemType
+			if i == acc {
+				types[i] = accumulator
+			}
+		}
+		bodyType := b.jsonCallbackStoredType(callback, types)
+		if jsonBytesStateAmbiguous(seedType, bodyType) {
+			return hff.Type{}, b.failure(n, "JSON fold state cannot distinguish Bytes from String or Any")
+		}
+		stored := hff.NewUnionType(seedType, bodyType)
+		carrier := jsonNativeCarrierType(typ, stored)
+		if !jsonHasBytes(stored) || carrier.Key() == accumulator.Key() {
+			return carrier, nil
+		}
+		accumulator = carrier
+	}
+	return hff.Type{}, b.failure(n, "JSON fold Bytes storage type does not reach a finite fixed point")
 }
 
 func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accumulatorIndex int, previous, item string, accumulatorType hff.Type, receiver, seed hff.Node, format JSONFormat) (expression, []string, hff.Type, error) {
@@ -156,4 +187,49 @@ func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accu
 	}()
 	result, err := b.expression(body)
 	return result, b.steps, b.jsonStoredType(body), err
+}
+
+// Compare positions before forming a union: Any can erase an explicit Bytes
+// alternative during type canonicalization, although JSON cannot recover it.
+func jsonBytesStateAmbiguous(left, right hff.Type) bool {
+	if left.Kind() == hff.UnionType {
+		for _, t := range left.Members() {
+			if jsonBytesStateAmbiguous(t, right) {
+				return true
+			}
+		}
+		return false
+	}
+	if right.Kind() == hff.UnionType {
+		return jsonBytesStateAmbiguous(right, left)
+	}
+	if left.Kind() == hff.AnyType {
+		return jsonHasBytes(right)
+	}
+	if right.Kind() == hff.AnyType {
+		return jsonHasBytes(left)
+	}
+	if left.Kind() == hff.BytesType {
+		return right.Kind() == hff.StringType
+	}
+	if right.Kind() == hff.BytesType {
+		return left.Kind() == hff.StringType
+	}
+	if left.Kind() == hff.ListType && right.Kind() == hff.ListType {
+		return jsonBytesStateAmbiguous(left.Element(), right.Element())
+	}
+	if (left.Kind() == hff.MapType || left.Kind() == hff.StructType) && (right.Kind() == hff.MapType || right.Kind() == hff.StructType) {
+		if left.Kind() == hff.MapType && right.Kind() == hff.MapType {
+			return jsonBytesStateAmbiguous(left.Element(), right.Element())
+		}
+		if left.Kind() == hff.MapType {
+			left, right = right, left
+		}
+		for _, field := range left.Fields() {
+			if jsonBytesStateAmbiguous(field.Type, jsonStoredMemberType(right, field.Name, true, false)) {
+				return true
+			}
+		}
+	}
+	return false
 }

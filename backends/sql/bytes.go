@@ -33,3 +33,12 @@ func (b *builder) bytesCall(n hff.Node, name string, receiver expression) (expre
 	}
 	return expression{postgresBase64(receiver.code), receiver.present, hff.StringType}, nil
 }
+
+// postgresDecodeBase64 rejects malformed input before invoking PostgreSQL's
+// throwing decoder and checks canonical padding bits by encoding the result.
+func postgresDecodeBase64(text string) string {
+	valid := "(" + text + " COLLATE \"C\" ~ '^[A-Za-z0-9+/]*={0,2}$' AND length(" + text + ")%4=0)"
+	safe := "(CASE WHEN " + valid + " THEN " + text + " ELSE NULL::text END)"
+	decoded := "decode(" + safe + ",'base64')"
+	return "(CASE WHEN " + postgresBase64(decoded) + " COLLATE \"C\"=" + text + " COLLATE \"C\" THEN " + decoded + " ELSE NULL::bytea END)"
+}

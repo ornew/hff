@@ -87,12 +87,77 @@ the general construction contract.
 ## Supported profile
 
 For statically known values, the schema determines the HFF representation.
-Supported families are null, bool, int64, finite float64, string, homogeneous
-lists, string-keyed maps, and structs; nullable variants are supported. JSONB
-metadata can restore numeric subtype and value when normalization would lose
-the distinction. The application must store data and metadata that satisfy
-the declared schema and remain consistent with each other. `Build` does not
-inspect rows, read the database, or validate stored documents or metadata.
+Supported families are null, bool, int64, finite float64, string, Bytes,
+homogeneous lists, string-keyed maps, and structs; nullable variants are
+supported. JSON represents a schema-known Bytes value as a standard padded
+base64 string. JSONB metadata can restore numeric subtype and value when
+normalization would lose the distinction. The application must store data and
+metadata that satisfy the declared schema and remain consistent with each
+other. `Build` does not inspect rows, read the database, or validate stored
+documents or metadata.
+
+### Bytes in JSON documents
+
+When the schema declares a field as Bytes, its JSON representation is a
+canonical standard-base64 string. The schema supplies the Bytes identity;
+ordinary JSON strings are not inferred to be Bytes. Nullable Bytes fields use
+JSON null. JSONB preserves the base64 text, so Bytes do not need numeric type
+metadata. Store only canonical padded standard-base64 values that decode
+strictly; `Build` does not scan stored documents to verify them.
+
+Schema-known Bytes values work in nested structs, maps, and lists, including
+list callbacks, JSON construction, and `json()` serialization as base64 JSON
+strings. Typed Bytes equality and `in()` membership work when the compared
+values have statically known Bytes types. A Bytes fold seed or callback value
+is also supported when the accumulator and callback types remain explicit; an
+`Any` accumulator remains JSON-native and cannot carry Bytes identity. Generic
+dynamic tree comparisons involving a Bytes-bearing value remain unsupported,
+such as comparing a Bytes value through a generic path with an `Any`
+counterpart. A statically known Bytes field can coexist with unrelated `Any`
+fields in the same fold.
+
+Typed map operations including `size()`, `has()`, `get()`, `keys()`, and
+`values()` work with Bytes values, and callbacks can process those values as
+Bytes. `items()` has a narrower limitation: it forms positional `[key, value]`
+pairs whose element types are String and Bytes, but the current representation
+cannot retain those position-specific types. Serialization or downstream
+operations that need to recover the Bytes identity may therefore be rejected
+at `Build` time. This does not make Bytes values inside an `Any` representation
+supported; `Any` remains JSON-native. Mixing Bytes positions with `Any` or
+String positions in the same `items()` result is also unsupported.
+
+Bytes decoders cannot currently resolve multi-non-null unions containing
+Bytes, including a category-disjoint union such as `Bytes|Bool`. The
+`String|Bytes` union is also ambiguous because both alternatives use JSON
+strings; structural union/type-guard merging does not make that representation
+recoverable.
+
+For example, `payloads` can be a JSONB array of Bytes strings:
+
+```sql
+CREATE TABLE binary_assets (
+    id bigint PRIMARY KEY,
+    payloads jsonb NOT NULL
+);
+INSERT INTO binary_assets VALUES
+    (1, '["AAECAw==", "AA=="]'::jsonb),
+    (2, '["AA=="]'::jsonb);
+```
+
+With `payloads` declared as `List<Bytes>`, this predicate selects the first
+row because one item is four bytes long and the list contains the decoded
+four-byte value:
+
+```hff
+payloads:any(p=>p:len>3) payloads:contains("AAECAw==":frombase64)
+```
+
+The [runnable JSON Bytes example](https://github.com/ornew/hff/tree/main/examples/sql-json-bytes)
+shows the matching schema and `BindJSON` configuration. Ambiguous dynamic
+representations are rejected: a JSON string under `Any` is a String, and a
+`String|Bytes` union cannot distinguish its alternatives from JSON storage.
+The backend rejects operations that need to treat such unrecoverable values as
+Bytes rather than guessing.
 
 ### Parse JSON text with `fromjson()`
 
@@ -572,9 +637,10 @@ values whose numeric representation is recoverable; it does not make arbitrary
 
 `string.frombase64()` is an explicit conversion for string fields and
 recoverable JSON string values. It produces a scalar Bytes expression without
-metadata. This does not make Bytes a JSON-native type: JSON collection
-construction and stored JSON/JSONB Bytes values remain unsupported. See the
-[PostgreSQL bytea support](README.md#bytes-and-base64) for the native column
+metadata. It does not infer Bytes for an untyped JSON string; stored
+schema-known Bytes use the declared schema and canonical base64 representation
+described [above](#bytes-in-json-documents). See the
+[PostgreSQL bytea support](README.md#bytes-and-base64) for native column
 methods and null rules.
 
 Nested callbacks can capture outer callback values and schema fields, with
@@ -814,7 +880,8 @@ to append.
 Native JSON supports these operations on `Any` when the stored JSON-native
 representation identifies the applicable signature. Plain JSONB supports
 schema-known string and list candidates whose element types are recoverable.
-Bytes, timestamps, and durations in `Any` are not supported. An `Any` list or
+Bytes, timestamps, and durations are not inferred inside `Any`; a schema-known
+Bytes value is supported as described above. An `Any` list or
 an ambiguous numeric list requires JSONB type metadata when JSONB storage has
 already erased distinctions needed by concatenation or a later operation;
 concatenation's normalization does not itself lose those distinctions. The
@@ -903,11 +970,14 @@ a source-located `hff.BackendError` from `Build`:
   index.
 - Dynamic folds whose seed or callback-result representations cannot be
   determined from the schema and available JSONB metadata.
-- Bytes values inside JSON arrays, objects, or callback-produced collections;
-  `frombase64()` can produce a scalar Bytes value, but the SQL JSON collection
-  representation does not materialize Bytes. Timestamp conversions remain
-  unsupported, and computed Duration values cannot be stored in native or JSON
-  bindings. Float64 serialization when JSONB has
+- Dynamic `Any` versus Bytes comparisons and generic dynamic tree comparisons
+  involving Bytes; dynamic JSON representations remain JSON-native. Bytes
+  decoders for multi-non-null unions containing Bytes, including `Bytes|Bool`,
+  are unsupported, and `String|Bytes` cannot be recovered from JSON strings.
+  Schema-known Bytes values in JSON arrays, objects, and callback-produced
+  collections are supported; `frombase64()` can also produce a scalar Bytes
+  value. Timestamp conversions remain unsupported, and computed Duration
+  values cannot be stored in native or JSON bindings. Float64 serialization when JSONB has
   lost required numeric representation and operations requiring a runtime
   type not fixed by schema or metadata remain unsupported.
 

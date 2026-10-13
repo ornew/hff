@@ -15,6 +15,9 @@ func (b *builder) jsonDecodeProjected(n hff.Node, code string, format JSONFormat
 		}
 	}
 	kind, ok := jsonKind(typ)
+	if !ok && jsonRootHasBytes(typ) {
+		return expression{}, b.failure(n, "JSON decoding requires an unambiguous Bytes schema")
+	}
 	if !ok {
 		if typ.Kind() != hff.AnyType && typ.Kind() != hff.UnionType {
 			return expression{}, b.failure(n, "JSON value requires a supported schema type")
@@ -34,4 +37,18 @@ func (b *builder) jsonDecodeProjected(n hff.Node, code string, format JSONFormat
 		text := "(" + normalized + " #>> '{}'::text[])"
 		return expression{jsonScalarCast(text, kind), present, kind}, nil
 	}
+}
+
+func jsonRootHasBytes(typ hff.Type) bool {
+	if typ.Kind() == hff.BytesType {
+		return true
+	}
+	if typ.Kind() == hff.UnionType {
+		for _, t := range typ.Members() {
+			if t.Kind() == hff.BytesType {
+				return true
+			}
+		}
+	}
+	return false
 }

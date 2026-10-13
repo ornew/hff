@@ -22,6 +22,10 @@ const (
 // valid for that schema and selected format. Build rejects operations whose
 // distinctions cannot be recovered from the stored representation. Options
 // configure metadata for distinctions that JSONB does not preserve.
+//
+// Schema-known Bytes use canonical padded standard-base64 JSON strings.
+// The same string under Any remains String; ambiguous Bytes/String unions
+// cannot recover their type identity and are rejected when consumed.
 func BindJSON(path hff.Path, column ColumnRef, format JSONFormat, options ...JSONBindingOption) Binding {
 	b := Bind(path, column)
 	b.format = format
@@ -58,7 +62,7 @@ func jsonKind(t hff.Type) (hff.TypeKind, bool) {
 		return kind, true
 	}
 	switch t.Kind() {
-	case hff.NullType, hff.BoolType, hff.IntType, hff.FloatType, hff.StringType, hff.ListType, hff.MapType, hff.StructType:
+	case hff.NullType, hff.BoolType, hff.IntType, hff.FloatType, hff.StringType, hff.BytesType, hff.ListType, hff.MapType, hff.StructType:
 		return t.Kind(), true
 	}
 	return hff.InvalidType, false
@@ -118,7 +122,7 @@ func (b *builder) jsonPath(n hff.Node) (expression, bool, error) {
 				}
 				code = converted
 			}
-			v, err := b.jsonDecode(n, code, format, n.Type(), "TRUE")
+			v, err := b.jsonDecode(n, code, format, b.jsonStoredType(n), "TRUE")
 			return v, true, err
 		}
 	}
@@ -151,7 +155,7 @@ func (b *builder) jsonPath(n hff.Node) (expression, bool, error) {
 	if err != nil {
 		return expression{}, true, err
 	}
-	result, err := b.jsonDecode(n, "("+value.code+" -> "+key.code+")", format, n.Type(), value.present)
+	result, err := b.jsonDecode(n, "("+value.code+" -> "+key.code+")", format, b.jsonStoredType(n), value.present)
 	return result, true, err
 }
 
@@ -221,7 +225,7 @@ func (b *builder) metadataSubpath(n hff.Node) (expression, bool, error) {
 			if err != nil {
 				return expression{}, true, err
 			}
-			value, err := b.jsonDecode(n, b.restoreJSONMetadataAt(code, metadata, prefix.code+"::text"), JSON, n.Type(), "TRUE")
+			value, err := b.jsonDecode(n, b.restoreJSONMetadataAt(code, metadata, prefix.code+"::text"), JSON, b.jsonStoredType(n), "TRUE")
 			return value, true, err
 		}
 		return expression{}, false, nil
@@ -282,7 +286,7 @@ func (b *builder) jsonIndex(n hff.Node) (expression, error) {
 	default:
 		return expression{}, b.failure(n, "JSON indexing requires a list or object")
 	}
-	return b.jsonDecode(n, code, format, n.Type(), present)
+	return b.jsonDecode(n, code, format, b.jsonStoredType(n), present)
 }
 func validJSONIndex(index expression) string {
 	test := "(" + index.code + " BETWEEN -2147483648 AND 2147483647)"
@@ -336,7 +340,7 @@ func (b *builder) jsonCall(n hff.Node, name string, values []expression, format 
 		alias := b.nextAlias()
 		item := alias + ".key"
 		code := "(CASE WHEN " + r.code + " IS NULL THEN NULL ELSE (SELECT COALESCE(" + string(format) + "_agg(" + item + " ORDER BY " + alias + ".key COLLATE \"C\"), '[]'::" + string(format) + ") FROM " + string(format) + "_each(" + r.code + ") AS " + alias + ") END)"
-		return b.jsonDecode(n, code, format, n.Type(), present)
+		return b.jsonDecode(n, code, format, b.jsonStoredType(n), present)
 	case "has":
 		arg := values[1]
 		code := ""
@@ -373,6 +377,8 @@ func nonnullJSONType(t hff.Type) hff.Type {
 	return t
 }
 func (b *builder) jsonTypeGuard(n hff.Node, value expression, format JSONFormat, source, target hff.Type) (expression, error) {
+	receiver, _ := n.Child(0)
+	source = b.jsonStoredType(receiver)
 	test, err := b.jsonMatches(n, value.code, format, source, target)
 	if err != nil {
 		return expression{}, err
@@ -381,9 +387,12 @@ func (b *builder) jsonTypeGuard(n hff.Node, value expression, format JSONFormat,
 	// a definite false so later null tests still produce ordinary false.
 	present := both(value.present, "COALESCE(("+test+"), FALSE)")
 	guarded := "CASE WHEN " + present + " THEN " + value.code + " ELSE NULL END"
-	return b.jsonDecode(n, guarded, format, n.Type(), present)
+	return b.jsonDecode(n, guarded, format, b.jsonStoredType(n), present)
 }
 func (b *builder) jsonMatches(n hff.Node, code string, format JSONFormat, source, target hff.Type) (string, error) {
+	if err := b.checkJSONBytesSchema(n, source); err != nil {
+		return "", err
+	}
 	null := "(" + code + " IS NULL OR " + string(format) + "_typeof(" + code + ") = 'null')"
 	switch target.Kind() {
 	case hff.AnyType:

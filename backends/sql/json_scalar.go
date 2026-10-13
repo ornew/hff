@@ -6,6 +6,9 @@ import "github.com/ornew/hff"
 // numeric preserves the full int64 range before the integer cast. Float
 // parsing handles underflow before using the original spelling for rounding.
 func jsonScalarCast(text string, kind hff.TypeKind) string {
+	if kind == hff.BytesType {
+		return postgresDecodeBase64(text)
+	}
 	if kind == hff.IntType {
 		return "(" + text + "::numeric::bigint)"
 	}

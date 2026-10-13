@@ -56,9 +56,14 @@ Numeric rounding preserves int64 versus float64 subtype. See
 | `bytes:base64() -> string` | Encode standard padded base64. |
 
 The PostgreSQL backend supports scalar Bytes values backed by `bytea`, including
-`len()`, `base64()`, equality, and decoding with `string:frombase64()`. It does
-not materialize Bytes inside JSON/JSONB collections; see the
-[PostgreSQL bytea guide](../backends/postgresql/README.md#bytes-and-base64).
+`len()`, `base64()`, equality, and decoding with `string:frombase64()`. It also
+supports schema-known Bytes values in JSON/JSONB collections, represented as
+canonical padded base64 strings. An `Any` string is not inferred to be Bytes,
+and an ambiguous `String|Bytes` union cannot recover the distinction. Typed
+Bytes membership with `in()` is supported; dynamic `Any`-versus-Bytes and
+generic dynamic tree comparisons involving Bytes remain unsupported. See the
+[PostgreSQL bytea guide](../backends/postgresql/README.md#bytes-and-base64) and
+[JSON Bytes guide](../backends/postgresql/json.md#bytes-in-json-documents).
 PostgreSQL 15 and later also supports `string:matches()` for literal patterns
 in the documented [RE2 subset](../backends/postgresql/README.md#regular-expressions).
 PostgreSQL supports `list:sort()` for JSON-backed lists, including recoverable

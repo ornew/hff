@@ -39,6 +39,7 @@ func TestPostgreSQLDynamicSortParity(t *testing.T) {
 	rawJSON := []string{` [ -1e-400, 0, 0.0, 1e0, 1 ] `, ` [ "\u65e5", "a" ] `}
 	sources := []string{`data:exists=[]:sort:exists`, `data:sort:json="[-0.0,0,0.0,1.0,1]"`, `data:sort`, `data:sort=null`, `data:sort:json="null"`, `data:sort:json="[]"`, `data:sort=[1,2,3]`, `data:sort[0]:[int]:exists`, `data:sort[0]:[float]:exists`, `data:sort[0]<0`, `data:sort:json="[-0.0,0,0.0]"`, `data:sort=[9007199254740992.0,9007199254740993]`, `data!:sort:exists`, `!data!:sort`, `data:sort:sort:json=data:sort:json`, `data:sort:map(v=>v:[float]):json="[-0.0,1.0]"`, `data:sort:map(v=>v:[float]):exists`}
 	var script strings.Builder
+	script.WriteString("SET jit=off;\n")
 	var wants []bool
 	var labels []string
 	for ti, typ := range types {

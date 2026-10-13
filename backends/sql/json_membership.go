@@ -14,6 +14,8 @@ func (b *builder) jsonRepresentation(n hff.Node, value expression) (string, JSON
 		return "'null'::json", JSON, nil
 	}
 	switch value.kind {
+	case hff.BytesType:
+		return "to_json(" + postgresBase64(value.code) + ")", JSON, nil
 	case hff.FloatType:
 		return b.floatText(value.code) + "::json", JSON, nil
 	case hff.BoolType, hff.IntType, hff.StringType:

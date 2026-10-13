@@ -193,6 +193,8 @@ func (b *builder) serializeJSON(n hff.Node, raw string, format JSONFormat, typ h
 			code = b.floatText(jsonScalarCast("("+raw+" #>> '{}')", hff.FloatType))
 		case hff.BoolType:
 			code = "((" + raw + " #>> '{}')::boolean)::text"
+		case hff.BytesType:
+			code = "COALESCE(to_json(" + postgresBase64(jsonScalarCast("("+raw+" #>> '{}')", hff.BytesType)) + ")::text,'null')"
 		case hff.StringType:
 			code = "to_json(" + raw + " #>> '{}')::text"
 		case hff.ListType:

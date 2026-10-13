@@ -4,6 +4,7 @@ package sql_test
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -256,6 +257,10 @@ func metadataJSONFixture(t testing.TB, value hff.Value) string {
 			out += ".0"
 		}
 		return out
+	case hff.BytesKind:
+		x, _ := value.AsBytes()
+		encoded, _ := json.Marshal(base64.StdEncoding.EncodeToString(x))
+		return string(encoded)
 	case hff.StringKind:
 		x, _ := value.AsString()
 		encoded, _ := json.Marshal(x)
