@@ -40,7 +40,7 @@ func TestPostgreSQLDirectJSONBStringMembershipMatchesLocal(t *testing.T) {
 	lists := []hff.Value{
 		hff.Null(), hff.List(), hff.List(hff.String("auth")),
 		hff.List(hff.String("auth"), hff.String("dev"), hff.String("auth")),
-		hff.List(hff.String("")), hff.List(hff.String("é"), hff.String("e\u0301")),
+		hff.List(hff.String("")), hff.List(hff.String("é")), hff.List(hff.String("e\u0301")),
 		hff.List(hff.String("%"), hff.String(`a"b`), hff.String(`\`)),
 	}
 	sources := []string{
@@ -55,6 +55,12 @@ func TestPostgreSQLDirectJSONBStringMembershipMatchesLocal(t *testing.T) {
 		`tags:contains(null)`, `tags:contains("auth",null)`,
 		`tags:contains(name)`, `tags!:contains("auth")`,
 		`!tags!:contains("auth")`, `tags:contains("auth"):type="null"`,
+		`tags:any(tag=>tag="auth")`, `tags:any(tag=>"auth"=tag)`,
+		`tags:any(tags=>tags="auth")`, `tags:any(name=>name="auth") name="Alice"`,
+		`tags:any(tag=>tag="")`, `tags:any(tag=>tag="é")`,
+		`!tags:any(tag=>tag="auth")`, `tags:any(tag=>tag="auth")|name="Alice"`,
+		`tags:any(tag=>name="auth")`, `tags:any(tag=>tag="auth"|tag="dev")`,
+		`tags:any(tag=>tag="auth"):type="null"`, `!tags!:any(tag=>tag="auth")`,
 	}
 	var script strings.Builder
 	var expected []bool

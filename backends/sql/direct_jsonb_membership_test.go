@@ -34,6 +34,11 @@ func TestDirectJSONBStringMembership(t *testing.T) {
 			`!tags:contains("auth")`,
 			`tags:contains("auth") name="Alice"`,
 			`tags:contains("auth")|name="Alice"`,
+			`tags:any(tag=>tag="auth")`,
+			`tags:any(tag=>"auth"=tag)`,
+			`tags:any(tags=>tags="auth")`,
+			`!tags:any(tag=>tag="auth")`,
+			`tags:any(name=>name="auth") name="Alice"`,
 		} {
 			program, err := e.Compile(ctx, source)
 			if err != nil {
@@ -52,6 +57,11 @@ func TestDirectJSONBStringMembership(t *testing.T) {
 			`tags:contains(null)`, `tags:contains("auth",null)`,
 			`tags:contains("auth"):type="null"`,
 			`tags:concat([]):contains("auth")`,
+			`tags:any(tag=>name="auth")`,
+			`tags:any(tag=>tag="auth"|tag="dev")`,
+			`tags:any(tag=>tag="auth"):type="null"`,
+			`tags!:any(tag=>tag="auth")`,
+			`tags:any(tag=>tag=null)`,
 		} {
 			program, err := e.Compile(ctx, source)
 			if err != nil {
@@ -72,6 +82,14 @@ func TestDirectJSONBStringMembership(t *testing.T) {
 		_, err = hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings...))
 		if err == nil || !strings.Contains(err.Error(), "NUL") {
 			t.Fatalf("expected NUL parameter rejection, got %v", err)
+		}
+		program, err = e.Compile(ctx, `tags:any(tag=>tag="\u0000")`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings...))
+		if err == nil || !strings.Contains(err.Error(), "NUL") {
+			t.Fatalf("expected callback NUL parameter rejection, got %v", err)
 		}
 	}
 }
@@ -116,5 +134,26 @@ func TestDirectJSONBMembershipKeepsOtherRepresentationsGeneral(t *testing.T) {
 				t.Fatal("ineligible representation used containment:", query.Where())
 			}
 		})
+	}
+}
+
+func TestDirectJSONBAnyDoesNotRequireContainsCapability(t *testing.T) {
+	ctx := context.Background()
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.List("tags", schema.StringType))),
+		engine.WithCapabilities(capabilities.Standard().Without(capabilities.Method("list.contains"))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	program, err := e.Compile(ctx, `tags:any(tag=>tag="auth")`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query, err := hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL),
+		hffsql.WithBindings(hffsql.BindJSON(hff.Path{"tags"}, hffsql.Column("records", "tags"), hffsql.JSONB)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(query.Where(), "@> jsonb_build_array") {
+		t.Fatal("permitted any did not use direct containment:", query.Where())
 	}
 }

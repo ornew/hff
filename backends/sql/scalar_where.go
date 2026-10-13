@@ -57,7 +57,8 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 	case hff.BoolNode:
 		child, _ := n.Child(0)
 		if child.Kind() == hff.CallNode {
-			return b.directScalarInEligible(child) || b.directScalarStringCallEligible(child) || b.directJSONBContainsEligible(child)
+			return b.directScalarInEligible(child) || b.directScalarStringCallEligible(child) ||
+				b.directJSONBContainsEligible(child) || b.directJSONBAnyEligible(child)
 		}
 		_, _, ok := b.directScalarColumn(child)
 		return ok
@@ -226,6 +227,9 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 			}
 			if b.directJSONBContainsEligible(child) {
 				return b.directJSONBContains(child)
+			}
+			if b.directJSONBAnyEligible(child) {
+				return b.directJSONBAny(child)
 			}
 			return b.directScalarStringCall(child)
 		}

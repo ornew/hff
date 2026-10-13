@@ -60,18 +60,27 @@ shorter and had no `OFFSET 0` barriers, but no plan or execution timing was
 collected. The [native String predicate shape](../../optimizations/015-postgresql-string-predicate-shape.md)
 record gives the exact filters and limits.
 
-### Emit direct membership predicates for JSONB String lists
+### Emit direct predicates for JSONB String lists
 
-For a directly bound JSONB `List<String>` and one or more literal String
-needles, `contains()` can lower to one `@>` predicate without projection
-barriers; every needle must occur in the list, and duplicates do not require
-extra occurrences. Nullable containers retain an explicit null test; null or
-dynamic needles, guarded/metadata-backed values, and other list shapes use the
-general path. This SQL-shape result does not establish production index
-selection or execution speed. Plain `EXPLAIN` on the empty fixture showed a
-Bitmap Index Scan for two GIN operator classes.
-See the [JSONB String-list membership](../../optimizations/016-postgresql-jsonb-string-list-membership.md)
-record for the fixture and limits.
+For a directly bound JSONB `List<String>`, `contains()` with one or more
+literal String needles and the exact callback form
+`tags:any(item=>item="auth")` can lower to `@>` without projection barriers.
+For `contains()`, all needles must occur in the list, and duplicate needles do
+not require extra occurrences. The callback path applies only when equality
+uses the callback's own bound item; a callback parameter may shadow an outer
+variable, but a captured/outer binding, complex body, guard, or type observation
+uses the general lowering. Nullable containers retain an explicit null test;
+null or dynamic needles and other list shapes also use the general path.
+
+The measured `contains()` filter shrank from 1,164 characters and four
+barriers to 84 characters and none; the measured `any()` filter shrank from
+884 characters and seven barriers to the same 84-character predicate. Plain
+`EXPLAIN` on an empty temporary fixture with default planner settings selected
+Bitmap Index Scans for both `jsonb_ops` and `jsonb_path_ops`. These observations
+do not establish production index selection or runtime speed; no execution
+timing was collected. See the [direct JSONB String-list membership](../../optimizations/016-postgresql-jsonb-string-list-membership.md)
+and [simple JSONB String-list any](../../optimizations/017-postgresql-jsonb-string-list-any.md)
+records for eligibility, parity, and limits.
 
 ### Project computed steps once
 

@@ -73,9 +73,62 @@ func (b *builder) directJSONBContainsEligible(n hff.Node) bool {
 func (b *builder) directJSONBContains(n hff.Node) (string, error) {
 	receiver, _ := n.Child(0)
 	column, _ := b.directJSONBStringListColumn(receiver)
-	arguments := make([]string, n.ChildCount()-1)
-	for i := range arguments {
-		argument, _ := n.Child(i + 1)
+	needles := make([]hff.Node, n.ChildCount()-1)
+	for i := range needles {
+		needles[i], _ = n.Child(i + 1)
+	}
+	return b.directJSONBStringContainment(column, needles)
+}
+
+func (b *builder) directJSONBAnyEligible(n hff.Node) bool {
+	_, ok := b.directJSONBAnyNeedle(n)
+	return ok
+}
+
+// Binding identity, rather than the parameter's spelling, distinguishes the
+// element tested by this callback from an outer or shadowed variable.
+func (b *builder) directJSONBAnyNeedle(n hff.Node) (hff.Node, bool) {
+	method, ok := n.Method()
+	if !ok || method.Name() != "any" || n.ChildCount() != 2 {
+		return hff.Node{}, false
+	}
+	receiver, _ := n.Child(0)
+	if _, ok := b.directJSONBStringListColumn(receiver); !ok {
+		return hff.Node{}, false
+	}
+	callback, _ := n.Child(1)
+	parameters, ok := callback.Parameters()
+	if !ok || len(parameters) != 1 {
+		return hff.Node{}, false
+	}
+	body, _ := callback.Child(0)
+	op, ok := body.Operator()
+	if body.Kind() != hff.BinaryNode || !ok || op != hff.Equal {
+		return hff.Node{}, false
+	}
+	for side := 0; side < 2; side++ {
+		element, _ := body.Child(side)
+		needle, _ := body.Child(1 - side)
+		binding, parameter := element.Binding()
+		value, literal := needle.Literal()
+		if element.Kind() == hff.ParameterNode && parameter && binding.ID() == parameters[0].ID() &&
+			literal && value.Kind() == hff.StringKind {
+			return needle, true
+		}
+	}
+	return hff.Node{}, false
+}
+
+func (b *builder) directJSONBAny(n hff.Node) (string, error) {
+	receiver, _ := n.Child(0)
+	column, _ := b.directJSONBStringListColumn(receiver)
+	needle, _ := b.directJSONBAnyNeedle(n)
+	return b.directJSONBStringContainment(column, []hff.Node{needle})
+}
+
+func (b *builder) directJSONBStringContainment(column string, needles []hff.Node) (string, error) {
+	arguments := make([]string, len(needles))
+	for i, argument := range needles {
 		value, err := b.literal(argument)
 		if err != nil {
 			return "", err
