@@ -38,6 +38,17 @@ fixture-specific plan observation, with no timing measurement. See [direct
 native Float predicates](../../optimizations/018-postgresql-float-predicate-shape.md)
 for the measured filters and evidence limits.
 
+For JSON-backed scalar Float pairs, PostgreSQL consumes the original or
+metadata-restored value instead of serializing to canonical JSON and decoding
+again. The supported PostgreSQL Float model also removes the older exact
+arithmetic templates and their repeated decomposition. In the measured
+`String|Float` self-pair, generated `WHERE` text shortened from 6,570 to 1,308
+bytes, with 16 to 4 projection barriers; plain plan inspection showed a
+smaller plan tree. These are SQL-shape observations, not speed claims. Exact
+Float decomposition remains in some structural sort keys. See the [native
+Float lowering record](../../optimizations/023-postgresql-native-float-lowering.md)
+and [Float model design](../../design/021-backend-native-float-semantics.md).
+
 ### Compose direct predicates in mixed boolean filters
 
 Eligible native scalar leaves can remain in the outer `WHERE` when a filter
@@ -76,6 +87,20 @@ reachable containers retain recursive equality, and Float normalization still
 applies whenever a Float branch is possible. See the [dynamic pair category
 pruning record](../../optimizations/021-postgresql-json-pair-category-pruning.md)
 for SQL-shape examples and limits; no timing or speed claim is made.
+
+### Use PostgreSQL's native approximate Float model
+
+Scalar Float comparisons avoid a canonical JSON serialize/decode round-trip.
+Supported Float arithmetic, conversions, rounding, and formatting follow the
+PostgreSQL `float.*` Profile details; extreme arithmetic magnitudes use the
+documented checked fallback. Int remains exact and mixed Int/Float comparisons
+remain exact over represented values. In the measured JSONB pair shapes,
+`String|Float` self-comparison fell from 6,570 to 1,308 `WHERE` bytes and from
+16 to 4 projection barriers; this is SQL-shape evidence only. Plain plan
+inspection also showed fewer nested-loop nodes, without execution timing. Some
+structural sort keys still use exact Float decomposition. See the
+[native Float lowering record](../../optimizations/023-postgresql-native-float-lowering.md)
+and [backend-native Float design](../../design/021-backend-native-float-semantics.md).
 
 ### Compare scalar JSON pairs without canonical JSON conversion
 
@@ -207,22 +232,17 @@ documents or change the metadata contract. The measured profiles are in
 
 ### Reuse fixed Float SQL fragments during Build
 
-Checked and unchecked Float SQL wrappers are immutable package-level fragments;
-each Build supplies only the receiver SQL. Build measurements showed lower
-allocation counts with unchanged SQL and parameters. The database benchmark
-was a byte-identical SQL control, not evidence of a database speed change. See
-[Float Build fragments](../../optimizations/006-postgresql-float-build-fragments.md)
-for the scoped measurements and limitations.
+This was a Build-allocation optimization for the earlier checked/unchecked
+Float SQL templates. The native Float model replaced those templates, so this
+mechanism is no longer active. The record retains the historical measurements:
+[Float Build fragments](../../optimizations/006-postgresql-float-build-fragments.md).
 
 ### Reuse repeated Float arithmetic operands
 
-Within an existing projection scope, repeated references to the same Float SQL
-operand can reuse its original expression and exact numeric decomposition.
-The cache preserves first-use order and resets at scope boundaries. Single-use
-expressions pay cache-allocation overhead; the measured result is specific to
-the tested repeated query and does not establish a database speedup for other
-workloads. See [Float operand reuse](../../optimizations/008-postgresql-float-decomposition-reuse.md)
-for the Build and PostgreSQL measurements.
+This was a SQL-scope cache for the earlier exact Float arithmetic
+decomposition. The native Float model replaced that arithmetic path; exact
+decomposition remains in some structural sort keys. The record retains the
+historical measurements: [Float operand reuse](../../optimizations/008-postgresql-float-decomposition-reuse.md).
 
 ### Sort recoverable dynamic JSON lists
 

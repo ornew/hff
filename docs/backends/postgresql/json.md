@@ -609,8 +609,11 @@ The root and all nested arrays, objects, and numbers are validated before the
 result is exposed. Invalid syntax, duplicate object keys, invalid Unicode
 escapes, int64 overflow, and non-finite or overflowing float values produce
 ordinary null for the entire document. No partial value is returned. JSON
-whitespace around the single root value is accepted. Float underflow remains
-valid and preserves the sign when it rounds to zero.
+whitespace around the single root value is accepted. The PostgreSQL Float
+profile rejects values it classifies as overflow or underflow; if such a
+number appears anywhere in a parsed document, the entire `fromjson()` result
+is null. The local backend instead accepts underflow to signed zero, as
+reported by its profile.
 
 For example, bind `payload_text` as a string column and declare that field as
 `String` in the engine schema. `fromjson()` returns a dynamic value, so its
@@ -647,10 +650,11 @@ for the workload, generated-SQL tradeoffs, and sample limits.
 does not trim surrounding whitespace. `number()` accepts one strict JSON
 number spelling, also without surrounding whitespace. Integer spellings must
 fit int64 and return int64; a decimal point or exponent selects float64. Invalid
-spellings, integer overflow, float overflow, and non-finite results return
-ordinary null. Finite subnormals and underflow to signed zero remain valid, so
-`-0.0` keeps its float subtype and sign. A null or inapplicable receiver returns
-null, while no-value propagates without invoking the conversion.
+spellings, integer overflow, Float inputs rejected by PostgreSQL, and
+non-finite results return ordinary null. PostgreSQL's `float.parsing` profile
+detail specifies its native input behavior, including underflow. A null or
+inapplicable receiver returns null, while no-value propagates without invoking
+the conversion.
 
 These conversions can read string columns or runtime JSON strings:
 
@@ -712,30 +716,29 @@ and other non-finite float results also produce null. The right operand's HFF
 result follows ordinary left-to-right null/no-value propagation; SQL does not
 promise physical expression evaluation order or local step budgets.
 
-Float arithmetic follows IEEE 754 round-to-nearest, ties-to-even. Subnormal
-results and underflow to signed zero are retained. PostgreSQL's native float
-operators are not used as the final rounding step: operands are represented as
-exact decimal values, the operation is rounded back to binary64, and division
-uses a high-precision decimal candidate with an exact midpoint check. This
-preserves HFF results at ties, subnormal boundaries, signed zero, and overflow.
-See [design record 015](../../design/015-postgresql-float-arithmetic.md) for
-the numerical rationale and tested boundaries.
+Float is approximate, and PostgreSQL follows the `float.*` model declared in
+the built query's Profile. Ordinary Float arithmetic uses PostgreSQL
+`double precision`; extreme magnitudes may use a checked `numeric` fallback
+to prevent database errors or non-finite results. The fallback may round or
+produce a different zero sign from PostgreSQL's native Float operation.
+Division by zero, overflow, invalid results, and non-finite results yield
+null. Int-only arithmetic remains exact, and mixed Int/Float comparisons
+remain exact over the represented values. See the
+[backend-native Float design](../../design/021-backend-native-float-semantics.md)
+for the language contract and backend profile details.
 
-When the same Float operand expression is referenced more than once in a
-projection scope, PostgreSQL lowering can reuse its original SQL expression
-and exact decomposition. This does not change numeric results or promise
-physical evaluation order; single-use expressions retain the cache's Build
-overhead. See the [measured Float operand reuse](../../optimizations/008-postgresql-float-decomposition-reuse.md)
-record for the scoped workloads and controls.
+Float arithmetic lowering follows the PostgreSQL `float.*` Profile, including
+the documented extreme-magnitude fallback. It does not promise a particular
+SQL size or execution time. The earlier exact-decomposition reuse measurement
+describes a superseded implementation, not a current guarantee.
 
 ### Numeric rounding methods
 
 `round()`, `ceil()`, and `floor()` are supported for schema-known `Int` and
 `Float` values and for JSON `Any` or unions when the runtime numeric subtype is
 recoverable. Integer receivers keep their int64 value and subtype. Float
-receivers keep float64, including signed zero; `round()` rounds halfway cases
-away from zero (`2.5` to `3.0`, `-2.5` to `-3.0`), while `ceil()` and `floor()`
-round toward positive and negative infinity respectively. Null or
+receivers keep the Float subtype; their `round()`, `ceil()`, and `floor()`
+behavior follows PostgreSQL's `float.rounding` Profile detail. Null or
 non-numeric runtime receivers produce ordinary null, and no-value propagates.
 
 ```hff
@@ -1073,12 +1076,13 @@ profile.scores:json="[80,90]"
 profile.name:string="Ada"
 ```
 
-Float serialization uses a canonical shortest round-tripping decimal with a
-float marker, canonical exponent form, and preserved negative zero. Its output
-does not depend on PostgreSQL's `extra_float_digits` setting. The formatter
-reconstructs the exact IEEE value and searches decimal precisions from one to
-seventeen using nearest, ties-to-even rounding; this correctness-first SQL
-lowering is a baseline, not a performance guarantee.
+Float serialization uses PostgreSQL's native Float text as reported by
+`float.format`. JSON transport requires `extra_float_digits > 0`, which is the
+PostgreSQL default; HFF does not set or inspect that session setting. JSON
+output retains a decimal or exponent marker so the Float subtype is preserved.
+JSONB metadata is still required when storage has erased an observable Float
+representation, such as negative zero. Exact decimal spelling is not
+guaranteed to match another backend.
 
 The canonical JSON token walk retains scalar and null rows as values while
 skipping their child expansion. It also decodes each Float token once before

@@ -240,6 +240,11 @@ Backend feature support is a separate statement and does not grant permission.
 Registered method declarations in `Methods()` likewise do not enable those
 methods.
 
+Profiles also expose backend-specific numeric details such as `float.model`,
+`float.parsing`, `float.arithmetic`, `float.rounding`, and `float.format`.
+These describe approximate Float behavior that can differ across backends;
+they do not change exact Int behavior or mixed Int/Float comparison rules.
+
 Profiles do not infer database, collation, regex, or time-zone data versions
 from ambient state. A backend may report a separately versioned data table,
 such as the Go Unicode tables used for PostgreSQL case conversion. A missing

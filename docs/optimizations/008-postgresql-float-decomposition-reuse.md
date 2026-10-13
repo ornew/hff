@@ -1,7 +1,12 @@
 # 008. Reuse exact Float decomposition within SQL scopes
 
-- **Status**: Measured
+- **Status**: Superseded
 - **Date**: 2026-10-13
+
+> The native PostgreSQL Float model in [design 021](../design/021-backend-native-float-semantics.md)
+> replaced the exact arithmetic decomposition path measured here. This record
+> remains historical evidence for that earlier implementation; exact Float
+> decomposition may still be used in unrelated structural sort keys.
 
 ## Problem and mechanism
 

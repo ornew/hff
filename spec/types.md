@@ -26,16 +26,25 @@ exact represented values without rounding an integer to float64 first.
 Division always returns float64, including for two integer operands. Integer
 overflow and non-finite floating-point results yield null.
 Integer-spelled literals have type int64; a decimal point or exponent selects
-float64. Remainder accepts only integer operands and has the dividend's sign.
-`round()` rounds a halfway value away from zero. Rounding methods preserve the
-input numeric subtype. Correct numeric spelling outside the selected type's
-range yields null; a negative integer literal is range-checked as a signed value,
-so the int64 minimum is representable.
-Float64 parsing and arithmetic use IEEE 754 round-to-nearest, ties-to-even.
-Subnormal results and underflow to signed zero are valid finite results. This
-rounding rule is distinct from the user-visible `round()` method. Overflow and
-non-finite results yield null. Positive and negative zero compare equal and are
-both falsy; serialization preserves the float64 sign of zero.
+float64. Literal values are parsed by the core compiler; runtime Float parsing
+follows the selected backend's Profile. Remainder accepts only integer operands
+and has the dividend's sign. For Int, `round()`, `ceil()`, and `floor()` are
+identity operations. Float rounding follows the selected backend's Profile.
+Rounding methods preserve the input numeric subtype. Correct numeric spelling
+outside the selected type's range yields null; a negative integer literal is
+range-checked as a signed value, so the int64 minimum is representable.
+Float64 is an approximate numeric type. Its parsing, arithmetic, rounding,
+aggregation, and formatting follow the selected backend's declared
+compatibility `Profile`; Float results and text need not match across
+backends. Decimal and exponent spellings select Float, while integer
+spellings select Int. Invalid conversions and non-finite Float results yield
+null. Positive and negative zero compare equal and are both falsy. Serialized
+Float values retain a decimal point or exponent marker so their numeric
+subtype remains Float; exact text and signed-zero preservation are
+backend-profile behavior. Int remains exact signed 64-bit, and mixed
+Int/Float equality and ordering compare exact represented values without
+rounding an Int through Float first. See the backend's `float.*` Profile
+details for its concrete Float model.
 Capitalized schema names here are explanatory, not a finalized public API.
 
 ## Objects and collections

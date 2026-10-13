@@ -20,11 +20,12 @@ These documents explain the rationale, contracts, and tradeoffs behind HFF's lan
 | [012\. PostgreSQL JSONB Type Metadata](012-postgresql-jsonb-type-metadata.md) | Accepted | 2026\-10\-12 | \@ornew |
 | [013\. PostgreSQL Flattened Structure Presence](013-postgresql-flattened-structure-presence.md) | Accepted | 2026\-10\-12 | \@ornew |
 | [014\. PostgreSQL Relation Bindings](014-postgresql-relation-bindings.md) | Accepted | 2026\-10\-12 | \@ornew |
-| [015\. Exact PostgreSQL Float Arithmetic](015-postgresql-float-arithmetic.md) | Accepted | 2026\-10\-13 | \@ornew |
+| [015\. Exact PostgreSQL Float Arithmetic](015-postgresql-float-arithmetic.md) | Superseded | 2026\-10\-13 | \@ornew |
 | [016\. Canonical PostgreSQL JSON Serialization](016-postgresql-json-serialization.md) | Accepted | 2026\-10\-13 | \@ornew |
 | [017\. PostgreSQL JSON Parsing](017-postgresql-json-parsing.md) | Accepted | 2026\-10\-13 | \@ornew |
 | [018\. PostgreSQL Timestamp Storage](018-postgresql-timestamp-storage.md) | Accepted | 2026\-10\-13 | \@ornew |
 | [019\. PostgreSQL JSON Union Dispatch](019-postgresql-json-union-dispatch.md) | Accepted | 2026\-10\-13 | \@ornew |
 | [020\. PostgreSQL JSON Timestamp Values](020-postgresql-json-timestamps.md) | Accepted | 2026\-10\-13 | \@ornew |
+| [021\. Backend\-Native Approximate Float Semantics](021-backend-native-float-semantics.md) | Accepted | 2026\-10\-14 | \@ornew |
 
 Use the [record template](000-template.md) when adding a design record.

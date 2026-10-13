@@ -30,11 +30,11 @@ func TestPostgreSQLJSONFloatUnderflow(t *testing.T) {
 		source, input string
 		want          bool
 	}{
-		{`data=0`, `1e-400`, true}, {`data`, `1e-999999999999999999999999`, false},
-		{`!data`, `-1e-9999`, true}, {`data+1=1`, `1e-400`, true},
-		{`data:[float]:string="-0.0"`, `-1e-400`, true},
+		{`data=0`, `1e-400`, false}, {`data`, `1e-999999999999999999999999`, false},
+		{`!data`, `-1e-9999`, true}, {`data+1=1`, `1e-400`, false},
+		{`data:[float]:string="null"`, `-1e-400`, true},
 		{`data:[float]:json="0.0"`, `0.000e+999999999999999999999999`, true},
-		{`data:[float]=0`, `2.4703282292062327e-324`, true},
+		{`data:[float]=0`, `2.4703282292062327e-324`, false},
 		{`data:[float]=5e-324`, `2.4703282292062328e-324`, true},
 		{`data`, `[1e-999999]`, true}, {`data`, `{"x":1e-999999}`, true},
 		{`data:[list]`, `[1e-999999]`, true}, {`data:[object]`, `{"x":1e-999999}`, true},

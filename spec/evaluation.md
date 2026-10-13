@@ -252,7 +252,9 @@ match-all exception.
 
 Invalid conversions (including JSON, base64, timestamp, and number parsing),
 out-of-range or non-integer list indices, division by zero, integer overflow,
-and non-finite floating-point results yield null. These rules also apply to
+and non-finite floating-point results yield null. Float parsing and arithmetic
+use the selected backend's declared approximate model; see the `float.*`
+details in its compatibility `Profile`. These rules also apply to
 constant operands: optimization must not turn an evaluation failure into a
 compile-time error. Syntax errors, statically invalid types, and unavailable
 features remain compile-time errors.

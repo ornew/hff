@@ -94,6 +94,13 @@ capability policy, compile limits, local input/runtime limits, registered
 extension declarations, and the selected time-zone snapshot. The profile is an
 immutable value; it does not load zone data or grant service permissions.
 
+Float behavior is described by the `float.*` profile details. The local
+backend uses Go `float64` parsing and arithmetic; subnormal values and
+underflow to signed zero are accepted, while overflow and non-finite results
+produce null. Float rounding uses Go's `math.Round`, `Ceil`, and `Floor`, and
+Float text uses Go's shortest round-trip format with a subtype marker. Float
+aggregate methods are not part of the current local method set.
+
 ```go
 profile := filter.Profile()
 if limits, known := profile.CompileLimits(); known {

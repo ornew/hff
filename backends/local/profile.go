@@ -38,6 +38,11 @@ func localProfile(f *Filter) hff.Profile {
 		},
 		Guarantees: []hff.GuaranteeID{hff.InputValidationGuarantee, hff.EvaluationOrderGuarantee, hff.CancellationGuarantee},
 		Details: []hff.ProfileDetail{
+			{Name: "float.model", Value: "Go float64 approximate binary64; Float results and text need not match other backends at rounding boundaries"},
+			{Name: "float.parsing", Value: "Go strconv float64 input; subnormals and underflow to signed zero are accepted, overflow becomes null"},
+			{Name: "float.arithmetic", Value: "Go float64 arithmetic; non-finite results and zero division become null"},
+			{Name: "float.rounding", Value: "Go math Round (midpoints away from zero), Ceil and Floor"},
+			{Name: "float.format", Value: "Go strconv shortest round-trip Float text with a decimal/exponent subtype marker and signed zero"},
 			{Name: "regex.syntax", Value: "RE2-compatible syntax excluding \\C; substring matching"},
 			{Name: "timezone.builtin", Value: "UTC and fixed offsets; named zones require explicitly supplied TZif data"},
 			{Name: "extensions.contract", Value: "extensions must be pure and concurrent-safe and cooperate with cancellation and cost accounting"},

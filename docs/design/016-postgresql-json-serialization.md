@@ -4,6 +4,11 @@
 - **Author**: @ornew
 - **Date**: 2026-10-13
 
+> Float-specific decimal spelling and signed-zero output details are superseded
+> by [021. Backend-Native Approximate Float Semantics](021-backend-native-float-semantics.md).
+> This record's JSON structure, key ordering, escaping, null, and no-value
+> contracts remain in force.
+
 ## Summary
 
 PostgreSQL `json()` and `string()` serialize schema-known values and recovered

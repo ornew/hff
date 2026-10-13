@@ -25,11 +25,21 @@ except for the excluded `\C` byte escape, which is invalid and yields null.
 not normalize strings. `len()` counts Unicode code points for strings and bytes
 for byte values.
 
-`round()` rounds halfway cases away from zero: `2.5` becomes `3` and `-2.5`
-becomes `-3`. `round()`, `ceil()`, and `floor()` preserve the input numeric
-subtype. `string:bool()` accepts exactly `true` or `false`, and `string:number()`
-accepts JSON number spelling; neither trims whitespace. Invalid patterns or
-conversions yield null.
+For Int, `round()`, `ceil()`, and `floor()` leave the value unchanged. Float
+`round()`, `ceil()`, and `floor()` follow the backend's `float.rounding`
+Profile detail. Rounding methods preserve the input numeric subtype.
+`string:bool()` accepts exactly `true` or `false`, and
+`string:number()` accepts JSON number spelling; neither trims whitespace.
+Invalid patterns or conversions yield null.
+
+Float operations are approximate and follow the backend's `float.*` Profile
+details. For example, the local backend uses Go `math.Round`, so a stored
+Float value of `2.5` rounds to `3`; PostgreSQL uses its native Float rounding,
+which rounds that midpoint to `2` on the supported platform. Parsing can also
+differ: local `string:number()` accepts underflow such as `1e-400` as zero,
+while PostgreSQL's Float profile rejects underflow as null. Query Float
+literals are parsed by the core compiler before backend translation. Inspect
+the built filter/query profile when these differences affect results.
 
 ## Regular-expression support
 

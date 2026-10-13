@@ -1,7 +1,11 @@
 # 006. Precompute PostgreSQL Float SQL fragments
 
-- **Status**: Measured
+- **Status**: Superseded
 - **Date**: 2026-10-13
+
+> The native PostgreSQL Float model in [design 021](../design/021-backend-native-float-semantics.md)
+> replaced the checked/unchecked Float parser templates measured here. The
+> measurements below describe the earlier implementation only.
 
 ## Problem and mechanism
 

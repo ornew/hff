@@ -3,11 +3,10 @@ package sql
 import "github.com/ornew/hff"
 
 func (b *builder) roundedFloat(value, name string) string {
-	value = b.project(value)
-	// PostgreSQL rounds numeric ties away from zero. Decode binary64 exactly
-	// first: casting float to numeric would round its decimal representation.
-	rounded := b.project(name + "(" + b.floatNumeric(value) + ")")
-	return "(CASE WHEN " + rounded + " IS NULL THEN NULL::double precision WHEN " + rounded + "=0 AND " + floatSign(value) + " THEN '-0'::double precision ELSE " + rounded + "::double precision END)"
+	// PostgreSQL's native Float builtins preserve the Float type. In
+	// particular, round() follows the backend's midpoint rule rather than
+	// reconstructing an exact decimal value to emulate another runtime.
+	return name + "(" + value + ")"
 }
 
 func (b *builder) numericRounding(n hff.Node, name string, value expression) (expression, error) {

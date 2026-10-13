@@ -271,18 +271,24 @@ the maximum int64 value, `(age+1):exists` is false because the overflowing
 result is null.
 
 Float/float and mixed int/float `+`, `-`, `*`, and `/` are supported. Mixed
-arithmetic promotes the integer operand to float64. Results use IEEE 754
-round-to-nearest, ties-to-even; overflow or a non-finite result yields null,
-while subnormal results and underflow to signed zero remain valid. Float
-remainder is unsupported. PostgreSQL lowering preserves these results without
-relying on the database's floating-point arithmetic for final rounding; see
-the [numeric JSON guide](json.md#numeric-arithmetic) and
-[design record 015](../../design/015-postgresql-float-arithmetic.md).
+arithmetic promotes the integer operand to Float. PostgreSQL Float results use
+the approximate model declared by the query's `float.*` Profile details:
+ordinary operations use PostgreSQL `double precision`, while extreme
+magnitudes may use a checked `numeric` fallback. Overflow, division by zero,
+and non-finite results yield null. Runtime Float conversions use PostgreSQL's
+native input validation; query literals have already been parsed by the core
+compiler. Float output uses PostgreSQL's native text, which depends on
+`extra_float_digits`. Float remainder is unsupported.
+Int-only arithmetic and exact mixed Int/Float comparisons keep their language
+contracts. See the [numeric JSON guide](json.md#numeric-arithmetic) and
+[backend-native Float design](../../design/021-backend-native-float-semantics.md).
 
-Numeric `round()` rounds halfway values away from zero; `ceil()` and `floor()`
-round toward positive and negative infinity. These methods preserve the input
-numeric subtype. For JSONB values, an ambiguous integer/float subtype requires
-the metadata described in the JSON guide.
+Float `round()`, `ceil()`, and `floor()` follow PostgreSQL's native Float
+rounding behavior, as reported in `float.rounding`; on the supported platform,
+`round()` rounds midpoint ties to even (`2.5` to `2.0`). Int rounding methods
+are identity operations. These methods preserve the input numeric subtype. For
+JSONB values, an ambiguous integer/float subtype requires the metadata
+described in the JSON guide.
 
 For mixed numeric ordering, the builder partitions float values around the
 int64 range, floors only in the safely castable range, and compares the integer
@@ -440,6 +446,15 @@ computed parsing, unit operations, native `bigint` nanosecond bindings, and
 schema-known JSON/JSONB support through canonical duration strings. It does not
 infer Duration inside `Any` or use JSONB metadata to restore Duration; native
 composite Duration storage remains unavailable.
+
+The `float.*` details describe PostgreSQL's approximate `double precision`
+model, input validation, arithmetic and extreme-value fallback, rounding, and
+text formatting. Using the PostgreSQL Float profile requires PostgreSQL 16+
+for input validation and `extra_float_digits > 0` for round-trip-safe JSON
+transport. PostgreSQL's default satisfies the latter requirement. HFF neither
+sets nor inspects these database/session settings, so the caller must ensure
+they are configured. Read the built query's profile when these backend-specific
+details matter to an application.
 
 ```go
 profile, err := hffsql.Profile(hffsql.PostgreSQL)

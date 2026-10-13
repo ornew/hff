@@ -52,10 +52,11 @@ base64 for bytes, UTC RFC 3339 for timestamps, and compound h/m/s for durations
 with fractional seconds representing nanoseconds. `json()` produces compact
 JSON and represents bytes, timestamps, and durations as these strings.
 Object keys are sorted in code-point order. Non-JSON type information is not
-restored automatically by `fromjson()`. Float64 values use a shortest
-round-trip representation, retaining a decimal point or exponent to preserve the
-numeric subtype. Negative float64 zero is written `-0.0`. Integer values use
-integer decimal spelling. Zero duration is written `0s`.
+restored automatically by `fromjson()`. Float64 values retain a decimal point
+or exponent marker to preserve the numeric subtype. Their exact decimal
+spelling and signed-zero text follow the selected backend's `float.format`
+Profile detail. Integer values use integer decimal spelling. Zero duration
+is written `0s`.
 
 ## Booleans and numbers
 
@@ -68,9 +69,10 @@ integer decimal spelling. Zero duration is written `0s`.
 | `number:ceil() -> number` | Round upward |
 | `number:floor() -> number` | Round downward |
 
-`round()` rounds halfway values away from zero: `2.5` becomes `3`, and `-2.5`
-becomes `-3`. Numbers distinguish int64 and float64; rounding methods preserve
-the numeric subtype.
+For Int, `round()`, `ceil()`, and `floor()` are identity operations. Float
+`round()`, `ceil()`, and `floor()` follow the selected backend's
+`float.rounding` Profile detail. Numbers distinguish int64 and float64;
+rounding methods preserve the numeric subtype.
 
 ## Strings and bytes
 

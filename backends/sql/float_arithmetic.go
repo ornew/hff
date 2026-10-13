@@ -1,24 +1,10 @@
 package sql
 
 import (
-	"math/big"
 	"strconv"
 
 	"github.com/ornew/hff"
 )
-
-// The overflow midpoint and half the minimum subnormal are exact binary64
-// rounding boundaries. Numeric division must not be used to construct them.
-var floatOverflowMidpoint = func() string {
-	upper := new(big.Int).Lsh(big.NewInt(1), 1024)
-	half := new(big.Int).Lsh(big.NewInt(1), 970)
-	return upper.Sub(upper, half).String()
-}()
-
-var floatHalfMinimum = func() string {
-	denominator := new(big.Int).Lsh(big.NewInt(1), 1075)
-	return new(big.Rat).SetFrac(big.NewInt(1), denominator).FloatString(1075)
-}()
 
 // binaryNumeric evaluates significand*2^power without decimal rounding. Integer
 // powers of five and decimal placement also cover the smallest subnormal.
@@ -43,11 +29,11 @@ func (b *builder) floatNumeric(value string) string {
 	return "(SELECT (CASE WHEN get_byte(" + bytes + ",0)>=128 THEN -1 ELSE 1 END)*" + exact + " FROM LATERAL (SELECT float8send(" + value + ") AS bytes OFFSET 0) AS " + bits + ")"
 }
 
-// floatOperands reuses exact decomposition within the current projection
-// scope. Presence remains owned by each operation. Original Float values keep
-// their sign bits, and fresh operands retain the ordinary projection order.
-func (b *builder) floatOperands(left, right string) (string, string, string, string) {
-	operands := [2]struct{ source, value, exact string }{{source: left}, {source: right}}
+// floatOperands shares native Float operands within the current projection
+// scope. Presence remains owned by each operation; no exact decomposition is
+// needed for backend-native arithmetic.
+func (b *builder) floatOperands(left, right string) (string, string) {
+	operands := [2]struct{ source, value string }{{source: left}, {source: right}}
 	if b.sharedPaths == nil {
 		b.sharedPaths = make(map[string]expression)
 	}
@@ -61,17 +47,7 @@ func (b *builder) floatOperands(left, right string) (string, string, string, str
 			b.sharedPaths[key] = expression{operand.value, "TRUE", hff.FloatType}
 		}
 	}
-	for i := range operands {
-		operand := &operands[i]
-		key := "float-arithmetic:" + operand.source + ":exact"
-		if cached, ok := b.sharedPaths[key]; ok {
-			operand.exact = cached.code
-		} else {
-			operand.exact = b.project(b.floatNumeric(operand.value))
-			b.sharedPaths[key] = expression{operand.exact, "TRUE", hff.FloatType}
-		}
-	}
-	return operands[0].value, operands[1].value, operands[0].exact, operands[1].exact
+	return operands[0].value, operands[1].value
 }
 
 func floatSign(value string) string { return "(get_byte(float8send(" + value + "),0)>=128)" }
@@ -88,41 +64,40 @@ func (b *builder) floatArithmetic(n hff.Node, left, right expression, op hff.Ope
 	if right.kind == hff.IntType {
 		r = "(" + r + "::double precision)"
 	}
-	l, r, ln, rn := b.floatOperands(l, r)
-	negative := "(" + floatSign(l) + " <> " + floatSign(r) + ")"
+	l, r = b.floatOperands(l, r)
+	leftMagnitude, rightMagnitude := "abs("+l+")", "abs("+r+")"
+	var safe string
+	switch op {
+	case hff.Add, hff.Subtract:
+		safe = both(leftMagnitude+"<=1e300::double precision", rightMagnitude+"<=1e300::double precision")
+		// Cancellation cannot overflow, and a nonzero difference of finite
+		// binary64 operands cannot fall below the smallest subnormal.
+		if op == hff.Add {
+			safe = "(" + safe + " OR (" + l + ">=0 AND " + r + "<=0) OR (" + l + "<=0 AND " + r + ">=0))"
+		} else {
+			safe = "(" + safe + " OR (" + l + ">=0 AND " + r + ">=0) OR (" + l + "<=0 AND " + r + "<=0))"
+		}
+	case hff.Multiply, hff.Divide:
+		safe = both(leftMagnitude+" BETWEEN 1e-100::double precision AND 1e100::double precision", rightMagnitude+" BETWEEN 1e-100::double precision AND 1e100::double precision")
+		if op == hff.Multiply {
+			safe = "(" + safe + " OR " + l + "=0 OR " + r + "=0)"
+		} else {
+			safe = "(" + safe + " OR " + l + "=0)"
+		}
+	}
+	nativeRight, decimalRight := r, "("+r+")::text::numeric"
 	if op == hff.Divide {
-		return expression{b.floatQuotient(ln, rn, negative), present, hff.FloatType}, nil
+		nativeRight, decimalRight = "NULLIF("+r+",0)", "NULLIF("+decimalRight+",0)"
 	}
-	x := b.project("(" + ln + " " + string(op) + " " + rn + ")")
-	if op == hff.Add {
-		negative = "(" + x + "<0 OR (" + x + "=0 AND " + floatSign(l) + " AND " + floatSign(r) + "))"
-	} else if op == hff.Subtract {
-		negative = "(" + x + "<0 OR (" + x + "=0 AND " + floatSign(l) + " AND NOT " + floatSign(r) + "))"
-	}
-	zero := "(CASE WHEN " + negative + " THEN '-0'::double precision ELSE 0::double precision END)"
-	code := "(CASE WHEN " + x + " IS NULL THEN NULL::double precision WHEN abs(" + x + ")>=" + floatOverflowMidpoint + "::numeric THEN NULL::double precision WHEN abs(" + x + ")<=" + floatHalfMinimum + "::numeric THEN " + zero + " ELSE " + x + "::double precision END)"
+	native := "(" + l + " " + string(op) + " " + nativeRight + ")"
+	// PostgreSQL arithmetic can raise on overflow or underflow. At extreme
+	// magnitudes, use its ordinary decimal arithmetic and validate the result
+	// before Float input. Text conversion avoids Float->numeric's DBL_DIG
+	// truncation. This fallback follows backend/session precision, not a
+	// portable exact binary64 rounding algorithm, and may lose zero's sign.
+	alias := b.nextAlias()
+	decimal := "(" + l + ")::text::numeric " + string(op) + " " + decimalRight
+	fallback := "(SELECT " + nativeFloatCast(alias+".v::text") + " FROM LATERAL (SELECT (" + decimal + ") AS v OFFSET 0) AS " + alias + ")"
+	code := "(CASE WHEN " + l + " IS NULL OR " + r + " IS NULL THEN NULL::double precision WHEN " + safe + " THEN " + native + " ELSE " + fallback + " END)"
 	return expression{code, present, hff.FloatType}, nil
-}
-
-// A 1000-place decimal quotient is farther from every non-tie rounding
-// midpoint than its approximation error. Exact cross-products identify ties
-// and replace an odd candidate with its even adjacent float.
-func (b *builder) floatQuotient(left, right, negative string) string {
-	n, d := b.project("abs("+left+")"), b.project("abs("+right+")")
-	low := n + "<=" + d + "*" + floatHalfMinimum + "::numeric"
-	high := n + ">=" + d + "*" + floatOverflowMidpoint + "::numeric"
-	quotient := b.project("((" + n + "+0::numeric(1000,1000))/NULLIF(" + d + ",0))")
-	candidate := b.project("(CASE WHEN " + low + " OR " + high + " THEN NULL::double precision ELSE " + quotient + "::double precision END)")
-	exact := b.project(b.floatNumeric(candidate))
-	bytes := "float8send(" + candidate + ")"
-	e := "(get_byte(" + bytes + ",0)%128*16+get_byte(" + bytes + ",1)/16)"
-	power := "(CASE WHEN " + e + "=0 THEN -1074 ELSE " + e + "-1075 END)"
-	unit := b.project(b.binaryNumeric("1::numeric", power))
-	odd := "(get_byte(" + bytes + ",7)%2=1)"
-	lower := n + "=" + d + "*(" + exact + "-" + unit + "*0.5::numeric)"
-	upper := n + "=" + d + "*(" + exact + "+" + unit + "*0.5::numeric)"
-	rounded := "(CASE WHEN " + odd + " AND " + lower + " THEN (" + exact + "-" + unit + ")::double precision WHEN " + odd + " AND " + upper + " THEN (" + exact + "+" + unit + ")::double precision ELSE " + candidate + " END)"
-	signed := "(CASE WHEN " + negative + " THEN -(" + rounded + ") ELSE " + rounded + " END)"
-	zero := "(CASE WHEN " + negative + " THEN '-0'::double precision ELSE 0::double precision END)"
-	return "(CASE WHEN " + d + " IS NULL OR " + d + "=0 OR " + n + " IS NULL OR " + high + " THEN NULL::double precision WHEN " + low + " THEN " + zero + " ELSE " + signed + " END)"
 }

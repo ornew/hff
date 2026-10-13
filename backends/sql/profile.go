@@ -39,6 +39,12 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 		Backend:  "sql/postgresql",
 		Versions: []hff.CompatibilityVersion{{Component: "unicode", Version: unicode.Version}, {Component: "regex.parser", Version: "Go regexp " + runtime.Version()}},
 		Details: []hff.ProfileDetail{
+			{Name: "float.requirements", Value: "PostgreSQL 16+ Float input validation and extra_float_digits>0 for round-trip-safe Float transport; caller configures the database session"},
+			{Name: "float.model", Value: "PostgreSQL approximate double precision; Float results and text need not match other backends at rounding boundaries"},
+			{Name: "float.parsing", Value: "PostgreSQL 16+ pg_input_is_valid and double-precision input; rejected overflow or underflow becomes null"},
+			{Name: "float.arithmetic", Value: "native Float arithmetic for safe ordinary magnitudes, cancellation and zero; extreme magnitudes use PostgreSQL numeric arithmetic from native Float text with validated Float output; fallback rounding and zero sign may differ"},
+			{Name: "float.rounding", Value: "native PostgreSQL round, ceil and floor; Float round uses the backend midpoint rule"},
+			{Name: "float.format", Value: "native PostgreSQL shortest-precise Float text with extra_float_digits>0; JSON retains a decimal/exponent Float marker and signed zero is preserved"},
 			{Name: "execution", Value: "caller owns database execution, input/schema validity, and database timeout configuration"},
 			{Name: "limits", Value: "translation cannot enforce HFF step, generated-value, or JSON-depth budgets in the database"},
 			{Name: "evaluation.order", Value: "SQL preserves supported expression results; database planning may reorder work and does not guarantee HFF evaluation steps"},
@@ -55,7 +61,7 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 	}
 	for _, id := range capabilities.Standard().IDs() {
 		feature := hff.FeatureSupport{ID: id, Level: hff.Conditional,
-			Conditions: "Build checks supported types, operator semantics, and explicit schema-to-column bindings"}
+			Conditions: "Build checks supported types, operator semantics, and explicit schema-to-column bindings; Float processing requires PostgreSQL 16+ and extra_float_digits>0"}
 		if id == capabilities.RegexOperators || id == capabilities.Method("string.matches") {
 			feature.Conditions += "; PostgreSQL 15+; literal non-NUL ASCII RE2 subset only"
 		}

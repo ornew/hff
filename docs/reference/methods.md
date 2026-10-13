@@ -27,11 +27,13 @@ serialization details.
 | `bool:and(bool) -> bool` | Logical AND with left-to-right short-circuit evaluation. |
 | `bool:or(bool) -> bool` | Logical OR with left-to-right short-circuit evaluation. |
 | `bool:not() -> bool` | Logical negation. |
-| `number:round() -> number` | Nearest integer value; halfway cases round away from zero. |
-| `number:ceil() -> number` | Smallest integer value not less than the receiver. |
-| `number:floor() -> number` | Greatest integer value not greater than the receiver. |
+| `number:round() -> number` | Int identity; Float rounding follows the backend Profile. |
+| `number:ceil() -> number` | Int identity; Float rounding follows the backend Profile. |
+| `number:floor() -> number` | Int identity; Float rounding follows the backend Profile. |
 
-Numeric rounding preserves int64 versus float64 subtype. See
+Numeric rounding preserves int64 versus float64 subtype. Int rounding methods
+are identity operations; Float `round()`, `ceil()`, and `floor()` follow the
+backend's `float.rounding` Profile detail. See
 [boolean and number rules](../../spec/methods.md#booleans-and-numbers).
 
 ## String and bytes
@@ -111,9 +113,10 @@ The PostgreSQL backend currently supports schema-known JSON/JSONB list
 also supported inside callbacks. Folds are supported with known accumulator
 types. `json()` and `string()` support null, bool, int64, string, and finite
 float values from scalar columns and native JSON in the schema-known profile.
-JSONB-origin floats remain unsupported because JSONB loses signed-zero
-information; query-generated floats use canonical shortest round-tripping
-serialization. `fromjson()` remains unsupported. Structural comparisons
+JSONB Float serialization requires metadata when storage may have lost an
+observable representation such as signed zero. Float text follows the
+backend's `float.format` Profile detail. PostgreSQL supports `fromjson()` for
+the representations listed in its JSON support matrix. Structural comparisons
 require the corresponding equality capability. See the
 [PostgreSQL JSON support matrix](../backends/postgresql/json.md) for the exact
 supported profile and restrictions.

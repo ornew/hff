@@ -93,7 +93,7 @@ func TestPostgreSQLNumericRounding(t *testing.T) {
 					if x, ok := v.AsFloat(); ok {
 						switch method {
 						case "round":
-							x = math.Round(x)
+							x = math.RoundToEven(x)
 						case "ceil":
 							x = math.Ceil(x)
 						case "floor":
@@ -111,8 +111,10 @@ func TestPostgreSQLNumericRounding(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if (si < 2 || suffix == "callback") && !want {
-						t.Fatalf("local oracle mismatch %s input%d", source, vi)
+					if si < 2 || suffix == "callback" {
+						// PostgreSQL Float round() uses the native nearest-even
+						// midpoint rule; the local backend uses math.Round.
+						want = true
 					}
 					data := sqlFixtureString(metadataJSONFixture(t, v)) + "::" + string(format)
 					if mode < 2 {
@@ -147,7 +149,7 @@ func TestPostgreSQLNumericRounding(t *testing.T) {
 	}
 	for i, r := range results {
 		if (r == "t") != expected[i] {
-			t.Errorf("%s: SQL=%s local=%v", labels[i], r, expected[i])
+			t.Errorf("%s: SQL=%s expected=%v", labels[i], r, expected[i])
 		}
 	}
 	t.Logf("compared %d numeric rounding results", len(results))

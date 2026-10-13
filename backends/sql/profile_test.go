@@ -7,11 +7,30 @@ import (
 	"unicode"
 
 	"github.com/ornew/hff"
+	"github.com/ornew/hff/backends/local"
 	hffsql "github.com/ornew/hff/backends/sql"
 	"github.com/ornew/hff/capabilities"
 	"github.com/ornew/hff/engine"
 	"github.com/ornew/hff/schema"
 )
+
+func TestBackendProfilesDiscloseFloatModels(t *testing.T) {
+	postgres, err := hffsql.Profile(hffsql.PostgreSQL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, profile := range []hff.Profile{local.Profile(), postgres} {
+		details := make(map[string]string)
+		for _, detail := range profile.Details() {
+			details[detail.Name] = detail.Value
+		}
+		for _, name := range []string{"float.model", "float.parsing", "float.arithmetic", "float.rounding", "float.format"} {
+			if details[name] == "" {
+				t.Errorf("%s omitted %s", profile.Backend(), name)
+			}
+		}
+	}
+}
 
 func TestSQLProfilesDoNotInventDatabaseGuarantees(t *testing.T) {
 	base, err := hffsql.Profile(hffsql.PostgreSQL)

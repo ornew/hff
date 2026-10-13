@@ -1,8 +1,14 @@
 # 015. Exact PostgreSQL Float Arithmetic
 
-- **Status**: Accepted
+- **Status**: Superseded
 - **Author**: @ornew
 - **Date**: 2026-10-13
+
+> Superseded for Float-specific parsing, arithmetic, rounding, and result
+> expectations by [021. Backend-Native Approximate Float Semantics](021-backend-native-float-semantics.md).
+> This record remains as the history and rationale for the prior exact SQL
+> lowering. Its Int behavior and exact mixed Int/Float comparison requirements
+> remain in force.
 
 ## Summary
 

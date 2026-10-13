@@ -11,7 +11,7 @@ func (b *builder) canonicalJSON(raw string) string {
 	category := "json_typeof(" + value + ")"
 	text := "(" + value + " #>> '{}'::text[])"
 	// Keep the lexical Float decoder inside the number-token branch and
-	// project it once before shortest-roundtrip formatting uses its value.
+	// project it once before native Float formatting uses its value.
 	decoded := b.nextAlias()
 	floating := "(SELECT " + b.floatText(decoded+".v") + " FROM LATERAL (SELECT " + jsonFloatCast(text) + " AS v OFFSET 0) AS " + decoded + ")"
 	// Integer text has already been normalized according to its stored schema.

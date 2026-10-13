@@ -42,19 +42,19 @@ func TestPostgreSQLScalarPairPhysicalSpellings(t *testing.T) {
 		{"float_float", schema.FloatType, schema.FloatType, []row{
 			{"100000000000000000000", "1e20", [2]hff.Value{hff.Float(1e20), hff.Float(1e20)}},
 			{"1.00000000000000001", "1", [2]hff.Value{hff.Float(1), hff.Float(1)}},
-			{"-2e-324", "0", [2]hff.Value{hff.Float(math.Copysign(0, -1)), hff.Float(0)}},
+			{"-0.0", "0", [2]hff.Value{hff.Float(math.Copysign(0, -1)), hff.Float(0)}},
 			{"3e-324", "5e-324", [2]hff.Value{hff.Float(math.SmallestNonzeroFloat64), hff.Float(math.SmallestNonzeroFloat64)}},
 		}},
 		{"float_int", schema.FloatType, schema.IntType, []row{
 			{"9223372036854775808", "9223372036854775807", [2]hff.Value{hff.Float(9223372036854775808), hff.Int(math.MaxInt64)}},
 			{"9007199254740992", "9007199254740993.0", [2]hff.Value{hff.Float(9007199254740992), hff.Int(9007199254740993)}},
-			{"-2e-324", "0.0", [2]hff.Value{hff.Float(math.Copysign(0, -1)), hff.Int(0)}},
+			{"-0.0", "0.0", [2]hff.Value{hff.Float(math.Copysign(0, -1)), hff.Int(0)}},
 			{"-9223372036854775808", "-9223372036854775808.0", [2]hff.Value{hff.Float(-9223372036854775808), hff.Int(math.MinInt64)}},
 		}},
 		{"int_float", schema.IntType, schema.FloatType, []row{
 			{"9223372036854775807.0", "9223372036854775808", [2]hff.Value{hff.Int(math.MaxInt64), hff.Float(9223372036854775808)}},
 			{"9007199254740993.0", "9007199254740992", [2]hff.Value{hff.Int(9007199254740993), hff.Float(9007199254740992)}},
-			{"0.0", "-2e-324", [2]hff.Value{hff.Int(0), hff.Float(math.Copysign(0, -1))}},
+			{"0.0", "-0.0", [2]hff.Value{hff.Int(0), hff.Float(math.Copysign(0, -1))}},
 		}},
 		{"int_int", schema.IntType, schema.IntType, []row{
 			{"9223372036854775807.0", "9223372036854775807", [2]hff.Value{hff.Int(math.MaxInt64), hff.Int(math.MaxInt64)}},
