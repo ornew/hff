@@ -38,6 +38,13 @@ func jsonUnionStringMatch(code string, format JSONFormat, source, target hff.Typ
 	if source.Kind() != hff.UnionType {
 		return "", false
 	}
+	for _, member := range source.Members() {
+		if member.Kind() == hff.AnyType {
+			// Any can contain String even when no finite String member is
+			// enumerated, such as the nullable result of map field access.
+			return "", false
+		}
+	}
 	switch target.Kind() {
 	case hff.StringType, hff.BytesType, hff.DurationType, hff.TimestampType:
 	default:

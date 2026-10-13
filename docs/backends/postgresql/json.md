@@ -1167,6 +1167,17 @@ data=true
 data=9007199254740993
 ```
 
+The same runtime type rules apply to an `Any` value reached through a map
+field. For a nullable `Map<Any>` named `payload`, a JSONB Float sibling can
+use numeric metadata while a JSON string at `payload.left` remains a String:
+
+```hff
+payload.left="a" payload.right="b"
+```
+
+Metadata for a numeric pointer such as `/f` restores only that numeric value;
+it does not change the type of the sibling string field.
+
 The runtime JSON type and schema's numeric candidates determine whether the
 comparison is meaningful. A schema-known integer is decoded from the numeric
 value through an exact integer conversion; the schema remains authoritative
