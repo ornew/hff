@@ -317,7 +317,7 @@ func sqlType(kind hff.TypeKind) string {
 	switch kind {
 	case hff.BoolType:
 		return "boolean"
-	case hff.IntType:
+	case hff.IntType, hff.DurationType:
 		return "bigint"
 	case hff.FloatType:
 		return "double precision"

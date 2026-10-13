@@ -68,7 +68,7 @@ func TestRelationOrderRejectsBytes(t *testing.T) {
 		hffsql.WithRelationItem(schema.BytesType, hffsql.Bind(hff.Path{}, hffsql.Column("child", "data"))),
 		hffsql.WithUniqueOrder(hffsql.Ascending(hffsql.Column("child", "data"), schema.BytesType)),
 	)
-	if err == nil || !strings.Contains(err.Error(), "number or string") {
+	if err == nil || !strings.Contains(err.Error(), "relation order requires") {
 		t.Fatalf("bytes widened relation ordering: %v", err)
 	}
 }

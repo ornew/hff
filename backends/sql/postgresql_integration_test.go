@@ -122,6 +122,9 @@ func sqlFixtureValue(t testing.TB, value hff.Value, typ string) string {
 	switch value.Kind() {
 	case hff.IntKind:
 		arg, _ = value.AsInt()
+	case hff.DurationKind:
+		duration, _ := value.AsDuration()
+		arg = int64(duration)
 	case hff.FloatKind:
 		arg, _ = value.AsFloat()
 	case hff.StringKind:
@@ -132,7 +135,7 @@ func sqlFixtureValue(t testing.TB, value hff.Value, typ string) string {
 		t.Fatal("invalid scalar fixture")
 	}
 	_, literal := sqlFixtureParameter(t, arg)
-	if value.Kind() == hff.IntKind {
+	if value.Kind() == hff.IntKind || value.Kind() == hff.DurationKind {
 		// Cast the signed text as a whole; casting the positive magnitude of
 		// MinInt64 before unary minus would overflow inside PostgreSQL.
 		literal = sqlFixtureString(literal)

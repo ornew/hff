@@ -117,3 +117,8 @@ always explicit. A child path guarded by a nullable or optional parent cannot
 be represented by an ordinary scalar `Bind` alone. If the database already
 stores a native composite, prefer [`BindComposite`](composites.md), which
 preserves SQL-null row identity separately from null attributes.
+
+Duration is supported as a direct flattened leaf backed by signed `bigint`
+nanoseconds, but materializing a whole flattened object containing Duration is
+not supported. JSON/JSONB and composite Duration representations are also
+unsupported.

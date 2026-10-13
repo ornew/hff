@@ -132,6 +132,9 @@ func (b *builder) checkStructBinding(binding Binding, typ hff.Type, kinds map[st
 			return configuration("invalid JSON binding format")
 		}
 		kind, known := jsonKind(field.Type)
+		if !known && format == "" && !child.composite {
+			kind, known = scalarKind(field.Type)
+		}
 		if !known && format == "" {
 			return configuration("struct field requires a supported physical schema")
 		}
@@ -321,6 +324,13 @@ func (b *builder) structPath(n hff.Node) (expression, bool, error) {
 			states = append(states, mapping.structure)
 			child, exists := structFieldBinding(mapping, name)
 			if !exists {
+				if kind, ok := scalarKind(n.Type()); ok {
+					code := "NULL"
+					if kind != hff.NullType {
+						code += "::" + sqlType(kind)
+					}
+					return expression{code: code, present: "TRUE", kind: kind}, true, nil
+				}
 				value, err := b.jsonDecode(n, "NULL::json", JSON, n.Type(), "TRUE")
 				return value, true, err
 			}

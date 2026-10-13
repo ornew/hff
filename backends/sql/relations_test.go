@@ -84,6 +84,37 @@ func relationOrderedQueries() []string {
 		`items:concat(items):contains({"price":20,"active":true,"tags":["auth"]}) items[-1].price=5`,
 	}
 }
+
+func TestRelationCanOrderByNativeDuration(t *testing.T) {
+	ctx := context.Background()
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.List("items", schema.IntType))),
+		engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	program, err := e.Compile(ctx, `items[0]>0`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	relation, err := hffsql.NewRelation(
+		hffsql.WithRelationSource(hffsql.Column("related_items"), "item"),
+		hffsql.WithCorrelation(hffsql.TrustedSQL("item.parent_id=records.id", hffsql.Column("item"), hffsql.Column("records"))),
+		hffsql.WithRelationItem(schema.IntType, hffsql.Bind(nil, hffsql.Column("item", "price"))),
+		hffsql.WithUniqueOrder(hffsql.Ascending(hffsql.Column("item", "elapsed_ns"), schema.DurationType)),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query, err := hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL),
+		hffsql.WithBindings(hffsql.BindRelation(hff.Path{"items"}, relation)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(query.Where(), `"item"."elapsed_ns" ASC`) {
+		t.Fatal("duration order column missing from SQL")
+	}
+}
+
 func TestRelationBuildAndOrderingContract(t *testing.T) {
 	e := relationEngine(t)
 	for _, ordered := range []bool{false, true} {

@@ -164,6 +164,9 @@ Duration strings accept signed, compound decimal units `h`, `m`, `s`, `ms`,
 `us`, and `ns`; values must sum to an exact integral nanosecond within int64
 range. Days and weeks are not supported. See
 [duration rules](../../spec/methods.md#durations).
+The PostgreSQL backend can bind a schema-known Duration scalar to a `bigint`
+of signed nanoseconds; JSON/JSONB and composite Duration storage are not
+supported. See the [temporal guide](../guides/temporal.md#store-native-postgresql-durations).
 
 ## Related references
 

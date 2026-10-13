@@ -60,7 +60,7 @@ func scalarKind(typ hff.Type) (hff.TypeKind, bool) {
 		return kind, true
 	}
 	switch typ.Kind() {
-	case hff.NullType, hff.BoolType, hff.IntType, hff.FloatType, hff.StringType, hff.BytesType:
+	case hff.NullType, hff.BoolType, hff.IntType, hff.FloatType, hff.StringType, hff.BytesType, hff.DurationType:
 		return typ.Kind(), true
 	default:
 		return hff.InvalidType, false
@@ -205,6 +205,16 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 			return expression{}, b.failure(n, "unbound callback parameter")
 		}
 		if item, exists := b.parameterItems[binding.ID()]; exists {
+			// Native Duration items already carry integral nanoseconds. Passing
+			// them through JSON would discard their HFF type (and currently
+			// rejects the representation entirely).
+			if kind, scalar := scalarKind(parameter.typ); scalar && kind == hff.DurationType && item.format == "" && !item.composite && item.structure == nil && item.relation == nil {
+				column, err := quoteColumn(item.column)
+				if err != nil {
+					return expression{}, err
+				}
+				return expression{code: column, present: "TRUE", kind: hff.DurationType}, nil
+			}
 			code, format, err := b.physicalItemJSON(n, item, parameter.typ)
 			if err != nil {
 				return expression{}, err
@@ -312,7 +322,7 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 			}
 		}
 		value.present = both(value.present, test)
-		kind, ok := computedScalarKind(n.Type())
+		kind, ok := scalarKind(n.Type())
 		if !ok {
 			return expression{}, b.failure(n, "SQL type guards require a supported scalar result")
 		}
@@ -472,6 +482,11 @@ func (b *builder) parameter(n hff.Node, value hff.Value) (expression, error) {
 		arg, _ = value.AsInt()
 		typ = "bigint"
 		kind = hff.IntType
+	case hff.DurationKind:
+		duration, _ := value.AsDuration()
+		arg = int64(duration)
+		typ = "bigint"
+		kind = hff.DurationType
 	case hff.FloatKind:
 		f, _ := value.AsFloat()
 		if math.IsNaN(f) || math.IsInf(f, 0) {
@@ -618,6 +633,16 @@ func (b *builder) call(n hff.Node) (expression, error) {
 	}
 	if name == "foldl" || name == "foldr" {
 		return b.jsonFold(n, name)
+	}
+	if name == "size" {
+		if value, handled, err := b.relationSize(n); handled {
+			return value, err
+		}
+	}
+	if name == "has" {
+		if value, handled, err := b.relationHas(n); handled {
+			return value, err
+		}
 	}
 	switch name {
 	case "duration", "hours", "minutes", "seconds", "milliseconds", "microseconds", "nanoseconds", "matches", "base64", "frombase64", "lower", "upper", "round", "ceil", "floor", "bool", "number", "fromjson", "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":

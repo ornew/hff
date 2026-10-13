@@ -118,7 +118,7 @@ func NewRelation(options ...RelationOption) (Relation, error) {
 		}
 		kind, ok := scalarKind(order.typ)
 		if !ok || kind == hff.NullType || kind == hff.BoolType || kind == hff.BytesType {
-			return Relation{}, configuration("relation order requires a number or string column type")
+			return Relation{}, configuration("relation order requires a number, string, or duration column type")
 		}
 	}
 	return Relation{config: c, valid: true}, nil

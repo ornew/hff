@@ -20,6 +20,200 @@ import (
 	"github.com/ornew/hff/schema"
 )
 
+func TestPostgreSQLNativeDurationParity(t *testing.T) {
+	container := os.Getenv("HFF_POSTGRES_CONTAINER")
+	if container == "" {
+		t.Fatal("integration tests require HFF_POSTGRES_CONTAINER")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Nullable(schema.Duration("elapsed")))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := []hff.Value{
+		hff.Null(), hff.Duration(0), hff.Duration(time.Nanosecond), hff.Duration(-time.Nanosecond),
+		hff.Duration(time.Minute), hff.Duration(time.Duration(math.MaxInt64)), hff.Duration(time.Duration(math.MinInt64)),
+	}
+	sources := []string{
+		`elapsed`, `!elapsed`, `elapsed=null`, `elapsed:exists`, `elapsed:type="duration"`,
+		`elapsed:seconds>=60`, `elapsed:nanoseconds=1`, `elapsed>"-1ns":duration`,
+		`elapsed:in("1ns":duration,null)`, `elapsed:string="0s"`,
+		`elapsed:json="\"-2562047h47m16.854775808s\""`, `elapsed:[duration]:exists`,
+	}
+	var script strings.Builder
+	var labels []string
+	var expected []bool
+	for sourceIndex, source := range sources {
+		program, err := e.Compile(ctx, source)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		filter, err := local.Build(ctx, program)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		query, err := hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL),
+			hffsql.WithBindings(hffsql.Bind(hff.Path{"elapsed"}, hffsql.Column("records", "elapsed"))))
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		var types, args []string
+		for _, arg := range query.Args() {
+			typ, literal := sqlFixtureParameter(t, arg)
+			types = append(types, typ)
+			args = append(args, literal)
+		}
+		parameters, arguments := "", ""
+		if len(types) != 0 {
+			parameters = "(" + strings.Join(types, ",") + ")"
+			arguments = "(" + strings.Join(args, ",") + ")"
+		}
+		var rows []string
+		for rowIndex, value := range values {
+			record := hff.Object(map[string]hff.Value{"elapsed": value})
+			match, err := filter.Match(ctx, record)
+			if err != nil {
+				t.Fatal(source, rowIndex, err)
+			}
+			expected = append(expected, match)
+			labels = append(labels, fmt.Sprintf("%s row%d", source, rowIndex))
+			rows = append(rows, "("+sqlFixtureValue(t, value, "bigint")+")")
+		}
+		fmt.Fprintf(&script, "PREPARE native_duration_%d%s AS SELECT %s FROM (VALUES %s) AS records(elapsed); EXECUTE native_duration_%d%s; DEALLOCATE native_duration_%d;\n",
+			sourceIndex, parameters, query.Where(), strings.Join(rows, ","), sourceIndex, arguments, sourceIndex)
+	}
+	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", container, "psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-U", "postgres")
+	cmd.Stdin = strings.NewReader(script.String())
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v\n%s", err, output)
+	}
+	results := strings.Fields(string(output))
+	if len(results) != len(expected) {
+		t.Fatalf("got %d SQL results; want %d: %s", len(results), len(expected), output)
+	}
+	for i, result := range results {
+		if (result == "t") != expected[i] {
+			t.Errorf("%s: SQL=%s local=%v", labels[i], result, expected[i])
+		}
+	}
+}
+
+func TestPostgreSQLNativeDurationRelationCallbacksMatchLocal(t *testing.T) {
+	container := os.Getenv("HFF_POSTGRES_CONTAINER")
+	if container == "" {
+		t.Fatal("integration tests require HFF_POSTGRES_CONTAINER")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	itemType := schema.NullableType(schema.DurationType)
+	e, err := engine.New(engine.WithSchema(schema.Struct(
+		schema.List("items", itemType), schema.Int("threshold"),
+	)), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	relation, err := hffsql.NewRelation(
+		hffsql.WithRelationSource(hffsql.Column("duration_items"), "item"),
+		hffsql.WithCorrelation(hffsql.TrustedSQL("item.parent_id=records.id",
+			hffsql.Column("item"), hffsql.Column("records"))),
+		hffsql.WithRelationItem(itemType, hffsql.Bind(nil, hffsql.Column("item", "elapsed_ns"))),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows := []struct {
+		items     hff.Value
+		threshold int64
+	}{
+		{hff.List(), 1},
+		{hff.List(hff.Null()), 1},
+		{hff.List(hff.Duration(0)), 0},
+		{hff.List(hff.Duration(time.Nanosecond), hff.Null()), 1},
+		{hff.List(hff.Duration(time.Duration(math.MinInt64))), math.MinInt64},
+	}
+	sources := []string{
+		`items:any(x=>x:nanoseconds=threshold)`,
+		`items:any(x=>x=null)`,
+		`items:any(x=>x!:nanoseconds=1)`,
+		`items:all(x=>x:exists)`,
+		`items:all(x=>x:nanoseconds=threshold)`,
+		`items:size=0`,
+		`items:size=2`,
+		`items:has(-1)`,
+		`items:has(1.5)`,
+		`items:has(threshold)`,
+	}
+	var script strings.Builder
+	script.WriteString("CREATE TEMP TABLE duration_parents(id integer,threshold bigint);" +
+		"CREATE TEMP TABLE duration_items(parent_id integer,elapsed_ns bigint);" +
+		"INSERT INTO duration_parents VALUES (0,1),(1,1),(2,0),(3,1),(4,'-9223372036854775808'::bigint);" +
+		"INSERT INTO duration_items VALUES (1,NULL),(2,0),(3,1),(3,NULL),(4,'-9223372036854775808'::bigint);\n")
+	var expected, labels []string
+	for si, source := range sources {
+		program, err := e.Compile(ctx, source)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		filter, err := local.Build(ctx, program)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		query, err := hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(
+			hffsql.BindRelation(hff.Path{"items"}, relation),
+			hffsql.Bind(hff.Path{"threshold"}, hffsql.Column("records", "threshold")),
+		))
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		var types, arguments []string
+		for _, arg := range query.Args() {
+			typ, literal := sqlFixtureParameter(t, arg)
+			types = append(types, typ)
+			arguments = append(arguments, literal)
+		}
+		name := fmt.Sprintf("native_duration_relation_%d", si)
+		allTypes := append(append([]string(nil), types...), "integer")
+		fmt.Fprintf(&script, "PREPARE %s(%s) AS SELECT %s FROM duration_parents AS records WHERE records.id=$%d;\n",
+			name, strings.Join(allTypes, ","), query.Where(), len(types)+1)
+		for ri, row := range rows {
+			match, err := filter.Match(ctx, hff.Object(map[string]hff.Value{
+				"items": row.items, "threshold": hff.Int(row.threshold),
+			}))
+			if err != nil {
+				t.Fatal(source, ri, err)
+			}
+			want := "f"
+			if match {
+				want = "t"
+			}
+			expected = append(expected, want)
+			labels = append(labels, fmt.Sprintf("%s row%d", source, ri))
+			args := fmt.Sprintf("%d", ri)
+			if len(arguments) > 0 {
+				args = strings.Join(arguments, ",") + "," + args
+			}
+			fmt.Fprintf(&script, "EXECUTE %s(%s);\n", name, args)
+		}
+	}
+	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", container, "psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-U", "postgres")
+	cmd.Stdin = strings.NewReader(script.String())
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v\n%s", err, output)
+	}
+	actual := strings.Fields(string(output))
+	if len(actual) != len(expected) {
+		t.Fatalf("got %d results, want %d: %s", len(actual), len(expected), output)
+	}
+	for i, want := range expected {
+		if actual[i] != want {
+			t.Errorf("%s: SQL=%s local=%s", labels[i], actual[i], want)
+		}
+	}
+}
+
 func TestPostgreSQLComputedDurationConversions(t *testing.T) {
 	container := os.Getenv("HFF_POSTGRES_CONTAINER")
 	if container == "" {

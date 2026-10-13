@@ -109,6 +109,89 @@ func (b *builder) relationPredicate(n hff.Node, name string) (expression, bool, 
 	code := "(CASE WHEN " + strings.Join(absent, " OR ") + " THEN NULL ELSE " + operator + " (SELECT 1 FROM " + from + " WHERE (" + b.predicateCode(c.correlation) + ") AND " + predicate + ") END)"
 	return expression{code: code, present: "TRUE", kind: hff.BoolType}, true, nil
 }
+
+// Relation cardinality depends on the correlated row set, not on the physical
+// representation of each item. Count rows directly so a native item does not
+// have to be materialized as JSON merely to answer size().
+func (b *builder) relationSize(n hff.Node) (expression, bool, error) {
+	receiver, _ := n.Child(0)
+	root := receiver
+	for root.Kind() == hff.FieldNode {
+		root, _ = root.Child(0)
+	}
+	if root.Kind() != hff.VariableNode && root.Kind() != hff.ParameterNode {
+		return expression{}, false, nil
+	}
+	mapping, ok := b.relationMapping(receiver, b.physicalParameters)
+	if !ok || mapping.relation == nil {
+		return expression{}, false, nil
+	}
+	c := mapping.relation.config
+	if b.activeRelationAliases[c.alias] > 0 || b.shadowsOuterBinding(c.alias) {
+		return expression{}, false, nil
+	}
+	absent := []string{"(" + b.predicateCode(c.present) + ") IS NOT TRUE", "(" + b.predicateCode(c.null) + ") IS TRUE"}
+	parent := receiver
+	for parent.Kind() == hff.FieldNode {
+		parent, _ = parent.Child(0)
+		if ancestor, ok := b.relationMapping(parent, b.physicalParameters); ok && ancestor.structure != nil {
+			absent = append(absent, "("+b.predicateCode(ancestor.structure.present)+") IS NOT TRUE", "("+b.predicateCode(ancestor.structure.null)+") IS TRUE")
+		}
+	}
+	table, err := quoteColumn(c.table)
+	if err != nil {
+		return expression{}, true, err
+	}
+	alias, err := quoteColumn(Column(c.alias))
+	if err != nil {
+		return expression{}, true, err
+	}
+	code := "(CASE WHEN " + strings.Join(absent, " OR ") + " THEN NULL::bigint ELSE (SELECT count(*) FROM " + table + " AS " + alias + " WHERE (" + b.predicateCode(c.correlation) + ")) END)"
+	return expression{code: code, present: "TRUE", kind: hff.IntType}, true, nil
+}
+
+// A relation's valid list indices depend only on its cardinality. This also
+// handles negative indices without requiring a stable order or item encoding.
+func (b *builder) relationHas(n hff.Node) (expression, bool, error) {
+	argumentNode, _ := n.Child(1)
+	// Dynamic arguments retain JSON-aware family dispatch and runtime checks.
+	staticKind, scalar := scalarKind(argumentNode.Type())
+	if argumentNode.Type().Kind() == hff.NeverType {
+		staticKind, scalar = hff.NeverType, true
+	}
+	if !scalar || (staticKind != hff.IntType && staticKind != hff.FloatType && staticKind != hff.NullType && staticKind != hff.NeverType) {
+		return expression{}, false, nil
+	}
+	size, handled, err := b.relationSize(n)
+	if !handled || err != nil {
+		return expression{}, handled, err
+	}
+	size.code = b.project(size.code)
+	argument, err := b.expression(argumentNode)
+	if err != nil {
+		return expression{}, true, err
+	}
+	switch argument.kind {
+	case hff.IntType, hff.FloatType, hff.NullType, hff.NeverType:
+	default:
+		return expression{}, true, b.failure(argumentNode, "relation has requires a recoverable numeric index")
+	}
+	present := ordinaryPresence([]expression{size, argument})
+	if argument.kind == hff.NullType || argument.kind == hff.NeverType {
+		return expression{code: "NULL::boolean", present: present, kind: hff.BoolType}, true, nil
+	}
+	integral := "TRUE"
+	index := argument.code
+	if argument.kind == hff.FloatType {
+		integral = both("("+argument.code+" = trunc("+argument.code+"))", validFloatIndex(argument.code))
+		// PostgreSQL promotes bigint COUNT to float8 and can round a list
+		// boundary above 2^53. Convert only after the range check.
+		index = "(" + argument.code + ")::bigint"
+	}
+	code := "(CASE WHEN " + size.code + " IS NULL OR " + argument.code + " IS NULL OR NOT " + integral + " THEN NULL::boolean ELSE (" + index + " >= -" + size.code + " AND " + index + " < " + size.code + ") END)"
+	return expression{code: code, present: present, kind: hff.BoolType}, true, nil
+}
+
 func (b *builder) physicalItemJSON(n hff.Node, mapping Binding, typ hff.Type) (string, JSONFormat, error) {
 	switch {
 	case mapping.structure != nil:

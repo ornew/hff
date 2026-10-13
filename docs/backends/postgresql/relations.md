@@ -233,6 +233,8 @@ can observe list order, such as indexing or returning the list. It is not
 required for a plain `any()` or `all()` predicate. If a relation is transformed
 or guarded, the builder checks whether the consumer still observes order and
 rejects a mapping that cannot preserve it.
+Duration columns can be used as typed order components with
+`schema.DurationType`; their signed nanosecond values define the ordering.
 
 For a plain relation path, `any()` and `all()` can use correlated
 `EXISTS`/`NOT EXISTS`. Guards, computed lists, and alias collisions may use a

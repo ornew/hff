@@ -77,7 +77,7 @@ Choose a physical binding from the way the application stores each HFF value:
 
 | Physical storage | Binding | What it maps |
 | --- | --- | --- |
-| Scalar SQL column | `Bind(path, Column(...))` | One HFF scalar field to one column. SQL `NULL` is an explicit HFF null. |
+| Scalar SQL column | `Bind(path, Column(...))` | One HFF scalar field to one column. SQL `NULL` is an explicit HFF null. Duration columns use signed `bigint` nanoseconds. |
 | JSON/JSONB column | `BindJSON(path, column, JSON/JSONB)` | One complete schema-known HFF JSON value, including objects, maps, lists, and Bytes represented as base64 strings. Descendant paths are read inside that document. JSONB may add `WithTypeMetadata(metadataColumn)` for numeric types lost by normalization. |
 | Native composite column | `BindComposite(path, column)` | One HFF struct to a PostgreSQL composite. A SQL-null row is null; its attributes are always present. |
 | Struct spread across columns | `BindStruct(path, present, null, fields...)` | One HFF object with caller-supplied parent state and per-field bindings. |
@@ -111,16 +111,33 @@ See [PostgreSQL translation optimizations](optimizations.md) for SQL-shape
 choices, semantic boundaries, and reproducible translation and database
 measurements.
 
-The builder supports nullable scalar columns whose HFF type is one of null,
-boolean, int64, finite float64, string, or bytes (`bytea`). Required struct
-parents may be traversed to a scalar leaf. Comparisons support homogeneous
-scalar types and mixed int64/float64 ordering without rounding the integer through float64;
-string ordering uses PostgreSQL's `C` collation. Boolean literals and operators,
+The builder supports nullable scalar columns whose HFF type is null, boolean,
+int64, finite float64, string, bytes (`bytea`), or Duration (`bigint`
+nanoseconds). Required struct parents may be traversed to a scalar leaf.
+Comparisons support homogeneous scalar types and mixed int64/float64 ordering
+without rounding the integer through float64; string ordering uses
+PostgreSQL's `C` collation. Boolean literals and operators,
 implicit AND, explicit null comparisons, numeric unary negation, postfix guards
 at scalar leaves, scalar type guards, `exists()`, and `type()` are supported.
-The generic `json()` and `string()` methods support the scalar and
-collection profile described in the JSON guide, including finite float values
-from scalar columns and native JSON. JSONB float serialization requires the
+Native Duration columns and direct scalar `BindRelation` items use signed
+`bigint` nanoseconds. Duration items can be `schema.DurationType` or
+`schema.NullableType(schema.DurationType)`; SQL `NULL` becomes an HFF null item.
+Direct `any()`/`all()` callback predicates are supported without a unique item
+order. Direct relation `size()` and `has()` are also supported without a unique
+item order: `size()` counts correlated rows, and `has()` checks a statically
+known numeric index (including nullable numeric indexes), a null index, or a
+no-value index without materializing Duration items. A genuinely dynamic
+`Any` or mixed-union index may use the JSON fallback and fail `Build` when that
+would require unsupported list materialization. These operations do not imply
+that the full Duration list can be materialized or used by every order-sensitive
+operation. Duration columns also support unit methods, truthiness, comparisons,
+`in()` membership, and typed relation ordering. A direct flattened `BindStruct`
+Duration leaf supports field access; materializing its parent object remains
+unsupported.
+The generic `json()` and `string()` methods support the scalar and collection
+profile described in the JSON guide, including finite float values from scalar
+columns and native JSON, plus Duration values from native scalar columns as
+canonical duration strings. JSONB float serialization requires the
 numeric metadata described in that guide. String and recoverable dynamic JSON
 values support `bool()` and `number()`; `number()` requires PostgreSQL 16 or
 later. They also support `fromjson()` on PostgreSQL 16 and later; see the JSON
@@ -235,11 +252,11 @@ and finiteness constraints. Scalar-column Bytes fields bind to PostgreSQL
 
 An unsupported operation or type returns a source-located `hff.BackendError`
 from `Build`. For scalar bindings, the current subset rejects regex patterns
-outside the literal subset above, collection
-operations, `Any` and non-null mixed unions, conversions outside the JSON
+outside the literal subset above, most collection operations (native Duration
+membership and direct scalar Duration relation `any()`/`all()`, `size()`, and
+`has(index)` are supported), `Any` and non-null mixed unions, conversions outside the JSON
 guide's `bool()`, `number()`, `duration()`, `fromjson()`, and `frombase64()`
-profile, and
-guarded access through nullable parents.
+profile, and guarded access through nullable parents.
 JSON bindings support the
 schema-known access and inspection described in the [JSON guide](json.md).
 JSONB metadata supports selected numeric type
@@ -254,8 +271,9 @@ list-union values; see the JSON guide for its conditions.
 Folds are supported for known accumulator types; see the JSON guide for their
 type and null rules. Schema-known Bytes values can be materialized inside
 JSON/JSONB collections as base64 strings; ambiguous dynamic Bytes remain
-unsupported. `duration()` parses strings into computed durations, but stored
-Duration bindings and JSON/JSONB Duration materialization remain unavailable.
+unsupported. `duration()` parses strings into computed durations; native
+Duration bindings use `bigint` nanoseconds. JSON/JSONB and native composite
+Duration materialization remain unavailable.
 Timestamp conversions, float64 serialization when JSONB has lost required numeric
 representation, and other unsupported types remain unsupported.
 Unsupported operations do not fall back to local evaluation.
@@ -356,8 +374,8 @@ parser version used to validate and translate literal patterns. The actual
 PostgreSQL regex engine and version remain unknown. Its `bytes` detail reports
 native `bytea`, computed Bytes, and schema-known JSON/JSONB Bytes support, while
 dynamic ambiguous Bytes remain unavailable. The `duration` detail reports
-computed parsing and unit operations, while native and JSON Duration storage
-bindings are unavailable.
+computed parsing, unit operations, and native `bigint` nanosecond bindings;
+JSON/JSONB and native composite Duration storage remain unavailable.
 
 ```go
 profile, err := hffsql.Profile(hffsql.PostgreSQL)

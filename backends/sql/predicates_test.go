@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ornew/hff"
 	hffsql "github.com/ornew/hff/backends/sql"
@@ -68,5 +69,25 @@ func TestStructuredPredicateRejectsInvalidTypes(t *testing.T) {
 		if _, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(binding)); err == nil {
 			t.Fatal("invalid predicate accepted")
 		}
+	}
+}
+
+func TestStructuredPredicateAcceptsNativeDuration(t *testing.T) {
+	p := predicateProgram(t)
+	present := hffsql.Equal(
+		hffsql.ColumnValue(hffsql.Column("records", "elapsed_ns"), schema.DurationType),
+		hffsql.Literal(hff.Duration(time.Nanosecond)),
+	)
+	binding := hffsql.BindStruct(hff.Path{"profile"}, present, hffsql.Boolean(false),
+		hffsql.Bind(hff.Path{"name"}, hffsql.Column("records", "name")))
+	query, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(binding))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(query.Where(), `"records"."elapsed_ns"`) || !strings.Contains(query.Where(), "::bigint") {
+		t.Fatal("duration predicate did not use a bigint nanosecond comparison")
+	}
+	if len(query.Args()) != 2 || query.Args()[0] != int64(1) || query.Args()[1] != "Alice" {
+		t.Fatalf("args %v", query.Args())
 	}
 }

@@ -115,6 +115,9 @@ array element types and dimensions, nullability, and actual row values satisfy
 the schema. In particular, arrays must be one-dimensional. `Build` does not
 introspect PostgreSQL declarations or validate stored rows.
 
+Duration is supported for native scalar `bigint` bindings and direct flattened
+field access, but not as a composite attribute or array element.
+
 ## Selecting fields
 
 A plain field path such as `profile.age` or `profile.father.name` reads the

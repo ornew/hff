@@ -2,6 +2,7 @@ package sql_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/ornew/hff"
@@ -49,7 +50,107 @@ func TestComputedDurationRepresentationBoundaries(t *testing.T) {
 	}
 }
 
-func TestStoredDurationScalarsRemainRejected(t *testing.T) {
+func TestNativeDurationRelationCallbacksBuild(t *testing.T) {
+	ctx := context.Background()
+	itemType := schema.NullableType(schema.DurationType)
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.List("items", itemType))),
+		engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	relation, err := hffsql.NewRelation(
+		hffsql.WithRelationSource(hffsql.Column("stored_durations"), "item"),
+		hffsql.WithCorrelation(hffsql.Boolean(true)),
+		hffsql.WithRelationItem(itemType, hffsql.Bind(nil, hffsql.Column("item", "elapsed_ns"))),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range []string{
+		`items:any(x=>x:nanoseconds=1)`,
+		`items:any(x=>x=null)`,
+		`items:all(x=>x:exists)`,
+		`items:size=2`,
+		`items:has(-1)`,
+		`items:has(1.5)`,
+	} {
+		program, err := e.Compile(ctx, source)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		query, err := hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL),
+			hffsql.WithBindings(hffsql.BindRelation(hff.Path{"items"}, relation)))
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		if strings.Contains(query.Where(), "json_agg(") {
+			t.Errorf("%s: Duration relation was materialized: %s", source, query.Where())
+		}
+		if strings.Contains(source, "=>") && !strings.Contains(query.Where(), `"item"."elapsed_ns"`) {
+			t.Errorf("%s: direct Duration item was not read: %s", source, query.Where())
+		}
+		if strings.Contains(source, ":size") || strings.Contains(source, ":has") {
+			if !strings.Contains(query.Where(), "count(*)") {
+				t.Errorf("%s: relation cardinality was not counted: %s", source, query.Where())
+			}
+		}
+	}
+}
+
+func TestNativeDurationRelationSizeAndHasKeepNullState(t *testing.T) {
+	ctx := context.Background()
+	itemType := schema.NullableType(schema.DurationType)
+	profileType := schema.Struct(schema.Nullable(schema.List("items", itemType)))
+	e, err := engine.New(engine.WithSchema(schema.Struct(
+		schema.Nullable(schema.Field("profile", profileType)),
+		schema.Nullable(schema.Float("index")),
+	)), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	relation, err := hffsql.NewRelation(
+		hffsql.WithRelationSource(hffsql.Column("duration_items"), "item"),
+		hffsql.WithCorrelation(hffsql.Boolean(true)),
+		hffsql.WithRelationState(
+			hffsql.AsPredicate(hffsql.ColumnValue(hffsql.Column("records", "items_present"), schema.BoolType)),
+			hffsql.AsPredicate(hffsql.ColumnValue(hffsql.Column("records", "items_null"), schema.BoolType)),
+		),
+		hffsql.WithRelationItem(itemType, hffsql.Bind(nil, hffsql.Column("item", "elapsed_ns"))),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := hffsql.BindStruct(hff.Path{"profile"},
+		hffsql.AsPredicate(hffsql.ColumnValue(hffsql.Column("records", "profile_present"), schema.BoolType)),
+		hffsql.AsPredicate(hffsql.ColumnValue(hffsql.Column("records", "profile_null"), schema.BoolType)),
+		hffsql.BindRelation(hff.Path{"items"}, relation),
+	)
+	for _, source := range []string{`profile.items:size=0`, `profile.items:has(index)`, `profile.items:has(null!)`} {
+		program, err := e.Compile(ctx, source)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		query, err := hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(
+			binding, hffsql.Bind(hff.Path{"index"}, hffsql.Column("records", "index")),
+		))
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		for _, token := range []string{"profile_present", "profile_null", "items_present", "items_null", "count(*)"} {
+			if !strings.Contains(query.Where(), token) {
+				t.Errorf("%s lost %s: %s", source, token, query.Where())
+			}
+		}
+		if strings.Contains(query.Where(), "json_agg(") {
+			t.Errorf("%s materialized Duration items: %s", source, query.Where())
+		}
+		if source == `profile.items:has(index)` && !strings.Contains(query.Where(), "::bigint") {
+			t.Errorf("%s lost exact int64 boundary check: %s", source, query.Where())
+		}
+	}
+}
+
+func TestStoredDurationBindingFormats(t *testing.T) {
 	ctx := context.Background()
 	for _, typ := range []hff.Type{schema.DurationType, schema.Union(schema.DurationType, schema.NullType), schema.Union(schema.DurationType, schema.StringType, schema.NullType)} {
 		e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("data", typ))), engine.WithCapabilities(capabilities.Standard()))
@@ -66,11 +167,82 @@ func TestStoredDurationScalarsRemainRejected(t *testing.T) {
 				binding = hffsql.BindJSON(hff.Path{"data"}, hffsql.Column("data"), format)
 			}
 			_, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(binding))
-			if err == nil {
-				t.Errorf("%s %s: decoded an unsupported stored Duration", typ.Key(), format)
-				continue
+			supportedNative := format == "" && (typ.Equal(schema.DurationType) || typ.Equal(schema.Union(schema.DurationType, schema.NullType)))
+			if supportedNative {
+				if err != nil {
+					t.Errorf("%s %s: rejected native duration: %v", typ.Key(), format, err)
+				}
+			} else {
+				if err == nil {
+					t.Errorf("%s %s: accepted an ambiguous or JSON duration binding", typ.Key(), format)
+					continue
+				}
+				requireCode(t, err, hff.BackendError)
 			}
-			requireCode(t, err, hff.BackendError)
 		}
+	}
+}
+
+func TestNativeDurationMethodsAndPredicatesBuild(t *testing.T) {
+	ctx := context.Background()
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Nullable(schema.Duration("elapsed")))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := hffsql.Bind(hff.Path{"elapsed"}, hffsql.Column("records", "elapsed"))
+	for _, source := range []string{
+		`elapsed`, `elapsed=null`, `elapsed:exists`, `elapsed>"1ns":duration`,
+		`elapsed:seconds>=60`, `elapsed:nanoseconds=1`, `elapsed:string="1ns"`,
+		`elapsed:json="\"1ns\""`, `elapsed:in("1ns":duration,null)`,
+		`elapsed:[duration]:exists`,
+	} {
+		program, err := e.Compile(ctx, source)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		if _, err := hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(binding)); err != nil {
+			t.Error(source, err)
+		}
+	}
+}
+
+func TestOmittedFlattenedDurationFieldIsNull(t *testing.T) {
+	ctx := context.Background()
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("profile", schema.Struct(
+		schema.Optional(schema.Nullable(schema.Duration("elapsed"))),
+	)))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	program, err := e.Compile(ctx, `profile.elapsed:type="null"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := hffsql.BindStruct(hff.Path{"profile"}, hffsql.Boolean(true), hffsql.Boolean(false))
+	if _, err := hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(binding)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFlattenedNativeDurationFieldBuilds(t *testing.T) {
+	ctx := context.Background()
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("profile", schema.Struct(
+		schema.Nullable(schema.Duration("elapsed")),
+	)))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	program, err := e.Compile(ctx, `profile.elapsed:nanoseconds=1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := hffsql.BindStruct(hff.Path{"profile"}, hffsql.Boolean(true), hffsql.Boolean(false),
+		hffsql.Bind(hff.Path{"elapsed"}, hffsql.Column("records", "elapsed_ns")))
+	query, err := hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(binding))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if query.Where() == "" {
+		t.Fatal("empty Duration predicate")
 	}
 }

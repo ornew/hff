@@ -331,8 +331,9 @@ sign.
 
 PostgreSQL supports `duration()` on a text column or a recoverable JSON string.
 It produces a computed HFF Duration represented internally as signed int64
-nanoseconds, without defining a stored Duration binding or JSON/JSONB
-materialization. The local duration syntax and range rules in the
+nanoseconds. This text conversion is separate from native Duration columns,
+which use `bigint` nanoseconds; it does not enable Duration values in JSON or
+JSONB documents. The local duration syntax and range rules in the
 [temporal guide](../../guides/temporal.md#parse-and-measure-durations) also
 apply to this conversion.
 
@@ -585,7 +586,9 @@ evaluation order or local `MaxSteps`/`MaxGeneratedValues` enforcement; unsupport
 explicit execution-budget requirements are rejected by `Build`.
 
 For schema-known scalar columns and JSON/JSONB values, `json()` and
-`string()` support null, bool, int64, string, and finite float64 values.
+`string()` support null, bool, int64, string, and finite float64 values. Native
+Duration scalar columns also support these methods, producing the canonical
+duration string; JSON/JSONB Duration values remain unsupported.
 Recovered JSON-native `Any` and union values are also supported, including
 recursive lists, maps, and structs whose numeric kinds can be determined from
 the schema, native JSON spelling, or JSONB metadata. `json()` emits compact
@@ -976,9 +979,10 @@ a source-located `hff.BackendError` from `Build`:
   are unsupported, and `String|Bytes` cannot be recovered from JSON strings.
   Schema-known Bytes values in JSON arrays, objects, and callback-produced
   collections are supported; `frombase64()` can also produce a scalar Bytes
-  value. Timestamp conversions remain unsupported, and computed Duration
-  values cannot be stored in native or JSON bindings. Float64 serialization when JSONB has
-  lost required numeric representation and operations requiring a runtime
+  value. Timestamp conversions remain unsupported. Native scalar Duration
+  columns are supported, but JSON/JSONB Duration values remain unsupported.
+  Float64 serialization when JSONB has lost required numeric representation
+  and operations requiring a runtime
   type not fixed by schema or metadata remain unsupported.
 
 Unsupported behavior is rejected rather than delegated to local evaluation.

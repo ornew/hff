@@ -40,6 +40,160 @@ hours, minutes, seconds, milliseconds, and microseconds return float64. Adding
 a duration to a timestamp uses fixed elapsed time, not calendar arithmetic; an
 out-of-range result yields null.
 
+### Store native PostgreSQL durations
+
+Bind a schema-known Duration column to a PostgreSQL `bigint` containing signed
+int64 nanoseconds. The binding does not round or reinterpret the value; SQL
+`NULL` is HFF null. A nullable schema field accepts SQL `NULL`, while a
+non-nullable field requires a non-null column value.
+
+```sql
+CREATE TABLE job_runs (
+    id bigint PRIMARY KEY,
+    elapsed_ns bigint
+);
+INSERT INTO job_runs VALUES
+    (1, 45000000000),
+    (2, 90000000000),
+    (3, NULL);
+```
+
+Declare the nullable field as a Duration and bind it to the nanosecond column:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    "github.com/ornew/hff"
+    hffsql "github.com/ornew/hff/backends/sql"
+    "github.com/ornew/hff/capabilities"
+    "github.com/ornew/hff/engine"
+    "github.com/ornew/hff/schema"
+)
+
+func main() {
+    ctx := context.Background()
+    e, err := engine.New(
+        engine.WithSchema(schema.Struct(
+            schema.Nullable(schema.Duration("elapsed")),
+        )),
+        engine.WithCapabilities(capabilities.Standard()),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    program, err := e.Compile(ctx, `elapsed:seconds>=60`)
+    if err != nil {
+        log.Fatal(err)
+    }
+    query, err := hffsql.Build(ctx, program,
+        hffsql.WithDialect(hffsql.PostgreSQL),
+        hffsql.WithBindings(hffsql.Bind(
+            hff.Path{"elapsed"},
+            hffsql.Column("job_runs", "elapsed_ns"),
+        )),
+    )
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println("Predicate built:", query.Where() != "")
+    fmt.Println("Parameter count:", len(query.Args()))
+}
+```
+
+Executing the predicate against the sample table selects row 2; the runnable
+example demonstrates construction and does not execute the query. Pass
+`query.Where()` and `query.Args()` to the application's PostgreSQL driver.
+Native Duration columns support Duration unit methods, comparisons, truthiness,
+membership, and canonical `string()`/`json()` output. A Duration column can
+also be used as a typed relation ordering key, for example with
+`hffsql.WithUniqueOrder(hffsql.Ascending(hffsql.Column("job_runs", "elapsed_ns"), schema.DurationType))`.
+The same scalar mapping works for a direct flattened `BindStruct` field, but
+materializing a whole struct containing Duration remains unsupported.
+JSON/JSONB and native composite Duration storage are also unavailable. The
+[runnable stored-duration example](https://github.com/ornew/hff/tree/main/examples/sql-stored-durations)
+shows the complete binding setup and can be run with
+`go run ./examples/sql-stored-durations` from the repository root.
+
+#### Filter a relation of Duration values
+
+A direct scalar relation item can also bind a `bigint` nanosecond column. Make
+the item nullable when the child column may be SQL `NULL`:
+
+```sql
+CREATE TABLE jobs (
+    id bigint PRIMARY KEY
+);
+CREATE TABLE job_durations (
+    id bigint PRIMARY KEY,
+    job_id bigint NOT NULL REFERENCES jobs(id),
+    elapsed_ns bigint
+);
+INSERT INTO jobs VALUES (41), (42);
+INSERT INTO job_durations VALUES
+    (1, 41, 45000000000),
+    (2, 41, 90000000000),
+    (3, 41, NULL);
+```
+
+Declare the list item as nullable Duration and bind the child column relative
+to each relation row. The following is a fragment inside a function returning
+`error`; it assumes the HFF, SQL backend, and schema imports. Use
+`recordSchema` when constructing the engine, then attach `durationRelation`
+with `BindRelation` during PostgreSQL `Build`.
+
+```go
+durationItems := schema.NullableType(schema.DurationType)
+recordSchema := schema.Struct(schema.List("durations", durationItems))
+
+durationRelation, err := hffsql.NewRelation(
+    hffsql.WithRelationSource(hffsql.Column("job_durations"), "duration"),
+    hffsql.WithCorrelation(hffsql.Equal(
+        hffsql.ColumnValue(hffsql.Column("duration", "job_id"), schema.IntType),
+        hffsql.ColumnValue(hffsql.Column("jobs", "id"), schema.IntType),
+    )),
+    hffsql.WithRelationItem(durationItems,
+        hffsql.Bind(hff.Path{}, hffsql.Column("duration", "elapsed_ns")),
+    ),
+)
+if err != nil {
+    return err
+}
+```
+
+Either callback predicate can be compiled and attached with
+`BindRelation(hff.Path{"durations"}, durationRelation)`:
+
+```hff
+durations:any(d=>d:seconds>=60)
+durations:all(d=>d:exists)
+```
+
+The relation also supports `size()` and `has()` without an item ordering:
+
+```hff
+durations:size=3
+durations:has(-1)
+```
+
+`size()` counts the matching child rows, including a row whose bound Duration
+is SQL `NULL`. `has()` checks whether a statically known numeric index exists;
+nullable numeric, null, and no-value indexes are also supported. A dynamic
+`Any` or mixed-union index may require the JSON fallback, which can fail to
+build if it would need to materialize the unsupported Duration list.
+
+The first predicate matches job 41 because one item is 90 seconds. A SQL-null
+item remains HFF null; its `seconds()` comparison is null and does not make
+`any()` true. The second predicate is false for job 41 because of its null item,
+and true for job 42's empty relation. Plain `any()` and `all()` do not require a
+unique item order. They do not imply that the complete Duration list can be
+materialized or used by every order-sensitive operation; those shapes may
+still be rejected at `Build`.
+
 ### PostgreSQL computed durations
 
 The PostgreSQL backend can parse a text column into a computed Duration and
@@ -49,9 +203,10 @@ The [SQL duration example](https://github.com/ornew/hff/tree/main/examples/sql-d
 shows the schema, binding, and parameterized predicate construction. It builds
 the query without connecting to a database. Run it from the repository root
 with `go run ./examples/sql-durations`; it prints that the predicate was built
-and reports one bound parameter. PostgreSQL durations are computed
-values, not stored Duration bindings; JSON and JSONB Duration materialization is
-also unavailable. The backend does not enforce the local parser's `MaxSteps`
+and reports one bound parameter. This text conversion is separate from the
+native `bigint` Duration binding described above. JSON and JSONB Duration
+materialization remains unavailable. The backend does not enforce the local
+parser's `MaxSteps`
 budget, so database timeouts and input-size controls remain the caller's
 responsibility.
 

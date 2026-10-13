@@ -42,7 +42,7 @@ type Binding struct {
 
 // Bind maps a scalar HFF path to a SQL column. Path components are literal
 // field names, not dotted text; the caller guarantees column type and data
-// satisfy the declared HFF schema.
+// satisfy the declared HFF schema. Duration values use bigint nanoseconds.
 func Bind(path hff.Path, column ColumnRef) Binding {
 	return Binding{path: append(hff.Path(nil), path...), column: Column(column.parts...)}
 }

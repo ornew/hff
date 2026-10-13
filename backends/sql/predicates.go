@@ -7,7 +7,8 @@ import (
 )
 
 // Scalar is an immutable SQL scalar expression for one supported physical
-// type: null, Boolean, int64, float64, or string, optionally unioned with HFF null.
+// type: null, Boolean, int64, float64, string, or duration as int64 nanoseconds,
+// optionally unioned with HFF null.
 // Equality requires the same non-null scalar kind (comparison with a null
 // literal is allowed); Build does not promote mixed int/float SQL values. A
 // Scalar may be reused across Builds.
@@ -28,9 +29,9 @@ func ColumnValue(column ColumnRef, typ hff.Type) Scalar {
 
 // Literal creates a typed scalar value. Build binds non-null values in
 // Query.Args; explicit null becomes SQL NULL. Unsupported values are rejected
-// during Build. Supported values are null, bool, int64,
-// finite float64, and string; bytes, timestamps, and durations are not SQL
-// predicate scalars in the current dialect profile.
+// during Build. Supported values are null, bool, int64, finite float64,
+// string, and duration. Bytes and timestamps are not SQL predicate scalars
+// in the current dialect profile.
 func Literal(value hff.Value) Scalar {
 	typ := hff.Type{}
 	switch value.Kind() {
@@ -40,6 +41,8 @@ func Literal(value hff.Value) Scalar {
 		typ = hff.PrimitiveType(hff.BoolType)
 	case hff.IntKind:
 		typ = hff.PrimitiveType(hff.IntType)
+	case hff.DurationKind:
+		typ = hff.PrimitiveType(hff.DurationType)
 	case hff.FloatKind:
 		typ = hff.PrimitiveType(hff.FloatType)
 	case hff.StringKind:

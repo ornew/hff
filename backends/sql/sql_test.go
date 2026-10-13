@@ -268,7 +268,7 @@ func TestRequiredNestedPathsAndUnrepresentableParents(t *testing.T) {
 func TestDeferredSQLTypesAndMethodsRejectAtBuild(t *testing.T) {
 	ctx := context.Background()
 	for _, typ := range []hff.Type{
-		schema.TimestampType, schema.DurationType, schema.ListOf(schema.IntType),
+		schema.TimestampType, schema.ListOf(schema.IntType),
 		schema.MapOf(schema.StringType), schema.Struct(schema.String("name")), schema.AnyType, schema.Union(schema.StringType, schema.IntType),
 	} {
 		e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("x", typ))), engine.WithCapabilities(capabilities.Standard()))
