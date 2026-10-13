@@ -269,7 +269,7 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		if err != nil {
 			return expression{}, err
 		}
-		code := truth(value)
+		code := b.truth(child, value)
 		if n.Kind() == hff.NotNode {
 			code = "(NOT " + code + ")"
 		}
@@ -282,7 +282,7 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 			if err != nil {
 				return expression{}, err
 			}
-			parts[i] = truth(value)
+			parts[i] = b.truth(child, value)
 		}
 		join := " AND "
 		if n.Kind() == hff.OrNode {
@@ -448,13 +448,20 @@ func both(a, b string) string {
 	return "(" + a + " AND " + b + ")"
 }
 
-func truth(value expression) string {
+func (b *builder) truth(n hff.Node, value expression) string {
 	var test string
 	switch value.kind {
 	case hff.AnyType:
 		raw := "(" + value.code + "::json)"
 		text := "(" + raw + " #>> '{}'::text[])"
-		test = "(CASE json_typeof(" + raw + ") WHEN 'null' THEN FALSE WHEN 'boolean' THEN " + text + "::boolean WHEN 'number' THEN " + jsonFloatCast(text) + "<>0 WHEN 'string' THEN " + text + "<>'' WHEN 'array' THEN json_array_length(" + raw + ")>0 WHEN 'object' THEN EXISTS(SELECT 1 FROM json_object_keys(" + raw + ")) ELSE FALSE END)"
+		stringTest := text + "<>''"
+		if jsonRootHasKind(b.jsonStoredType(n), hff.DurationType) {
+			// Duration(0) is false even though its canonical JSON string is
+			// nonempty. A recoverable union can use the JSON string class for
+			// exactly one tagged HFF family at this position.
+			stringTest = "(" + b.parseDurationInline(text) + "<>0)"
+		}
+		test = "(CASE json_typeof(" + raw + ") WHEN 'null' THEN FALSE WHEN 'boolean' THEN " + text + "::boolean WHEN 'number' THEN " + jsonFloatCast(text) + "<>0 WHEN 'string' THEN " + stringTest + " WHEN 'array' THEN json_array_length(" + raw + ")>0 WHEN 'object' THEN EXISTS(SELECT 1 FROM json_object_keys(" + raw + ")) ELSE FALSE END)"
 
 	case hff.NullType:
 		test = "FALSE"

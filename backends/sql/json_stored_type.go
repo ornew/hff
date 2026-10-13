@@ -165,12 +165,12 @@ func jsonStoredMemberType(typ hff.Type, key string, known, indexed bool) hff.Typ
 func jsonNativeCarrierType(typ, stored hff.Type) hff.Type {
 	switch typ.Kind() {
 	case hff.AnyType:
-		if jsonHasBytes(stored) {
+		if jsonHasTaggedString(stored) {
 			return stored
 		}
 		return typ
-	case hff.BytesType:
-		if jsonHasBytes(stored) {
+	case hff.BytesType, hff.DurationType:
+		if jsonHasTaggedKind(stored, typ.Kind()) {
 			return typ
 		}
 		return hff.PrimitiveType(hff.NeverType)

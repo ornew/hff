@@ -47,6 +47,19 @@ func (b *builder) durationCall(n hff.Node, name string, receiver expression) (ex
 		}
 		return expression{b.parseDuration(text), receiver.present, hff.DurationType}, nil
 	}
+	if receiver.kind == hff.AnyType {
+		receiverNode, _ := n.Child(0)
+		if !jsonRootHasKind(b.jsonStoredType(receiverNode), hff.DurationType) {
+			return expression{}, b.failure(n, "duration units require a recoverable Duration receiver")
+		}
+		format, ok := b.jsonValues[receiver.code]
+		if !ok {
+			return expression{}, b.failure(n, "duration units require a JSON-backed Duration receiver")
+		}
+		class := string(format) + "_typeof(" + receiver.code + ")"
+		text := "(CASE WHEN " + class + "='string' THEN " + receiver.code + " #>> '{}'::text[] ELSE NULL::text END)"
+		receiver = expression{b.parseDuration(text), receiver.present, hff.DurationType}
+	}
 	if receiver.kind != hff.DurationType {
 		return expression{}, b.failure(n, "duration units require a duration value")
 	}
@@ -64,13 +77,24 @@ func (b *builder) durationCall(n hff.Node, name string, receiver expression) (ex
 }
 
 func (b *builder) parseDuration(text string) string {
-	raw := b.project("(" + text + " COLLATE \"C\")")
+	return b.parseDurationWithProject(text, b.project)
+}
+
+// JSON array elements and object fields use aliases local to a nested SQL
+// expression. Their conversions must stay in that scope rather than adding
+// projections to the enclosing builder.
+func (b *builder) parseDurationInline(text string) string {
+	return b.parseDurationWithProject(text, func(code string) string { return code })
+}
+
+func (b *builder) parseDurationWithProject(text string, project func(string) string) string {
+	raw := project("(" + text + " COLLATE \"C\")")
 	const amount = `([0-9]+(\.[0-9]*)?|\.[0-9]+)`
 	const component = amount + `(ms|us|ns|h|m|s)`
 	// Explicit escape literals keep these fixed patterns independent of the
 	// connection's standard_conforming_strings setting.
 	pattern := strings.ReplaceAll(`\A[+-]?(0|(`+component+`)+)\Z`, `\`, `\\`)
-	safe := b.project("(CASE WHEN " + raw + " ~ E'" + pattern + "' THEN " + raw + " ELSE NULL::text END)")
+	safe := project("(CASE WHEN " + raw + " ~ E'" + pattern + "' THEN " + raw + " ELSE NULL::text END)")
 	// Validate the entire input before component casts can execute.
 	parts, columns, whole, result := b.nextAlias(), b.nextAlias(), b.nextAlias(), b.nextAlias()
 	code := `WITH RECURSIVE @parts AS MATERIALIZED (
@@ -111,11 +135,19 @@ THEN NULL::bigint ELSE ns::bigint END FROM @result`
 }
 
 func (b *builder) durationText(code string) string {
-	n := b.project("abs(" + code + "::numeric)")
-	h := b.project("div(" + n + ",3600000000000)")
-	m := b.project("div(mod(" + n + ",3600000000000),60000000000)")
-	s := b.project("div(mod(" + n + ",60000000000),1000000000)")
-	f := b.project("mod(" + n + ",1000000000)")
+	return b.durationTextWithProject(code, b.project)
+}
+
+func (b *builder) durationTextInline(code string) string {
+	return b.durationTextWithProject(code, func(value string) string { return value })
+}
+
+func (b *builder) durationTextWithProject(code string, project func(string) string) string {
+	n := project("abs(" + code + "::numeric)")
+	h := project("div(" + n + ",3600000000000)")
+	m := project("div(mod(" + n + ",3600000000000),60000000000)")
+	s := project("div(mod(" + n + ",60000000000),1000000000)")
+	f := project("mod(" + n + ",1000000000)")
 	return "(CASE WHEN " + code + " IS NULL THEN NULL::text ELSE " +
 		"(CASE WHEN " + code + "<0 THEN '-' ELSE '' END)||" +
 		"(CASE WHEN " + h + ">0 THEN " + h + "::text||'h' ELSE '' END)||" +
@@ -138,7 +170,19 @@ func (b *builder) durationIn(n hff.Node, values []expression) (expression, error
 		default:
 			child, _ := n.Child(index + 1)
 			if value.kind == hff.AnyType && acceptsKind(child.Type(), hff.DurationType) {
-				return expression{}, b.failure(child, "duration membership cannot recover a dynamic duration argument")
+				if !jsonRootHasKind(b.jsonStoredType(child), hff.DurationType) {
+					return expression{}, b.failure(child, "duration membership cannot recover a dynamic duration argument")
+				}
+				format, ok := b.jsonValues[value.code]
+				if !ok {
+					return expression{}, b.failure(child, "duration membership requires a JSON-backed argument")
+				}
+				class := string(format) + "_typeof(" + value.code + ")"
+				text := "(" + value.code + " #>> '{}'::text[])"
+				candidate := expression{b.parseDurationInline(text), value.present, hff.DurationType}
+				comparison := b.scalarComparison(receiver, candidate, hff.Equal)
+				matches = append(matches, "(CASE WHEN "+class+"='string' THEN "+comparison.code+" ELSE FALSE END)")
+				continue
 			}
 			// A statically disjoint family cannot match a duration. Its
 			// no-value flag still contributes to membershipPresence.

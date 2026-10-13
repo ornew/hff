@@ -23,9 +23,10 @@ const (
 // distinctions cannot be recovered from the stored representation. Options
 // configure metadata for distinctions that JSONB does not preserve.
 //
-// Schema-known Bytes use canonical padded standard-base64 JSON strings.
-// The same string under Any remains String; ambiguous Bytes/String unions
-// cannot recover their type identity and are rejected when consumed.
+// Schema-known Bytes use canonical padded standard-base64 JSON strings, and
+// schema-known Duration values use canonical duration strings. The same
+// spelling under Any remains String; ambiguous string-family unions cannot
+// recover their type identity and are rejected when consumed.
 func BindJSON(path hff.Path, column ColumnRef, format JSONFormat, options ...JSONBindingOption) Binding {
 	b := Bind(path, column)
 	b.format = format
@@ -62,7 +63,7 @@ func jsonKind(t hff.Type) (hff.TypeKind, bool) {
 		return kind, true
 	}
 	switch t.Kind() {
-	case hff.NullType, hff.BoolType, hff.IntType, hff.FloatType, hff.StringType, hff.BytesType, hff.ListType, hff.MapType, hff.StructType:
+	case hff.NullType, hff.BoolType, hff.IntType, hff.FloatType, hff.StringType, hff.BytesType, hff.DurationType, hff.ListType, hff.MapType, hff.StructType:
 		return t.Kind(), true
 	}
 	return hff.InvalidType, false
@@ -319,7 +320,11 @@ func (b *builder) jsonCall(n hff.Node, name string, values []expression, format 
 		return boolean(both(r.present, "("+r.code+" IS NOT NULL)")), nil
 	case "type":
 		if r.kind == hff.AnyType {
-			code := "(CASE " + string(format) + "_typeof(" + r.code + ") WHEN 'array' THEN 'list' WHEN 'boolean' THEN 'bool' ELSE COALESCE(" + string(format) + "_typeof(" + r.code + "),'null') END)"
+			receiver, _ := n.Child(0)
+			code, err := b.jsonRuntimeTypeName(n, r.code, format, b.jsonStoredType(receiver))
+			if err != nil {
+				return expression{}, err
+			}
 			return expression{code, r.present, hff.StringType}, nil
 		}
 		typ := "object"
@@ -390,7 +395,7 @@ func (b *builder) jsonTypeGuard(n hff.Node, value expression, format JSONFormat,
 	return b.jsonDecode(n, guarded, format, b.jsonStoredType(n), present)
 }
 func (b *builder) jsonMatches(n hff.Node, code string, format JSONFormat, source, target hff.Type) (string, error) {
-	if err := b.checkJSONBytesSchema(n, source); err != nil {
+	if err := b.checkJSONStringSchemas(n, source); err != nil {
 		return "", err
 	}
 	null := "(" + code + " IS NULL OR " + string(format) + "_typeof(" + code + ") = 'null')"
@@ -417,6 +422,9 @@ func (b *builder) jsonMatches(n hff.Node, code string, format JSONFormat, source
 	}
 	kind, ok := jsonKind(source)
 	if !ok {
+		if match, handled := jsonUnionStringMatch(code, format, source, target); handled {
+			return match, nil
+		}
 		if target.Kind() == hff.IntType || target.Kind() == hff.FloatType {
 			integer, floating := jsonNumericCandidates(source)
 			if !integer || !floating {

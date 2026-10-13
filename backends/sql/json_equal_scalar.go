@@ -21,8 +21,8 @@ func (b *builder) jsonAnyScalarEqual(n hff.Node, left string, lf JSONFormat, lt 
 	if lt.Kind() != hff.AnyType {
 		return "", false, nil
 	}
-	if jsonHasBytes(rt) {
-		return "", true, b.failure(n, "Any JSON equality cannot recover Bytes types")
+	if jsonHasTaggedString(rt) {
+		return "", true, b.failure(n, "Any JSON equality cannot recover Bytes or Duration types")
 	}
 	kind, known := jsonKind(rt)
 	if !known || structuredKind(kind) {

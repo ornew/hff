@@ -32,10 +32,15 @@ func (b *builder) jsonSequence(n hff.Node, name string, values []expression, for
 	var valid, order []string
 	for _, t := range members {
 		switch t.Kind() {
-		case hff.IntType, hff.FloatType, hff.StringType:
+		case hff.IntType, hff.FloatType, hff.StringType, hff.DurationType:
 			condition := category + "='" + jsonCategory(t.Kind()) + "'"
 			valid = append(valid, condition)
-			key := "(CASE WHEN " + condition + " THEN " + jsonScalarCast("("+raw+" #>> '{}'::text[])", t.Kind()) + " END)"
+			text := "(" + raw + " #>> '{}'::text[])"
+			cast := jsonScalarCast(text, t.Kind())
+			if t.Kind() == hff.DurationType {
+				cast = b.parseDurationInline(text)
+			}
+			key := "(CASE WHEN " + condition + " THEN " + cast + " END)"
 			if t.Kind() == hff.StringType {
 				key += " COLLATE \"C\""
 			}
@@ -90,6 +95,15 @@ func (b *builder) jsonConcat(n hff.Node, values []expression, format JSONFormat)
 
 // Operands have already been normalized to preserve their declared subtypes.
 func (b *builder) concatJSONLists(n hff.Node, values []expression, format JSONFormat) (expression, error) {
+	leftNode, _ := n.Child(0)
+	rightNode, _ := n.Child(1)
+	for _, left := range jsonPossibleListElements(b.jsonStoredType(leftNode)) {
+		for _, right := range jsonPossibleListElements(b.jsonStoredType(rightNode)) {
+			if jsonTaggedStringStateAmbiguous(left, right) {
+				return expression{}, b.failure(n, "JSON list concat cannot distinguish String, Bytes, and Duration elements")
+			}
+		}
+	}
 	r, arg := values[0], values[1]
 	if arg.kind == hff.NullType {
 		code := "NULL::json"
@@ -111,4 +125,22 @@ func (b *builder) concatJSONLists(n hff.Node, values []expression, format JSONFo
 	code := "(CASE WHEN " + r.code + " IS NULL OR " + arg.code + " IS NULL THEN NULL ELSE (SELECT COALESCE(json_agg(" + result + ".value" + aggregateOrder + "),'[]'::json) FROM (" + rows + ") AS " + result + ") END)"
 	b.jsonValues[code] = JSON
 	return expression{code, ordinaryPresence(values), hff.ListType}, nil
+}
+
+// Keep distinct list branches until their element representations have been
+// checked. Forming an HFF union first could let Any erase a tagged string.
+func jsonPossibleListElements(typ hff.Type) []hff.Type {
+	switch typ.Kind() {
+	case hff.ListType:
+		return []hff.Type{typ.Element()}
+	case hff.AnyType:
+		return []hff.Type{typ}
+	case hff.UnionType:
+		var elements []hff.Type
+		for _, member := range typ.Members() {
+			elements = append(elements, jsonPossibleListElements(member)...)
+		}
+		return elements
+	}
+	return nil
 }

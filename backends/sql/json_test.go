@@ -267,14 +267,6 @@ func TestJSONBindingRejectsConflictingPhysicalMappings(t *testing.T) {
 
 func TestJSONUnsupportedSemanticsAreExplicitBuildErrors(t *testing.T) {
 	ctx := context.Background()
-	for _, source := range []string{`scores:foldl("1s":duration,(acc,x)=>acc):exists`} {
-		p, err := jsonEngine(t).Compile(ctx, source)
-		if err != nil {
-			t.Fatal(source, err)
-		}
-		_, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(jsonBindings(hffsql.JSONB)...))
-		requireCode(t, err, hff.BackendError)
-	}
 	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("x", schema.Union(schema.IntType, schema.FloatType)))), engine.WithCapabilities(capabilities.Standard()))
 	if err != nil {
 		t.Fatal(err)

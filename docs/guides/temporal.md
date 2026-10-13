@@ -277,7 +277,7 @@ also be used as a typed relation ordering key, for example with
 `hffsql.WithUniqueOrder(hffsql.Ascending(hffsql.Column("job_runs", "elapsed_ns"), schema.DurationType))`.
 The same scalar mapping works for a direct flattened `BindStruct` field, but
 materializing a whole struct containing Duration remains unsupported.
-JSON/JSONB and native composite Duration storage are also unavailable. The
+Native composite Duration storage is also unavailable. The
 [runnable stored-duration example](https://github.com/ornew/hff/tree/main/examples/sql-stored-durations)
 shows the complete binding setup and can be run with
 `go run ./examples/sql-stored-durations` from the repository root.
@@ -357,6 +357,15 @@ unique item order. They do not imply that the complete Duration list can be
 materialized or used by every order-sensitive operation; those shapes may
 still be rejected at `Build`.
 
+### Store schema-known durations in JSON
+
+PostgreSQL `BindJSON` can decode schema-known Duration fields from canonical
+duration strings in JSON or JSONB. The schema, not the string contents, supplies
+the HFF type: an `Any` value containing the same text remains a String. The
+[JSON binding guide](../backends/postgresql/json.md#duration-values-in-json-documents)
+shows the table, schema, binding, and query. This does not add Duration tags to
+the JSONB numeric metadata format.
+
 ### PostgreSQL computed durations
 
 The PostgreSQL backend can parse a text column into a computed Duration and
@@ -366,9 +375,9 @@ The [SQL duration example](https://github.com/ornew/hff/tree/main/examples/sql-d
 shows the schema, binding, and parameterized predicate construction. It builds
 the query without connecting to a database. Run it from the repository root
 with `go run ./examples/sql-durations`; it prints that the predicate was built
-and reports one bound parameter. This text conversion is separate from the
-native `bigint` Duration binding described above. JSON and JSONB Duration
-materialization remains unavailable. The backend does not enforce the local
+and reports one bound parameter. This conversion produces a computed Duration;
+it is separate from native scalar `bigint` bindings and schema-known JSON/JSONB
+Duration storage described above. The backend does not enforce the local
 parser's `MaxSteps`
 budget, so database timeouts and input-size controls remain the caller's
 responsibility.

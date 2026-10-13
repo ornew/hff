@@ -40,7 +40,31 @@ func (b *builder) dynamicJSONComparison(n hff.Node, left, right expression, op h
 			category = "boolean"
 		}
 		matches := "(" + class + "='" + category + "')"
+		if scalar.kind == hff.StringType {
+			child := 0
+			if reversed {
+				child = 1
+			}
+			dynamicNode, _ := n.Child(child)
+			if schemaMatch, handled := jsonUnionStringMatch(dynamic.code, format, b.jsonStoredType(dynamicNode), hff.PrimitiveType(hff.StringType)); handled {
+				matches = schemaMatch
+			}
+		}
 		value := expression{"(CASE WHEN " + matches + " THEN " + text + "::" + sqlType(scalar.kind) + " ELSE NULL END)", "TRUE", scalar.kind}
+		comparison := compare(value)
+		code := "(CASE WHEN " + nullOrAbsent + " THEN FALSE WHEN " + matches + " THEN " + comparison.code + " ELSE NULL::boolean END)"
+		return expression{code, "TRUE", hff.BoolType}, nil
+	case hff.DurationType:
+		child := 0
+		if reversed {
+			child = 1
+		}
+		dynamicNode, _ := n.Child(child)
+		if !jsonRootHasKind(b.jsonStoredType(dynamicNode), hff.DurationType) {
+			return expression{}, b.failure(n, "dynamic JSON comparison cannot recover Duration identity")
+		}
+		matches := "(" + class + "='string')"
+		value := expression{"(CASE WHEN " + matches + " THEN " + b.parseDurationInline(text) + " ELSE NULL::bigint END)", "TRUE", hff.DurationType}
 		comparison := compare(value)
 		code := "(CASE WHEN " + nullOrAbsent + " THEN FALSE WHEN " + matches + " THEN " + comparison.code + " ELSE NULL::boolean END)"
 		return expression{code, "TRUE", hff.BoolType}, nil

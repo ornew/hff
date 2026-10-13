@@ -109,17 +109,17 @@ func (b *builder) jsonFoldType(n hff.Node, typ hff.Type) (hff.Type, error) {
 			}
 		}
 		bodyType := b.jsonCallbackStoredType(callback, types)
-		if jsonBytesStateAmbiguous(seedType, bodyType) {
-			return hff.Type{}, b.failure(n, "JSON fold state cannot distinguish Bytes from String or Any")
+		if jsonTaggedStringStateAmbiguous(seedType, bodyType) {
+			return hff.Type{}, b.failure(n, "JSON fold state cannot distinguish String, Bytes, and Duration")
 		}
 		stored := hff.NewUnionType(seedType, bodyType)
 		carrier := jsonNativeCarrierType(typ, stored)
-		if !jsonHasBytes(stored) || carrier.Key() == accumulator.Key() {
+		if !jsonHasTaggedString(stored) || carrier.Key() == accumulator.Key() {
 			return carrier, nil
 		}
 		accumulator = carrier
 	}
-	return hff.Type{}, b.failure(n, "JSON fold Bytes storage type does not reach a finite fixed point")
+	return hff.Type{}, b.failure(n, "JSON fold tagged-string storage type does not reach a finite fixed point")
 }
 
 func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accumulatorIndex int, previous, item string, accumulatorType hff.Type, receiver, seed hff.Node, format JSONFormat) (expression, []string, hff.Type, error) {
@@ -190,43 +190,44 @@ func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accu
 }
 
 // Compare positions before forming a union: Any can erase an explicit Bytes
-// alternative during type canonicalization, although JSON cannot recover it.
-func jsonBytesStateAmbiguous(left, right hff.Type) bool {
+// or Duration alternative during type canonicalization, although JSON cannot
+// recover that typed value from an untagged string.
+func jsonTaggedStringStateAmbiguous(left, right hff.Type) bool {
 	if left.Kind() == hff.UnionType {
 		for _, t := range left.Members() {
-			if jsonBytesStateAmbiguous(t, right) {
+			if jsonTaggedStringStateAmbiguous(t, right) {
 				return true
 			}
 		}
 		return false
 	}
 	if right.Kind() == hff.UnionType {
-		return jsonBytesStateAmbiguous(right, left)
+		return jsonTaggedStringStateAmbiguous(right, left)
 	}
 	if left.Kind() == hff.AnyType {
-		return jsonHasBytes(right)
+		return jsonHasTaggedString(right)
 	}
 	if right.Kind() == hff.AnyType {
-		return jsonHasBytes(left)
+		return jsonHasTaggedString(left)
 	}
-	if left.Kind() == hff.BytesType {
-		return right.Kind() == hff.StringType
+	if jsonTaggedStringKind(left.Kind()) {
+		return right.Kind() == hff.StringType || (jsonTaggedStringKind(right.Kind()) && left.Kind() != right.Kind())
 	}
-	if right.Kind() == hff.BytesType {
+	if jsonTaggedStringKind(right.Kind()) {
 		return left.Kind() == hff.StringType
 	}
 	if left.Kind() == hff.ListType && right.Kind() == hff.ListType {
-		return jsonBytesStateAmbiguous(left.Element(), right.Element())
+		return jsonTaggedStringStateAmbiguous(left.Element(), right.Element())
 	}
 	if (left.Kind() == hff.MapType || left.Kind() == hff.StructType) && (right.Kind() == hff.MapType || right.Kind() == hff.StructType) {
 		if left.Kind() == hff.MapType && right.Kind() == hff.MapType {
-			return jsonBytesStateAmbiguous(left.Element(), right.Element())
+			return jsonTaggedStringStateAmbiguous(left.Element(), right.Element())
 		}
 		if left.Kind() == hff.MapType {
 			left, right = right, left
 		}
 		for _, field := range left.Fields() {
-			if jsonBytesStateAmbiguous(field.Type, jsonStoredMemberType(right, field.Name, true, false)) {
+			if jsonTaggedStringStateAmbiguous(field.Type, jsonStoredMemberType(right, field.Name, true, false)) {
 				return true
 			}
 		}

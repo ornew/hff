@@ -18,7 +18,7 @@ func TestComputedDurationRepresentationBoundaries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, source := range []string{`data:duration:in(data:fromjson)`, `[data:duration]:size=1`, `{"d":data:duration}:size=1`, `[data:duration]:json="[]"`, `data:fromjson:[list]:map(x=>x:duration):size=1`} {
+	for _, source := range []string{`data:duration:in(data:fromjson)`} {
 		p, err := e.Compile(ctx, source)
 		if err != nil {
 			t.Fatal(source, err)
@@ -29,7 +29,7 @@ func TestComputedDurationRepresentationBoundaries(t *testing.T) {
 			t.Fatalf("%s: representation rejection lacks source span", source)
 		}
 	}
-	for _, source := range []string{`data:duration:in(data:fromjson:[string|int]):exists`, `[data:duration:nanoseconds]:size=1`, `[data:duration:string]:size=1`, `data:duration:[duration]:exists`} {
+	for _, source := range []string{`data:duration:in(data:fromjson:[string|int]):exists`, `[data:duration]:size=1`, `{"d":data:duration}:size=1`, `[data:duration]:json="[]"`, `data:fromjson:[list]:map(x=>x:duration):size=1`, `[data:duration:nanoseconds]:size=1`, `[data:duration:string]:size=1`, `data:duration:[duration]:exists`} {
 		p, err := e.Compile(ctx, source)
 		if err != nil {
 			t.Fatal(source, err)
@@ -41,6 +41,20 @@ func TestComputedDurationRepresentationBoundaries(t *testing.T) {
 	profile, err := hffsql.Profile(hffsql.PostgreSQL)
 	if err != nil {
 		t.Fatal(err)
+	}
+	foundDurationDetail := false
+	for _, detail := range profile.Details() {
+		if detail.Name == "duration" {
+			foundDurationDetail = true
+			if !strings.Contains(detail.Value, "schema-known JSON/JSONB duration strings") ||
+				!strings.Contains(detail.Value, "native bigint nanosecond duration columns") {
+				t.Fatalf("duration profile reports stale storage support: %s", detail.Value)
+			}
+			break
+		}
+	}
+	if !foundDurationDetail {
+		t.Fatal("duration profile detail missing")
 	}
 	for _, id := range []string{"string.duration", "duration.hours", "duration.minutes", "duration.seconds", "duration.milliseconds", "duration.microseconds", "duration.nanoseconds"} {
 		feature, ok := profile.Feature(capabilities.Method(id))
@@ -152,8 +166,18 @@ func TestNativeDurationRelationSizeAndHasKeepNullState(t *testing.T) {
 
 func TestStoredDurationBindingFormats(t *testing.T) {
 	ctx := context.Background()
-	for _, typ := range []hff.Type{schema.DurationType, schema.Union(schema.DurationType, schema.NullType), schema.Union(schema.DurationType, schema.StringType, schema.NullType)} {
-		e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("data", typ))), engine.WithCapabilities(capabilities.Standard()))
+	for _, test := range []struct {
+		typ  hff.Type
+		want bool
+	}{
+		{schema.DurationType, true},
+		{schema.Union(schema.DurationType, schema.NullType), true},
+		{schema.Union(schema.DurationType, schema.IntType), true},
+		{schema.Union(schema.DurationType, schema.StringType, schema.NullType), false},
+		{schema.Union(schema.DurationType, schema.BytesType), false},
+		{schema.Union(schema.ListOf(schema.DurationType), schema.ListOf(schema.AnyType)), false},
+	} {
+		e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("data", test.typ))), engine.WithCapabilities(capabilities.Standard()))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -167,16 +191,14 @@ func TestStoredDurationBindingFormats(t *testing.T) {
 				binding = hffsql.BindJSON(hff.Path{"data"}, hffsql.Column("data"), format)
 			}
 			_, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(binding))
-			supportedNative := format == "" && (typ.Equal(schema.DurationType) || typ.Equal(schema.Union(schema.DurationType, schema.NullType)))
-			if supportedNative {
+			supported := (format == "" && (test.typ.Equal(schema.DurationType) ||
+				test.typ.Equal(schema.Union(schema.DurationType, schema.NullType)))) ||
+				(format != "" && test.want)
+			if supported {
 				if err != nil {
-					t.Errorf("%s %s: rejected native duration: %v", typ.Key(), format, err)
+					t.Errorf("%s %s: rejected schema-known Duration: %v", test.typ.Key(), format, err)
 				}
 			} else {
-				if err == nil {
-					t.Errorf("%s %s: accepted an ambiguous or JSON duration binding", typ.Key(), format)
-					continue
-				}
 				requireCode(t, err, hff.BackendError)
 			}
 		}

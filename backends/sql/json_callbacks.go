@@ -55,7 +55,7 @@ func (b *builder) jsonPredicate(n hff.Node, name string) (expression, error) {
 	if err != nil {
 		return expression{}, err
 	}
-	predicate := truth(result)
+	predicate := b.truth(body, result)
 	operator := "EXISTS"
 	if name == "all" {
 		operator = "NOT EXISTS"

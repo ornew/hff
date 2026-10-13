@@ -46,7 +46,7 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 			{Name: "unicode.casing", Value: "locale-independent simple Unicode mappings are bound by the translator; database lower/upper rules are not used"},
 			{Name: "number.parsing", Value: "number() requires PostgreSQL 16+ input validation; JSON number spelling, int64 bounds, and finite binary64 results are checked"},
 			{Name: "json.parsing", Value: "fromjson requires PostgreSQL 16+ JSON validation; caller guarantees decoded JSON strings and keys contain no NUL"},
-			{Name: "duration", Value: "string parsing, computed durations, and native bigint nanosecond duration columns are supported; JSON and composite duration materialization are unavailable"},
+			{Name: "duration", Value: "string parsing, computed durations, native bigint nanosecond duration columns, and schema-known JSON/JSONB duration strings are supported; ambiguous JSON unions and composite duration materialization are unavailable"},
 			{Name: "timestamp", Value: "schema-known timestamptz bindings use optional SMALLINT 0–999 nanosecond remainders; the caller guarantees whole-microsecond storage, null pairing, and finite years 0000–9999; literal RFC 3339 parsing and UTC methods are supported"},
 			{Name: "bytes", Value: "native bytea, computed bytes, and schema-known JSON/JSONB Bytes use strict standard base64; ambiguous Bytes representations are rejected"},
 			{Name: "regex", Value: "literal non-NUL ASCII RE2 subset translated to PostgreSQL 15+ ARE; dynamic patterns, case folding, line anchors, Unicode classes, dot and quantified anchors are unavailable"},

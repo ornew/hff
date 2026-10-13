@@ -288,7 +288,7 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 	if b.predicateFailure != nil {
 		return nil, b.predicateFailure
 	}
-	where := truth(root)
+	where := b.truth(program.Root(), root)
 	if len(b.steps) > 0 {
 		where = "(SELECT " + where + " FROM " + strings.Join(b.steps, " CROSS JOIN LATERAL ") + ")"
 	}

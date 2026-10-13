@@ -94,7 +94,7 @@ func (b *builder) relationPredicate(n hff.Node, name string) (expression, bool, 
 	if err != nil {
 		return expression{}, true, err
 	}
-	predicate := truth(result)
+	predicate := b.truth(body, result)
 	operator := "EXISTS"
 	if name == "all" {
 		operator = "NOT EXISTS"

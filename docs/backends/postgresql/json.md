@@ -88,13 +88,161 @@ the general construction contract.
 
 For statically known values, the schema determines the HFF representation.
 Supported families are null, bool, int64, finite float64, string, Bytes,
-homogeneous lists, string-keyed maps, and structs; nullable variants are
-supported. JSON represents a schema-known Bytes value as a standard padded
-base64 string. JSONB metadata can restore numeric subtype and value when
-normalization would lose the distinction. The application must store data and
-metadata that satisfy the declared schema and remain consistent with each
-other. `Build` does not inspect rows, read the database, or validate stored
-documents or metadata.
+Duration, homogeneous lists, string-keyed maps, and structs; nullable variants
+are supported. JSON represents schema-known Bytes as standard padded base64
+strings and schema-known Durations as canonical duration strings. JSONB
+preserves those strings, so Duration values need no type metadata. JSONB
+metadata can restore numeric subtype and value when normalization would lose
+the distinction. The application must store data and metadata that satisfy the
+declared schema and remain consistent with each other. `Build` does not inspect
+rows, read the database, or validate stored documents or metadata.
+
+### Duration values in JSON documents
+
+When the schema declares a field as Duration, JSON and JSONB store it as a
+canonical HFF duration string. For example, `1m30s` is a Duration under a
+Duration schema, while the same JSON string under `Any` remains a String.
+JSONB does not normalize string contents, so Duration decoding requires no
+numeric type metadata. This support covers a schema-known Duration or nullable
+Duration field, including typed nested fields and collection elements. For the
+schema-known unions `Duration|Int|Null`, `Duration|Bool|Null`, and
+`Duration|Int|Bool|Null`,
+supported operations dispatch by JSON category: strings select Duration,
+booleans select Bool, numbers select Int when Int is an alternative, and JSON
+null remains null. These category distinctions work for both JSON and JSONB
+without Duration metadata.
+
+For example, a document can hold each alternative in the same column:
+
+```sql
+CREATE TABLE duration_union (
+    id bigint PRIMARY KEY,
+    value jsonb NOT NULL,
+    items jsonb NOT NULL
+);
+INSERT INTO duration_union VALUES
+    (1, '"0.000000001s"'::jsonb, '["0.000000001s",7,true,null]'::jsonb),
+    (2, '7'::jsonb, '[7,true,null]'::jsonb),
+    (3, 'true'::jsonb, '[false,"0s"]'::jsonb),
+    (4, 'null'::jsonb, '[]'::jsonb);
+```
+
+Declare the union at the bound path and bind the JSON column with that schema:
+
+```go
+valueType := schema.Union(schema.DurationType, schema.IntType, schema.BoolType, schema.NullType)
+e, err := engine.New(
+    engine.WithSchema(schema.Struct(
+        schema.Field("value", valueType),
+        schema.List("items", valueType),
+    )),
+    engine.WithCapabilities(capabilities.Standard()),
+)
+if err != nil {
+    return err
+}
+program, err := e.Compile(ctx, `value:type="duration"`)
+if err != nil {
+    return err
+}
+query, err := hffsql.Build(ctx, program,
+    hffsql.WithDialect(hffsql.PostgreSQL),
+    hffsql.WithBindings(hffsql.BindJSON(
+        hff.Path{"value"}, hffsql.Column("duration_union", "value"), hffsql.JSONB,
+    ), hffsql.BindJSON(
+        hff.Path{"items"}, hffsql.Column("duration_union", "items"), hffsql.JSONB,
+    )),
+)
+if err != nil {
+    return err
+}
+```
+
+The following forms are supported against that declared schema:
+
+| Operation | HFF expression |
+| --- | --- |
+| `type()` | `value:type="duration"` |
+| Truthiness | `value` |
+| Duration unit | `value:seconds>0` |
+| Explicit Duration guard | `value:[duration]:nanoseconds=1` |
+| Bool alternative and guard | `value:type="bool"`, `value:[bool]:not` |
+| Duration comparison | `value="1ns":duration` |
+| Bool comparison | `value=true` |
+| Union compared with itself | `value=value` |
+| Membership across alternatives | `value:in("1ns":duration,7)` |
+| Duration membership with union candidates | `"1ns":duration:in(value)` |
+| List-element union comparison | `items[0]=items[1]` |
+| List membership and callback | `items:contains(true)`, `items:all(x=>x)` |
+| Collection and callback type | `items:unique`, `items:map(x=>x:type):contains("bool")` |
+| `string()` output | `value:string="0.000000001s"` |
+| `json()` output | `value:json="\"0.000000001s\""` |
+
+This is a limited supported subset, not general tagged-union support. Other
+unions and operations may be rejected by `Build`, especially when the
+translator cannot recover the active HFF type. For example,
+`String|Duration` and `Bytes|Duration` share the JSON string representation
+and must be rejected when an operation needs their identity.
+JSONB metadata version 1 restores numeric types only; it does not add tags for
+these string-backed alternatives. Ambiguous non-null tagged unions,
+overlapping structural alternatives such as `List<Duration>|List<Any>`, and
+operations outside the supported subset remain Build errors.
+
+```sql
+CREATE TABLE job_events (
+    id bigint PRIMARY KEY,
+    profile jsonb NOT NULL
+);
+INSERT INTO job_events VALUES
+    (1, '{"elapsed":"1m30s","splits":["1s","2.5s"],"summary":{"elapsed":"0s"}}'::jsonb),
+    (2, '{"elapsed":"45s","splits":["0.5s"],"summary":{"elapsed":"1s"}}'::jsonb);
+```
+
+Declare the JSON shape, bind the whole `profile` value, and query its typed
+Duration fields. The surrounding service supplies `ctx` and its database
+handle:
+
+```go
+profileType := schema.Struct(
+    schema.Duration("elapsed"),
+    schema.List("splits", schema.DurationType),
+    schema.Field("summary", schema.Struct(schema.Duration("elapsed"))),
+)
+e, err := engine.New(
+    engine.WithSchema(schema.Struct(schema.Field("profile", profileType))),
+    engine.WithCapabilities(capabilities.Standard()),
+)
+if err != nil {
+    return err
+}
+program, err := e.Compile(ctx,
+    `profile.elapsed:seconds>=60 profile.splits:contains("1s":duration) profile.summary.elapsed:nanoseconds=0`,
+)
+if err != nil {
+    return err
+}
+query, err := hffsql.Build(ctx, program,
+    hffsql.WithDialect(hffsql.PostgreSQL),
+    hffsql.WithBindings(hffsql.BindJSON(
+        hff.Path{"profile"}, hffsql.Column("job_events", "profile"), hffsql.JSONB,
+    )),
+)
+if err != nil {
+    return err
+}
+rows, err := db.QueryContext(ctx,
+    `SELECT job_events.id FROM job_events WHERE `+query.Where(), query.Args()...)
+```
+
+The predicate matches row 1. JSON null maps to HFF null where the schema allows
+it; nested objects, lists, and maps retain their declared Duration members.
+Duration values support comparison, equality, membership, sorting, folds, and
+the methods supported for their schema-known representation when the
+surrounding result types remain representable. `string()` returns the
+canonical duration text, and `json()` returns that text as a JSON string. The
+[temporal guide](../../guides/temporal.md#parse-and-measure-durations) describes
+the canonical format and parser rules. Stored values must satisfy the declared
+schema; `Build` does not inspect JSON documents.
 
 ### Bytes in JSON documents
 
@@ -331,9 +479,10 @@ sign.
 
 PostgreSQL supports `duration()` on a text column or a recoverable JSON string.
 It produces a computed HFF Duration represented internally as signed int64
-nanoseconds. This text conversion is separate from native Duration columns,
-which use `bigint` nanoseconds; it does not enable Duration values in JSON or
-JSONB documents. The local duration syntax and range rules in the
+nanoseconds. This computed conversion is separate from native Duration
+columns, which use `bigint` nanoseconds, and from schema-known JSON/JSONB
+Duration storage described [above](#duration-values-in-json-documents). The
+local duration syntax and range rules in the
 [temporal guide](../../guides/temporal.md#parse-and-measure-durations) also
 apply to this conversion.
 
@@ -574,7 +723,8 @@ before the result is retained, so a list or object literal does not hide a lost
 JSONB subtype.
 PostgreSQL does not provide local `MaxSteps` or `MaxGeneratedValues` enforcement
 or a guarantee about physical callback evaluation order. JSONB metadata and
-these dynamic folds do not add support for bytes, timestamps, or durations.
+these dynamic folds do not infer Duration inside `Any`; schema-known Duration
+values use the JSON/JSONB representation described above.
 
 ```hff
 profile.scores:foldl(0,(acc,score)=>acc-score)=-170
@@ -585,10 +735,14 @@ These are HFF result-order guarantees. SQL does not promise physical callback
 evaluation order or local `MaxSteps`/`MaxGeneratedValues` enforcement; unsupported
 explicit execution-budget requirements are rejected by `Build`.
 
+For schema-known JSON/JSONB values, `json()` and `string()` also support
+Duration: `string()` returns the canonical duration text, while `json()` returns
+it as a JSON string. A string under `Any` remains a String; this conversion
+depends on the declared schema.
 For schema-known scalar columns and JSON/JSONB values, `json()` and
 `string()` support null, bool, int64, string, and finite float64 values. Native
-Duration scalar columns also support these methods, producing the canonical
-duration string; JSON/JSONB Duration values remain unsupported.
+Duration scalar columns and schema-known JSON/JSONB Duration values also
+support these methods, producing canonical duration strings.
 Recovered JSON-native `Any` and union values are also supported, including
 recursive lists, maps, and structs whose numeric kinds can be determined from
 the schema, native JSON spelling, or JSONB metadata. `json()` emits compact
@@ -979,11 +1133,19 @@ a source-located `hff.BackendError` from `Build`:
   are unsupported, and `String|Bytes` cannot be recovered from JSON strings.
   Schema-known Bytes values in JSON arrays, objects, and callback-produced
   collections are supported; `frombase64()` can also produce a scalar Bytes
-  value. Timestamp conversions remain unsupported. Native scalar Duration
-  columns are supported, but JSON/JSONB Duration values remain unsupported.
-  Float64 serialization when JSONB has lost required numeric representation
-  and operations requiring a runtime
-  type not fixed by schema or metadata remain unsupported.
+  value.
+- Timestamp conversions from JSON/JSONB values and JSON/JSONB Timestamp storage
+  remain unsupported; native Timestamp columns use the separate `BindTimestamp`
+  binding.
+- Native Duration columns use `bigint` nanoseconds. Schema-known JSON/JSONB
+  Duration values use canonical duration strings; `Any` strings remain Strings.
+  The `Duration|Int|Null`, `Duration|Bool|Null`, and `Duration|Int|Bool|Null`
+  subsets support the operations listed above. Broader dynamic dispatch across
+  tagged unions remains unsupported when the active type cannot be recovered
+  or the requested operation cannot be lowered.
+- JSONB float64 serialization is unsupported when storage has lost numeric
+  representation needed to produce the result. More generally, operations
+  requiring a runtime type not fixed by schema or metadata remain unsupported.
 
 Unsupported behavior is rejected rather than delegated to local evaluation.
 The [method reference](../../reference/methods.md) lists built-in signatures;

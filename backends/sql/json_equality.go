@@ -13,8 +13,21 @@ func structuredKind(k hff.TypeKind) bool {
 // Query collections use JSON, retaining their children as typed SQL arguments.
 // No text from the query is inserted into the SQL source.
 func (b *builder) jsonLiteral(n hff.Node) (expression, error) {
-	if err := b.checkJSONBytesSchema(n, b.jsonStoredType(n)); err != nil {
+	if err := b.checkJSONStringSchemas(n, b.jsonStoredType(n)); err != nil {
 		return expression{}, err
+	}
+	if n.Kind() == hff.ListNode {
+		// Check before NewUnionType canonicalizes the element schema. In
+		// particular Any otherwise erases an explicit Bytes/Duration member.
+		for i := 0; i < n.ChildCount(); i++ {
+			left, _ := n.Child(i)
+			for j := i + 1; j < n.ChildCount(); j++ {
+				right, _ := n.Child(j)
+				if jsonTaggedStringStateAmbiguous(b.jsonStoredType(left), b.jsonStoredType(right)) {
+					return expression{}, b.failure(n, "JSON list cannot distinguish String, Bytes, and Duration elements")
+				}
+			}
+		}
 	}
 	var values []expression
 	var args []string
@@ -32,8 +45,8 @@ func (b *builder) jsonLiteral(n hff.Node) (expression, error) {
 			}
 			args = append(args, key.code)
 		}
-		if v.kind == hff.DurationType || v.kind == hff.TimestampType {
-			return expression{}, b.failure(child, "PostgreSQL JSON collections do not yet preserve duration or timestamp values")
+		if v.kind == hff.TimestampType {
+			return expression{}, b.failure(child, "PostgreSQL JSON collections do not yet preserve timestamp values")
 		}
 		values = append(values, v)
 		code := v.code
@@ -41,6 +54,8 @@ func (b *builder) jsonLiteral(n hff.Node) (expression, error) {
 			code = "NULL::text"
 		} else if v.kind == hff.BytesType {
 			code = postgresBase64(code)
+		} else if v.kind == hff.DurationType {
+			code = b.durationTextInline(code)
 		} else if v.kind == hff.FloatType {
 			code = b.floatText(code) + "::json"
 		} else if format, ok := b.jsonValues[code]; ok {
@@ -95,7 +110,7 @@ func jsonCategory(k hff.TypeKind) string {
 		return "number"
 	case hff.BoolType:
 		return "boolean"
-	case hff.StringType, hff.BytesType:
+	case hff.StringType, hff.BytesType, hff.DurationType:
 		return "string"
 	case hff.ListType:
 		return "array"
@@ -109,6 +124,12 @@ func jsonCategory(k hff.TypeKind) string {
 // element/key scope that supplies the raw JSON expressions.
 func (b *builder) jsonEqual(n hff.Node, left string, lf JSONFormat, lt hff.Type, right string, rf JSONFormat, rt hff.Type) (code string, err error) {
 	if err = checkContext(b.ctx); err != nil {
+		return "", err
+	}
+	if err = b.checkJSONStringSchemas(n, lt); err != nil {
+		return "", err
+	}
+	if err = b.checkJSONStringSchemas(n, rt); err != nil {
 		return "", err
 	}
 	outer := b.steps
@@ -131,8 +152,8 @@ func (b *builder) jsonEqualValue(n hff.Node, left string, lf JSONFormat, lt hff.
 		return code, err
 	}
 	if (needsDynamicJSONEquality(lt) || needsDynamicJSONEquality(rt)) && !definiteJSONContainerPair(lt, rt) {
-		if jsonHasBytes(lt) || jsonHasBytes(rt) {
-			return "", b.failure(n, "dynamic JSON comparison cannot preserve Bytes type identity")
+		if jsonHasTaggedString(lt) || jsonHasTaggedString(rt) {
+			return "", b.failure(n, "dynamic JSON comparison cannot preserve Bytes or Duration type identity")
 		}
 		l, err := b.comparisonDocumentAgainst(n, left, lf, lt, rt)
 		if err != nil {
@@ -162,7 +183,7 @@ func (b *builder) jsonEqualValue(n hff.Node, left string, lf JSONFormat, lt hff.
 			if jsonCategory(a.Kind()) != jsonCategory(c.Kind()) {
 				continue
 			}
-			if a.Kind() != c.Kind() && (a.Kind() == hff.BytesType || c.Kind() == hff.BytesType) {
+			if a.Kind() != c.Kind() && (jsonTaggedStringKind(a.Kind()) || jsonTaggedStringKind(c.Kind())) {
 				continue
 			}
 			value, err := b.jsonEqualTyped(n, left, lf, a, right, rf, c)
@@ -271,6 +292,12 @@ func (b *builder) jsonEqualTyped(n hff.Node, left string, lf JSONFormat, lt hff.
 	// CASE protects casts for each runtime member of a heterogeneous list.
 	ltext := "(CASE WHEN " + string(lf) + "_typeof(" + left + ")='" + jsonCategory(lt.Kind()) + "' THEN " + left + " #>> '{}'::text[] END)"
 	rtext := "(CASE WHEN " + string(rf) + "_typeof(" + right + ")='" + jsonCategory(rt.Kind()) + "' THEN " + right + " #>> '{}'::text[] END)"
+	// Duration strings in stored JSON are canonical by the binding contract.
+	// Equal spellings therefore represent equal nanosecond values; no parser
+	// needs to run inside a nested array/object comparison.
+	if lt.Kind() == hff.DurationType && rt.Kind() == hff.DurationType {
+		return "COALESCE((" + ltext + " COLLATE \"C\"=" + rtext + " COLLATE \"C\"),FALSE)", nil
+	}
 	l := expression{jsonScalarCast(ltext, lt.Kind()), "TRUE", lt.Kind()}
 	r := expression{jsonScalarCast(rtext, rt.Kind()), "TRUE", rt.Kind()}
 	if lt.Kind() != rt.Kind() {
@@ -336,21 +363,25 @@ func (b *builder) jsonObjectEqual(n hff.Node, left string, lf JSONFormat, lt hff
 	return "(NOT EXISTS(SELECT 1 FROM " + from + " WHERE " + la + ".key IS NULL OR " + ra + ".key IS NULL OR NOT " + equal + "))", nil
 }
 
-func jsonHasBytes(typ hff.Type) bool {
+func jsonTaggedStringKind(kind hff.TypeKind) bool {
+	return kind == hff.BytesType || kind == hff.DurationType
+}
+
+func jsonHasTaggedKind(typ hff.Type, kind hff.TypeKind) bool {
 	switch typ.Kind() {
-	case hff.BytesType:
+	case kind:
 		return true
 	case hff.ListType, hff.MapType:
-		return jsonHasBytes(typ.Element())
+		return jsonHasTaggedKind(typ.Element(), kind)
 	case hff.StructType:
 		for _, field := range typ.Fields() {
-			if jsonHasBytes(field.Type) {
+			if jsonHasTaggedKind(field.Type, kind) {
 				return true
 			}
 		}
 	case hff.UnionType:
 		for _, member := range typ.Members() {
-			if jsonHasBytes(member) {
+			if jsonHasTaggedKind(member, kind) {
 				return true
 			}
 		}
@@ -358,27 +389,32 @@ func jsonHasBytes(typ hff.Type) bool {
 	return false
 }
 
-// A string spelling alone cannot distinguish Bytes from String or Any. Check
-// constructed/consumed values; unrelated fields need not be materialized.
-func (b *builder) checkJSONBytesSchema(n hff.Node, typ hff.Type) error {
+func jsonHasTaggedString(typ hff.Type) bool {
+	return jsonHasTaggedKind(typ, hff.BytesType) || jsonHasTaggedKind(typ, hff.DurationType)
+}
+
+// A string spelling alone cannot distinguish Bytes or Duration from String,
+// each other, or Any at the same structural position. Check consumed values;
+// unrelated fields need not be materialized.
+func (b *builder) checkJSONStringSchemas(n hff.Node, typ hff.Type) error {
 	switch typ.Kind() {
 	case hff.UnionType:
-		bytes, strings := false, false
-		for _, member := range typ.Members() {
-			bytes = bytes || member.Kind() == hff.BytesType
-			strings = strings || member.Kind() == hff.StringType || member.Kind() == hff.AnyType
-			if err := b.checkJSONBytesSchema(n, member); err != nil {
+		members := typ.Members()
+		for i, member := range members {
+			for _, other := range members[i+1:] {
+				if jsonTaggedStringStateAmbiguous(member, other) {
+					return b.failure(n, "JSON cannot distinguish String, Bytes, and Duration at one structural position")
+				}
+			}
+			if err := b.checkJSONStringSchemas(n, member); err != nil {
 				return err
 			}
 		}
-		if bytes && strings {
-			return b.failure(n, "JSON cannot distinguish Bytes from String or Any")
-		}
 	case hff.ListType, hff.MapType:
-		return b.checkJSONBytesSchema(n, typ.Element())
+		return b.checkJSONStringSchemas(n, typ.Element())
 	case hff.StructType:
 		for _, field := range typ.Fields() {
-			if err := b.checkJSONBytesSchema(n, field.Type); err != nil {
+			if err := b.checkJSONStringSchemas(n, field.Type); err != nil {
 				return err
 			}
 		}

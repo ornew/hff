@@ -168,6 +168,18 @@ The PostgreSQL backend can bind a schema-known Duration scalar to a `bigint`
 of signed nanoseconds; JSON/JSONB and composite Duration storage are not
 supported. See the [temporal guide](../guides/temporal.md#store-native-postgresql-durations).
 
+The PostgreSQL backend can also decode schema-known Duration values stored as
+canonical strings in JSON or JSONB with `BindJSON`. A JSON string under `Any`
+remains a String, and ambiguous same-position `String|Duration` unions cannot
+be recovered. Alongside schema-known Duration and nullable Duration shapes,
+the binding supports a limited operation subset for the schema-known unions
+`Duration|Int|Null`, `Duration|Bool|Null`, and `Duration|Int|Bool|Null`. Other
+union shapes or operations may be rejected when the active type cannot be
+recovered or the requested operation cannot be lowered. These JSON
+representations are separate from the native scalar Duration binding and do
+not add Duration tags to JSONB numeric metadata. See the
+[PostgreSQL JSON guide](../backends/postgresql/json.md#duration-values-in-json-documents).
+
 ## Related references
 
 - [Normative method semantics](../../spec/methods.md)

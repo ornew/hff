@@ -79,7 +79,7 @@ Choose a physical binding from the way the application stores each HFF value:
 | --- | --- | --- |
 | Scalar SQL column | `Bind(path, Column(...))` | One HFF scalar field to one column. SQL `NULL` is an explicit HFF null. Duration columns use signed `bigint` nanoseconds. |
 | Timestamp columns | `BindTimestamp(path, instantColumn, options...)` | One schema-known Timestamp to `timestamptz`, optionally paired with a `smallint` nanosecond remainder. |
-| JSON/JSONB column | `BindJSON(path, column, JSON/JSONB)` | One complete schema-known HFF JSON value, including objects, maps, lists, and Bytes represented as base64 strings. Descendant paths are read inside that document. JSONB may add `WithTypeMetadata(metadataColumn)` for numeric types lost by normalization. |
+| JSON/JSONB column | `BindJSON(path, column, JSON/JSONB)` | One complete schema-known HFF JSON value, including objects, maps, lists, Bytes as base64 strings, and Duration as canonical duration strings. Descendant paths are read inside that document. JSONB may add `WithTypeMetadata(metadataColumn)` for numeric types lost by normalization. |
 | Native composite column | `BindComposite(path, column)` | One HFF struct to a PostgreSQL composite. A SQL-null row is null; its attributes are always present. |
 | Struct spread across columns | `BindStruct(path, present, null, fields...)` | One HFF object with caller-supplied parent state and per-field bindings. |
 | Related rows | `BindRelation(path, relation)` | An HFF list whose items come from one caller-selected correlated row source. |
@@ -170,8 +170,10 @@ Duration leaf supports field access; materializing its parent object remains
 unsupported.
 The generic `json()` and `string()` methods support the scalar and collection
 profile described in the JSON guide, including finite float values from scalar
-columns and native JSON, plus Duration values from native scalar columns as
-canonical duration strings. JSONB float serialization requires the
+columns and native JSON, native scalar Duration columns as canonical duration
+strings, and schema-known JSON/JSONB Duration values as canonical duration
+strings. A string under `Any` remains a String. JSONB float serialization
+requires the
 numeric metadata described in that guide. String and recoverable dynamic JSON
 values support `bool()` and `number()`; `number()` requires PostgreSQL 16 or
 later. They also support `fromjson()` on PostgreSQL 16 and later; see the JSON
@@ -305,11 +307,13 @@ list-union values; see the JSON guide for its conditions.
 Folds are supported for known accumulator types; see the JSON guide for their
 type and null rules. Schema-known Bytes values can be materialized inside
 JSON/JSONB collections as base64 strings; ambiguous dynamic Bytes remain
-unsupported. `duration()` parses strings into computed durations; native
-Duration bindings use `bigint` nanoseconds. JSON/JSONB and native composite
-Duration materialization remain unavailable.
-Timestamp conversions, float64 serialization when JSONB has lost required numeric
-representation, and other unsupported types remain unsupported.
+unsupported. `duration()` parses strings into computed durations. Native
+Duration columns use `bigint` nanoseconds, and schema-known JSON/JSONB Duration
+values use canonical duration strings. The backend does not infer Duration
+inside `Any` or use JSONB metadata to restore Duration. Native composite
+Duration storage remains unavailable. JSON/JSONB Timestamp conversions and
+storage remain unsupported. Float64 serialization when JSONB has lost required
+numeric representation and other unsupported types remain unsupported.
 Unsupported operations do not fall back to local evaluation.
 PostgreSQL is the only currently supported SQL dialect.
 
@@ -408,8 +412,10 @@ parser version used to validate and translate literal patterns. The actual
 PostgreSQL regex engine and version remain unknown. Its `bytes` detail reports
 native `bytea`, computed Bytes, and schema-known JSON/JSONB Bytes support, while
 dynamic ambiguous Bytes remain unavailable. The `duration` detail reports
-computed parsing, unit operations, and native `bigint` nanosecond bindings;
-JSON/JSONB and native composite Duration storage remain unavailable.
+computed parsing, unit operations, native `bigint` nanosecond bindings, and
+schema-known JSON/JSONB support through canonical duration strings. It does not
+infer Duration inside `Any` or use JSONB metadata to restore Duration; native
+composite Duration storage remains unavailable.
 
 ```go
 profile, err := hffsql.Profile(hffsql.PostgreSQL)

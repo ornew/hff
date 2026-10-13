@@ -179,6 +179,9 @@ func (b *builder) serializeJSON(n hff.Node, raw string, format JSONFormat, typ h
 	if err := b.ctx.Err(); err != nil {
 		return "", err
 	}
+	if err := b.checkJSONStringSchemas(n, typ); err != nil {
+		return "", err
+	}
 	members, err := b.jsonEqualityMembers(n, typ)
 	if err != nil {
 		return "", b.failure(n, "JSON serialization requires recoverable schema types: "+err.Error())
@@ -195,6 +198,10 @@ func (b *builder) serializeJSON(n hff.Node, raw string, format JSONFormat, typ h
 			code = "((" + raw + " #>> '{}')::boolean)::text"
 		case hff.BytesType:
 			code = "COALESCE(to_json(" + postgresBase64(jsonScalarCast("("+raw+" #>> '{}')", hff.BytesType)) + ")::text,'null')"
+		case hff.DurationType:
+			// BindJSON requires canonical duration strings. Computed
+			// durations enter collections through durationTextInline.
+			code = "to_json(" + raw + " #>> '{}'::text[])::text"
 		case hff.StringType:
 			code = "to_json(" + raw + " #>> '{}')::text"
 		case hff.ListType:
