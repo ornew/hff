@@ -236,8 +236,9 @@ func (b *builder) dynamicJSONPair(n hff.Node, left, right expression, op hff.Ope
 	return expression{"(" + code + " ELSE NULL::boolean END)", "TRUE", hff.BoolType}, nil
 }
 
-// Tagged temporal values occupy the JSON string category, separately from
-// numeric and Boolean values. Native JSON spelling distinguishes Int and Float.
+// Tagged Bytes and temporal values occupy the JSON string category, separately
+// from numeric and Boolean values. Native JSON spelling distinguishes Int and
+// Float.
 func (b *builder) dynamicJSONTaggedScalarPair(n hff.Node, left expression, lf JSONFormat, right expression, rf JSONFormat, op hff.Operator, leftType, rightType hff.Type) (expression, error) {
 	lc := string(lf) + "_typeof(" + left.code + ")"
 	rc := string(rf) + "_typeof(" + right.code + ")"
@@ -248,12 +249,18 @@ func (b *builder) dynamicJSONTaggedScalarPair(n hff.Node, left expression, lf JS
 	if jsonRootHasKind(leftType, hff.TimestampType) || jsonRootHasKind(rightType, hff.TimestampType) {
 		stringKind = hff.TimestampType
 		parse = jsonTimestampNanoseconds
+	} else if jsonRootHasKind(leftType, hff.BytesType) || jsonRootHasKind(rightType, hff.BytesType) {
+		stringKind = hff.BytesType
+		parse = postgresDecodeBase64
 	}
-	stringValue := b.scalarComparison(
-		expression{parse(lt), "TRUE", stringKind},
-		expression{parse(rt), "TRUE", stringKind}, op)
+	stringValue := "NULL::boolean"
+	if stringKind != hff.BytesType || op == hff.Equal || op == hff.NotEqual {
+		stringValue = b.scalarComparison(
+			expression{parse(lt), "TRUE", stringKind},
+			expression{parse(rt), "TRUE", stringKind}, op).code
+	}
 	code := "(CASE WHEN NOT (" + both(left.present, right.present) + ") OR " + left.code + " IS NULL OR " + right.code + " IS NULL" +
-		" THEN FALSE WHEN " + both(lc+"='string'", rc+"='string'") + " THEN " + stringValue.code
+		" THEN FALSE WHEN " + both(lc+"='string'", rc+"='string'") + " THEN " + stringValue
 	leftInt, leftFloat := jsonNumericCandidates(leftType)
 	rightInt, rightFloat := jsonNumericCandidates(rightType)
 	if (leftInt || leftFloat) && (rightInt || rightFloat) {
@@ -291,7 +298,7 @@ func (b *builder) dynamicJSONTaggedScalarPair(n hff.Node, left expression, lf JS
 	return expression{code, "TRUE", hff.BoolType}, nil
 }
 
-// A temporal union may be compared with another compatible temporal union or
+// A tagged scalar union may be compared with another compatible union or
 // with a single scalar. JSONB numeric ambiguity is accepted only after type
 // metadata has restored native JSON spelling.
 func jsonTaggedScalarComparable(left hff.Type, lf JSONFormat, right hff.Type, rf JSONFormat) bool {
@@ -310,7 +317,7 @@ func jsonTaggedScalarFamily(typ hff.Type, format JSONFormat) (hff.TypeKind, bool
 	integer, floating := false, false
 	for _, member := range members {
 		switch member.Kind() {
-		case hff.TimestampType, hff.DurationType:
+		case hff.BytesType, hff.TimestampType, hff.DurationType:
 			if tagged != 0 && tagged != member.Kind() {
 				return 0, false
 			}

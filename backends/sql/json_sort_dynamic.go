@@ -51,11 +51,14 @@ func (b *builder) jsonSort(n hff.Node, value expression) (expression, error) {
 		return expression{}, b.failure(n, "sort requires an applicable list schema")
 	}
 	temporal := hff.InvalidType
+	bytes := false
 	if jsonHasTaggedString(stored.Element()) {
 		if !jsonRecoverableTaggedScalarUnion(stored.Element(), format) {
 			return expression{}, b.failure(n, "dynamic JSON sort cannot recover Bytes, Duration, or Timestamp type identity")
 		}
-		if jsonRootHasKind(stored.Element(), hff.TimestampType) {
+		if jsonRootHasKind(stored.Element(), hff.BytesType) {
+			bytes = true
+		} else if jsonRootHasKind(stored.Element(), hff.TimestampType) {
 			temporal = hff.TimestampType
 		} else {
 			temporal = hff.DurationType
@@ -100,6 +103,9 @@ func (b *builder) jsonSort(n hff.Node, value expression) (expression, error) {
 	}
 	from := "json_array_elements(" + raw + ") WITH ORDINALITY AS " + alias + "(value,ord)"
 	invalid := "EXISTS(SELECT 1 FROM " + from + " WHERE " + category + " NOT IN ('number','string'))"
+	if bytes {
+		invalid = "EXISTS(SELECT 1 FROM " + from + " WHERE " + category + "!='number')"
+	}
 	mixed := "(SELECT count(DISTINCT " + category + ")>1 FROM " + from + ")"
 	// Int/Float and signed-zero ties keep their normalized original spelling,
 	// so stable ordering is observable even though their numeric keys coincide.

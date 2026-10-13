@@ -303,6 +303,15 @@ func (b *builder) jsonCall(n hff.Node, name string, values []expression, format 
 	}
 	r := values[0]
 	present := ordinaryPresence(values)
+	if r.kind == hff.AnyType && name == "len" {
+		receiver, _ := n.Child(0)
+		if jsonRootHasKind(b.jsonStoredType(receiver), hff.BytesType) {
+			class := string(format) + "_typeof(" + r.code + ")"
+			text := "(" + r.code + " #>> '{}'::text[])"
+			code := "(CASE WHEN " + class + "='string' THEN octet_length(" + postgresDecodeBase64(text) + ")::bigint ELSE NULL::bigint END)"
+			return expression{code, present, hff.IntType}, nil
+		}
+	}
 	if r.kind == hff.AnyType && (name == "lower" || name == "upper" || name == "len" || name == "startswith" || name == "endswith") {
 		return b.dynamicJSONStringCall(n, name, values)
 	}

@@ -533,11 +533,45 @@ at `Build` time. This does not make Bytes values inside an `Any` representation
 supported; `Any` remains JSON-native. Mixing Bytes positions with `Any` or
 String positions in the same `items()` result is also unsupported.
 
-Bytes decoders cannot currently resolve multi-non-null unions containing
-Bytes, including a category-disjoint union such as `Bytes|Bool`. The
-`String|Bytes` union is also ambiguous because both alternatives use JSON
-strings; structural union/type-guard merging does not make that representation
-recoverable.
+The schema-known `Bytes|Int|Float|Null` and
+`Bytes|Bool|Int|Float|Null` unions are supported for native JSON and for JSONB
+with numeric type metadata when Int/Float identity is needed. The
+category-disjoint `Bytes|Bool` and `Bytes|Bool|Null` unions need no numeric
+metadata. JSON strings select Bytes, booleans select Bool when present, and
+numbers select the numeric alternatives. Supported operations include
+`type()`, explicit type guards, equality and inequality, numeric ordering on the
+active numeric branch, `in()`, list
+`contains()`/`unique()`, serialization, and `map()` to `type()`. `len()` on an
+active Bytes value counts its decoded bytes. `sort()` orders numeric-only lists
+with stable Int/Float ties; a Bytes, Bool, null, or other nonnumeric element
+makes the result ordinary null. Bytes themselves are not orderable. For example,
+if `value` and `items` have this union schema:
+
+```hff
+value:type="bytes"
+value:[bytes]:exists
+value:len=4
+value="AAECAw==":frombase64
+value:[float]:exists value>1.5
+value!=7
+value:in("AAECAw==":frombase64,7)
+items:contains("AA==":frombase64)
+items:unique
+items:map(x=>x:type):contains("bytes")
+items:sort:json="[1,7.0]"
+value:string="AAECAw=="
+value:json="\"AAECAw==\""
+```
+
+Native JSON preserves the Int/Float spelling. Raw JSONB cannot distinguish
+those numeric alternatives and is rejected at Build when an operation needs
+that distinction; bind the version-1 numeric sidecar in those cases. These
+supported shapes do not imply support for every union containing Bytes. The
+listed Bool combinations are recoverable because JSON strings, booleans, and
+numbers have distinct categories; operation support remains specific to each
+lowering. `String|Bytes` is ambiguous because both alternatives use JSON
+strings. Structural type-guard merging does not recover an identity that the
+stored representation cannot distinguish.
 
 For example, `payloads` can be a JSONB array of Bytes strings:
 
@@ -1411,9 +1445,12 @@ a source-located `hff.BackendError` from `Build`:
 - Dynamic folds whose seed or callback-result representations cannot be
   determined from the schema and available JSONB metadata.
 - Dynamic `Any` versus Bytes comparisons and generic dynamic tree comparisons
-  involving Bytes; dynamic JSON representations remain JSON-native. Bytes
-  decoders for multi-non-null unions containing Bytes, including `Bytes|Bool`,
-  are unsupported, and `String|Bytes` cannot be recovered from JSON strings.
+  involving Bytes; dynamic JSON representations remain JSON-native. Other
+  multi-non-null unions containing Bytes remain unsupported where their
+  representations overlap or the operation cannot be lowered. `String|Bytes`
+  cannot be recovered from JSON strings. The schema-known
+  `Bytes|Int|Float|Null`, `Bytes|Bool`, `Bytes|Bool|Null`, and
+  `Bytes|Bool|Int|Float|Null` subsets are described in the Bytes section.
   Schema-known Bytes values in JSON arrays, objects, and callback-produced
   collections are supported; `frombase64()` can also produce a scalar Bytes
   value.

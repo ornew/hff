@@ -71,6 +71,18 @@ ambiguous. See the
 [PostgreSQL bytea guide](../backends/postgresql/README.md#bytes-and-base64) and
 [JSON Bytes guide](../backends/postgresql/json.md#bytes-in-json-documents).
 
+The PostgreSQL JSON backend also supports the schema-known
+`Bytes|Int|Float|Null` and `Bytes|Bool|Int|Float|Null` subsets in native JSON
+and JSONB with numeric metadata when Int/Float identity is needed. The
+category-disjoint `Bytes|Bool` and `Bytes|Bool|Null` subsets need no numeric
+metadata. This allows Bytes guards, decoded-byte `len()`, membership,
+serialization, and numeric operations on numeric values. Lists containing only
+numbers can be sorted with stable Int/Float ties; a list containing Bytes or
+another nonnumeric value yields ordinary null. The listed Bool variants are
+also recoverable by JSON category. Bytes itself cannot be ordered. See the
+[JSON union guide](../backends/postgresql/json.md#bytes-in-json-documents) and
+[runnable union example](https://github.com/ornew/hff/tree/main/examples/sql-json-unions).
+
 Assuming `encoded` is a string field, these predicates check the decoded byte
 length and a decode/encode round trip:
 

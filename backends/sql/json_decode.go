@@ -57,7 +57,8 @@ func jsonRootHasKind(typ hff.Type, kind hff.TypeKind) bool {
 	return false
 }
 
-// One temporal scalar, numeric values, and Bool occupy disjoint JSON categories.
+// One tagged string scalar, numeric values, and Bool occupy disjoint JSON
+// categories.
 // Int|Float within the numeric category additionally needs preserved spelling
 // or metadata that restores that spelling before decoding.
 func jsonRecoverableTaggedScalarUnion(typ hff.Type, format JSONFormat) bool {
@@ -67,7 +68,7 @@ func jsonRecoverableTaggedScalarUnion(typ hff.Type, format JSONFormat) bool {
 	tagged, other, integer, floating := false, false, false, false
 	for _, member := range typ.Members() {
 		switch member.Kind() {
-		case hff.DurationType, hff.TimestampType:
+		case hff.BytesType, hff.DurationType, hff.TimestampType:
 			if tagged {
 				return false
 			}

@@ -54,6 +54,23 @@ func (b *builder) dynamicJSONComparison(n hff.Node, left, right expression, op h
 		comparison := compare(value)
 		code := "(CASE WHEN " + nullOrAbsent + " THEN FALSE WHEN " + matches + " THEN " + comparison.code + " ELSE NULL::boolean END)"
 		return expression{code, "TRUE", hff.BoolType}, nil
+	case hff.BytesType:
+		if op != hff.Equal && op != hff.NotEqual {
+			return expression{}, b.failure(n, "bytes values do not support order comparisons")
+		}
+		child := 0
+		if reversed {
+			child = 1
+		}
+		dynamicNode, _ := n.Child(child)
+		if !jsonRootHasKind(b.jsonStoredType(dynamicNode), hff.BytesType) {
+			return expression{}, b.failure(n, "dynamic JSON comparison cannot recover Bytes identity")
+		}
+		matches := "(" + class + "='string')"
+		value := expression{"(CASE WHEN " + matches + " THEN " + postgresDecodeBase64(text) + " ELSE NULL::bytea END)", "TRUE", hff.BytesType}
+		comparison := compare(value)
+		code := "(CASE WHEN " + nullOrAbsent + " THEN FALSE WHEN " + matches + " THEN " + comparison.code + " ELSE NULL::boolean END)"
+		return expression{code, "TRUE", hff.BoolType}, nil
 	case hff.DurationType:
 		child := 0
 		if reversed {

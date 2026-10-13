@@ -98,6 +98,24 @@ This does not make every collection or serialization operation available. Raw
 JSONB mixed-numeric unions do not have a metadata-free lowering for operations
 that require the numeric subtype.
 
+The schema-known `Bytes|Int|Float|Null` and
+`Bytes|Bool|Int|Float|Null` unions are supported for native JSON and JSONB
+with numeric metadata where Int/Float identity is needed. The
+category-disjoint `Bytes|Bool` and `Bytes|Bool|Null` shapes need no numeric
+metadata. JSON strings select Bytes, booleans select
+Bool when present, and numbers select a numeric alternative. Supported uses include
+type inspection and guards, equality, numeric comparisons on numeric values,
+membership, list `contains()`/`unique()`, serialization, and `map()` to
+`type()`. A Bytes value's `len()` counts decoded bytes. These Bool combinations
+are recoverable because JSON strings, booleans, and numbers have distinct JSON
+categories; operation availability remains specific to each lowering.
+`String|Bytes` remains ambiguous because both use JSON strings.
+
+For a `Bytes|Int|Float|Null` list, `sort()` can order a list whose elements are
+all numeric, preserving stable Int/Float ties and original representations. If
+any element is Bytes, Bool, null, or another nonnumeric value, the result is
+ordinary null. Bytes itself is not orderable.
+
 For schema-known list element unions containing one temporal alternative and
 numeric alternatives, `sort()` dispatches from each stored element's JSON
 category. A list containing only temporal strings sorts by exact Timestamp or
