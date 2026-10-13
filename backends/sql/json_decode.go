@@ -6,7 +6,7 @@ import "github.com/ornew/hff"
 // Keeping the projection outside this helper permits reuse of validated parses.
 func (b *builder) jsonDecodeProjected(n hff.Node, code string, format JSONFormat, typ hff.Type, present string) (expression, error) {
 	kind, ok := jsonKind(typ)
-	if !ok && jsonRootHasTaggedString(typ) && !jsonRecoverableTaggedScalarUnion(typ) {
+	if !ok && jsonRootHasTaggedString(typ) && !jsonRecoverableTaggedScalarUnion(typ, format) {
 		return expression{}, b.failure(n, "JSON decoding cannot preserve dynamic Bytes, Duration, or Timestamp type identity")
 	}
 	if !ok {
@@ -57,10 +57,10 @@ func jsonRootHasKind(typ hff.Type, kind hff.TypeKind) bool {
 	return false
 }
 
-// One string-backed scalar, one numeric subtype, and Bool occupy disjoint JSON
-// categories. A finite union of these types retains its runtime family without
-// a type tag. Int|Float still needs preserved spelling or numeric metadata.
-func jsonRecoverableTaggedScalarUnion(typ hff.Type) bool {
+// One temporal scalar, numeric values, and Bool occupy disjoint JSON categories.
+// Int|Float within the numeric category additionally needs preserved spelling
+// or metadata that restores that spelling before decoding.
+func jsonRecoverableTaggedScalarUnion(typ hff.Type, format JSONFormat) bool {
 	if typ.Kind() != hff.UnionType {
 		return false
 	}
@@ -83,5 +83,5 @@ func jsonRecoverableTaggedScalarUnion(typ hff.Type) bool {
 			return false
 		}
 	}
-	return tagged && other && !(integer && floating)
+	return tagged && other && (!(integer && floating) || format == JSON)
 }

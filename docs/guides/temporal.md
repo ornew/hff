@@ -300,16 +300,27 @@ value:in("2026-01-01T00:00:00.000000123Z":timestamp,1.5)
 events:contains(1.5)
 ```
 
-The supported `Timestamp|Int|Null` subset also permits `string()` and `json()`
-when the active value is recoverable. `type()` reports `"number"` for both Int
-and Float, so use `[float]` for a Float-specific guard. JSONB `string()`/`json()`
-of a union that may contain Float remain rejected because storage may have lost
-signed-zero provenance; this union lowering has no lossless recovery path.
-`Timestamp|Int|Float` is rejected because JSON numbers do not distinguish the
-two numeric alternatives. Other collection transformations may still fail to
-build when they require an unsupported materialized value. Time-zone
-arguments, data-dependent Timestamp parsing, and ambiguous string-backed
-unions such as `String|Timestamp` are rejected by `Build`.
+The schema-known `Timestamp|Int|Float|Null` union is supported when the active
+numeric type can be recovered. Native JSON preserves the Int-versus-Float
+spelling; JSONB requires `WithTypeMetadata` for operations that observe that
+distinction. A version-1 sidecar can preserve Float text such as `-0.0` when
+`string()` or `json()` must reproduce it. Without metadata, Build rejects
+operations on a mixed-union value bound to raw JSONB when they need to
+distinguish Int from Float. A separate Float-only JSONB value can still be
+compared with a mixed-union value in native JSON because the Float schema fixes
+its type. For example, use
+`value:in("2026-01-01T00:00:00.000000123Z":timestamp,1.5)` for a scalar union
+and `events:contains(1.5)` or `events:unique` for a separately
+bound list of the same union type. The [JSON binding guide](../backends/postgresql/json.md#timestamp-values-in-json-documents)
+shows the sidecar shape and binding; the runnable JSON union example builds
+scalar and list predicates for Timestamp and Duration unions.
+
+The same support applies to `Duration|Int|Float|Null`. For either union, JSONB
+`string()`/`json()` output involving Float requires sidecar text when needed to
+preserve signed zero. Other collection transformations may still fail to build
+when they require an unsupported materialized value. Time-zone arguments,
+data-dependent Timestamp parsing, and ambiguous string-backed unions such as
+`String|Timestamp` are rejected by `Build`.
 The [PostgreSQL JSON guide](../backends/postgresql/json.md#timestamp-values-in-json-documents)
 describes the full binding contract and operation limits.
 
@@ -490,17 +501,17 @@ the HFF type: an `Any` value containing the same text remains a String. The
 shows the table, schema, binding, and query. This does not add Duration tags to
 the JSONB numeric metadata format.
 
-The same guide documents a limited `Duration|Float|Null` JSON union. JSON
-strings identify Duration, numbers identify Float, and null remains null in
-both JSON and JSONB without numeric type metadata. Use `[float]` rather than
-`type="float"` to distinguish Float: HFF `type()` reports both Int and Float
-as `number`. Native JSON preserves signed zero for `string()` and `json()`
-serialization. Build rejects those serialization operations for JSONB when
-signed-zero provenance may have been erased.
+The same guide documents schema-known Duration unions, including
+`Duration|Int|Float|Null`. Native JSON spelling distinguishes numeric types;
+JSONB uses `WithTypeMetadata` for mixed Int/Float unions. Use `[float]`, not
+`type="float"`, for a Float-specific guard because HFF `type()` reports both
+Int and Float as `number`. The runnable example also binds lists of these
+unions and builds `contains()` and `unique()` predicates.
 
 The [JSON union example](https://github.com/ornew/hff/tree/main/examples/sql-json-unions)
-shows both Timestamp and Duration Float unions with guards and an OR query. It
-builds a parameterized predicate without opening a database connection.
+shows mixed Timestamp and Duration unions with JSONB metadata, including list
+predicates. It builds a parameterized predicate without opening a database
+connection.
 
 ### PostgreSQL computed durations
 

@@ -190,9 +190,10 @@ func (b *builder) dynamicJSONPair(n hff.Node, left, right expression, op hff.Ope
 	leftNode, _ := n.Child(0)
 	rightNode, _ := n.Child(1)
 	leftType, rightType := b.jsonStoredType(leftNode), b.jsonStoredType(rightNode)
-	if jsonRecoverableTaggedScalarUnion(leftType) && jsonRecoverableTaggedScalarUnion(rightType) &&
-		jsonRootHasKind(leftType, hff.TimestampType) == jsonRootHasKind(rightType, hff.TimestampType) {
-		return b.dynamicJSONTaggedScalarPair(n, left, right, op, leftType, rightType)
+	leftFormat, leftJSON := b.jsonValues[left.code]
+	rightFormat, rightJSON := b.jsonValues[right.code]
+	if leftJSON && rightJSON && jsonTaggedScalarComparable(leftType, leftFormat, rightType, rightFormat) {
+		return b.dynamicJSONTaggedScalarPair(n, left, leftFormat, right, rightFormat, op, leftType, rightType)
 	}
 	for i := 0; i < 2; i++ {
 		child, _ := n.Child(i)
@@ -224,7 +225,7 @@ func (b *builder) dynamicJSONPair(n hff.Node, left, right expression, op hff.Ope
 		comparison := b.scalarComparison(expression{jsonScalarCast(ln, kind), "TRUE", kind}, expression{jsonScalarCast(rn, kind), "TRUE", kind}, op)
 		code += " WHEN " + both(lc+"='"+jsonCategory(kind)+"'", rc+"='"+jsonCategory(kind)+"'") + " THEN " + comparison.code
 	}
-	code += " WHEN " + both(lc+"='number'", rc+"='number'") + " THEN " + b.dynamicJSONNumbers(ln, rn, op)
+	code += " WHEN " + both(lc+"='number'", rc+"='number'") + " THEN " + b.dynamicJSONNumbers(ln, rn, op, true, true, true, true)
 	if op == hff.Equal || op == hff.NotEqual {
 		equal := b.dynamicJSONTreeEqual(left.code, right.code)
 		if op == hff.NotEqual {
@@ -235,22 +236,16 @@ func (b *builder) dynamicJSONPair(n hff.Node, left, right expression, op hff.Ope
 	return expression{"(" + code + " ELSE NULL::boolean END)", "TRUE", hff.BoolType}, nil
 }
 
-// Duration or Timestamp, one numeric subtype, and Bool use different JSON
-// categories. A declared union containing only these families can compare two
-// dynamic values without external type metadata.
-func (b *builder) dynamicJSONTaggedScalarPair(n hff.Node, left, right expression, op hff.Operator, leftType, rightType hff.Type) (expression, error) {
-	lf, leftOK := b.jsonValues[left.code]
-	rf, rightOK := b.jsonValues[right.code]
-	if !leftOK || !rightOK {
-		return expression{}, b.failure(n, "dynamic comparison requires recoverable JSON representations")
-	}
+// Tagged temporal values occupy the JSON string category, separately from
+// numeric and Boolean values. Native JSON spelling distinguishes Int and Float.
+func (b *builder) dynamicJSONTaggedScalarPair(n hff.Node, left expression, lf JSONFormat, right expression, rf JSONFormat, op hff.Operator, leftType, rightType hff.Type) (expression, error) {
 	lc := string(lf) + "_typeof(" + left.code + ")"
 	rc := string(rf) + "_typeof(" + right.code + ")"
 	lt := "(" + left.code + " #>> '{}'::text[])"
 	rt := "(" + right.code + " #>> '{}'::text[])"
 	stringKind := hff.DurationType
 	parse := b.parseDurationInline
-	if jsonRootHasKind(leftType, hff.TimestampType) {
+	if jsonRootHasKind(leftType, hff.TimestampType) || jsonRootHasKind(rightType, hff.TimestampType) {
 		stringKind = hff.TimestampType
 		parse = jsonTimestampNanoseconds
 	}
@@ -262,21 +257,29 @@ func (b *builder) dynamicJSONTaggedScalarPair(n hff.Node, left, right expression
 	leftInt, leftFloat := jsonNumericCandidates(leftType)
 	rightInt, rightFloat := jsonNumericCandidates(rightType)
 	if (leftInt || leftFloat) && (rightInt || rightFloat) {
-		leftKind, rightKind := hff.IntType, hff.IntType
-		if leftFloat {
-			leftKind = hff.FloatType
-		}
-		if rightFloat {
-			rightKind = hff.FloatType
-		}
 		// Mixed numeric comparison may add LATERAL projections outside this
 		// CASE. Guard the cast inputs before they can see tagged strings.
 		leftNumber := "(CASE WHEN " + lc + "='number' THEN " + lt + " END)"
 		rightNumber := "(CASE WHEN " + rc + "='number' THEN " + rt + " END)"
-		numeric := b.scalarComparison(
-			expression{jsonScalarCast(leftNumber, leftKind), "TRUE", leftKind},
-			expression{jsonScalarCast(rightNumber, rightKind), "TRUE", rightKind}, op)
-		code += " WHEN " + both(lc+"='number'", rc+"='number'") + " THEN " + numeric.code
+		var numeric string
+		if (leftInt && leftFloat) || (rightInt && rightFloat) {
+			// Classify by spelling only where the schema permits both numeric
+			// subtypes. A schema-known Float can be stored in JSONB without a
+			// decimal marker and must never be cast to bigint.
+			numeric = b.dynamicJSONNumbers(leftNumber, rightNumber, op, leftInt, leftFloat, rightInt, rightFloat)
+		} else {
+			leftKind, rightKind := hff.IntType, hff.IntType
+			if leftFloat {
+				leftKind = hff.FloatType
+			}
+			if rightFloat {
+				rightKind = hff.FloatType
+			}
+			numeric = b.scalarComparison(
+				expression{jsonScalarCast(leftNumber, leftKind), "TRUE", leftKind},
+				expression{jsonScalarCast(rightNumber, rightKind), "TRUE", rightKind}, op).code
+		}
+		code += " WHEN " + both(lc+"='number'", rc+"='number'") + " THEN " + numeric
 	}
 	if op == hff.Equal || op == hff.NotEqual {
 		boolean := b.scalarComparison(
@@ -288,25 +291,76 @@ func (b *builder) dynamicJSONTaggedScalarPair(n hff.Node, left, right expression
 	return expression{code, "TRUE", hff.BoolType}, nil
 }
 
-func (b *builder) dynamicJSONNumbers(left, right string, op hff.Operator) string {
+// A temporal union may be compared with another compatible temporal union or
+// with a single scalar. JSONB numeric ambiguity is accepted only after type
+// metadata has restored native JSON spelling.
+func jsonTaggedScalarComparable(left hff.Type, lf JSONFormat, right hff.Type, rf JSONFormat) bool {
+	leftTag, leftOK := jsonTaggedScalarFamily(left, lf)
+	rightTag, rightOK := jsonTaggedScalarFamily(right, rf)
+	return leftOK && rightOK && (leftTag != 0 || rightTag != 0) &&
+		(leftTag == 0 || rightTag == 0 || leftTag == rightTag)
+}
+
+func jsonTaggedScalarFamily(typ hff.Type, format JSONFormat) (hff.TypeKind, bool) {
+	members := []hff.Type{typ}
+	if typ.Kind() == hff.UnionType {
+		members = typ.Members()
+	}
+	var tagged hff.TypeKind
+	integer, floating := false, false
+	for _, member := range members {
+		switch member.Kind() {
+		case hff.TimestampType, hff.DurationType:
+			if tagged != 0 && tagged != member.Kind() {
+				return 0, false
+			}
+			tagged = member.Kind()
+		case hff.IntType:
+			integer = true
+		case hff.FloatType:
+			floating = true
+		case hff.BoolType, hff.NullType:
+		default:
+			return 0, false
+		}
+	}
+	return tagged, !(integer && floating && format != JSON)
+}
+
+func (b *builder) dynamicJSONNumbers(left, right string, op hff.Operator, leftInt, leftFloat, rightInt, rightFloat bool) string {
 	outer, paths := b.steps, b.sharedPaths
 	b.steps, b.sharedPaths = nil, nil
 	defer func() { b.steps, b.sharedPaths = outer, paths }()
 	var branches []string
-	for _, l := range []hff.TypeKind{hff.IntType, hff.FloatType} {
-		for _, r := range []hff.TypeKind{hff.IntType, hff.FloatType} {
-			condition := func(text string, kind hff.TypeKind) string {
+	for _, l := range []struct {
+		kind    hff.TypeKind
+		allowed bool
+	}{{hff.IntType, leftInt}, {hff.FloatType, leftFloat}} {
+		if !l.allowed {
+			continue
+		}
+		for _, r := range []struct {
+			kind    hff.TypeKind
+			allowed bool
+		}{{hff.IntType, rightInt}, {hff.FloatType, rightFloat}} {
+			if !r.allowed {
+				continue
+			}
+			condition := func(text string, kind hff.TypeKind, ambiguous bool) string {
+				if !ambiguous {
+					return "TRUE"
+				}
 				operator := "!~"
 				if kind == hff.FloatType {
 					operator = "~"
 				}
 				return text + " " + operator + " '[.eE]'"
 			}
-			convert := func(text string, kind hff.TypeKind) expression {
-				return expression{"(CASE WHEN " + condition(text, kind) + " THEN " + jsonScalarCast(text, kind) + " ELSE NULL END)", "TRUE", kind}
+			convert := func(text string, kind hff.TypeKind, ambiguous bool) expression {
+				return expression{"(CASE WHEN " + condition(text, kind, ambiguous) + " THEN " + jsonScalarCast(text, kind) + " ELSE NULL END)", "TRUE", kind}
 			}
-			comparison := b.scalarComparison(convert(left, l), convert(right, r), op)
-			branches = append(branches, "WHEN "+both(condition(left, l), condition(right, r))+" THEN "+comparison.code)
+			comparison := b.scalarComparison(convert(left, l.kind, leftInt && leftFloat), convert(right, r.kind, rightInt && rightFloat), op)
+			branches = append(branches, "WHEN "+both(condition(left, l.kind, leftInt && leftFloat), condition(right, r.kind, rightInt && rightFloat))+" THEN "+comparison.code)
 		}
 	}
 	code := "(CASE " + strings.Join(branches, " ") + " ELSE FALSE END)"
@@ -330,6 +384,6 @@ func (b *builder) dynamicJSONTreeEqual(left, right string) string {
 	lv, rv := l+".value", r+".value"
 	lc, rc := "json_typeof("+lv+")", "json_typeof("+rv+")"
 	lt, rt := "("+lv+" #>> '{}'::text[])", "("+rv+" #>> '{}'::text[])"
-	equal := "CASE WHEN " + lv + " IS NULL OR " + rv + " IS NULL THEN FALSE WHEN " + lc + "<>" + rc + " THEN FALSE WHEN " + lc + " IN ('null','array','object') THEN TRUE WHEN " + lc + "='number' THEN " + b.dynamicJSONNumbers(lt, rt, hff.Equal) + " ELSE " + lt + " COLLATE \"C\"=" + rt + " COLLATE \"C\" END"
+	equal := "CASE WHEN " + lv + " IS NULL OR " + rv + " IS NULL THEN FALSE WHEN " + lc + "<>" + rc + " THEN FALSE WHEN " + lc + " IN ('null','array','object') THEN TRUE WHEN " + lc + "='number' THEN " + b.dynamicJSONNumbers(lt, rt, hff.Equal, true, true, true, true) + " ELSE " + lt + " COLLATE \"C\"=" + rt + " COLLATE \"C\" END"
 	return "(WITH RECURSIVE " + walk(l, left) + "," + walk(r, right) + " SELECT NOT EXISTS(SELECT 1 FROM " + l + " FULL JOIN " + r + " ON " + l + ".path COLLATE \"C\"=" + r + ".path COLLATE \"C\" WHERE " + l + ".path IS NULL OR " + r + ".path IS NULL OR NOT (" + equal + ")))"
 }

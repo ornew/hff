@@ -85,12 +85,22 @@ present or needs representation details that JSONB discarded. Native JSON may
 retain the numeric spelling needed by the active profile, subject to that
 profile's existing rules.
 
+The `Timestamp|Int|Float|Null` and `Duration|Int|Float|Null` subsets are also
+supported with native JSON spelling or JSONB version-1 numeric metadata.
+Supported operations include type inspection, explicit guards, comparisons,
+membership, list `contains()`/`unique()`, and `string()`/`json()` when the
+active value remains recoverable. JSONB requires the sidecar for operations
+that observe Int versus Float; without it, Build rejects those operations.
+Metadata `text` restores Float representations such as negative zero when
+needed. A Float-only operand bound as JSONB can be compared with a mixed-union
+operand bound as native JSON, because the known Float schema fixes its type.
+This does not make every collection or serialization operation available. Raw
+JSONB mixed-numeric unions do not have a metadata-free lowering for operations
+that require the numeric subtype.
+
 Support remains operation-specific: category-disjointness alone does not
-make every result representable. For example, the current Timestamp lowering
-supports `Timestamp|Int|Null`, `Timestamp|Bool|Null`, and
-`Timestamp|Float|Null` for selected operations, but rejects
-`Timestamp|Int|Float` because it cannot choose between both numeric HFF types
-from the stored JSON number. JSONB serialization of a Float branch also
+make every result representable. Metadata-free JSONB does not reveal whether
+a stored number is Int or Float. Serialization of a JSONB Float branch also
 requires lossless signed-zero provenance.
 
 For a representation-ambiguous union such as `String|Duration` or
@@ -194,9 +204,14 @@ and leaves any format extension for a separate decision.
 
 The implemented JSON Duration subset has Build/unit coverage for
 `Duration|Int|Null`, `Duration|Bool|Null`, `Duration|Int|Bool|Null`, and
-`Duration|Float|Null`, including type inspection, guards, comparisons,
-membership, and null handling for JSON and JSONB without numeric metadata. It
-also has Build rejection coverage for ambiguous
+`Duration|Float|Null` without numeric metadata, plus
+`Duration|Int|Float|Null` with native JSON spelling and JSONB metadata.
+PostgreSQL/local parity covers type inspection, guards, comparisons,
+membership, list `contains()`/`unique()`, serialization, and null handling for
+both temporal mixed-numeric variants in native JSON and JSONB with metadata.
+Tests also cover Float signed zero, mixed-union lists, comparison with a
+schema-known Float on plain JSONB, Build rejection for metadata-free JSONB
+mixed-numeric operations that need a subtype, and ambiguous
 `String|Duration` and `Bytes|Duration` operations that require the active
 type. PostgreSQL/local parity cases cover supported scalar and list uses of
 these disjoint unions.

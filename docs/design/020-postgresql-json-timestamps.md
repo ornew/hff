@@ -95,26 +95,29 @@ list/struct construction and serialized when the resulting value is
 representable.
 
 Category-disjoint schema unions `Timestamp|Bool|Null` and
-`Timestamp|Float|Null` are supported for `type()`, explicit Timestamp guards,
-comparisons, and membership. Typed lists of these unions support `contains()`,
-`unique()`, and callback operations where the result remains representable.
-JSON strings identify Timestamp, booleans identify Bool, numbers identify Float in the
-second union, and null remains null. The previously supported
-`Timestamp|Int|Null` subset also supports `string()` and `json()` when the
-active value can be serialized faithfully. HFF `type()` reports `"number"` for
-both Int and Float, so use `[float]` for a Float-specific guard. For JSONB
-union values that may contain Float, `string()` and `json()` remain rejected
-because storage may have lost signed-zero provenance; this union lowering has
-no lossless recovery path.
+`Timestamp|Float|Null` support `type()`, explicit Timestamp guards,
+comparisons, membership, and typed-list `contains()`/`unique()` when the
+operation's result is representable. `Timestamp|Int|Null` also supports
+serialization when the active value is recoverable.
+`Timestamp|Int|Float|Null` uses native JSON spelling or JSONB version-1 numeric
+metadata to distinguish the numeric alternatives. It supports type inspection,
+explicit guards, comparisons, membership, list `contains()`/`unique()`, and
+`string()`/`json()` when numeric metadata preserves the representation needed
+for output. `Duration|Int|Float|Null` follows the same numeric recovery rule
+with Duration represented by its canonical string. Without a JSONB sidecar,
+Build rejects operations on either mixed-numeric union that need to distinguish
+Int from Float. Metadata `text` preserves Float details such as signed zero
+when serialization needs them. A schema-known Float on a plain JSONB binding
+can be compared with a mixed-union value bound as native JSON, because its own
+numeric type is fixed by schema. HFF `type()` reports `"number"` for Int and
+Float; use `[int]` or `[float]` for subtype guards.
 
-`Timestamp|Int|Float` remains unsupported because the numeric JSON category
-does not let this lowering select between both HFF numeric alternatives. No
-new metadata format is introduced. Unions whose alternatives share a JSON
-representation category, such as `String|Timestamp` or
-`Duration|Timestamp`, are also ambiguous; `Build` rejects operations that need
-an unrecoverable active type. Other collection transformations are supported
-only where their binding and operation can be lowered without materializing an
-unsupported representation.
+The JSONB sidecar remains numeric-only and is not extended with temporal tags.
+Unions whose alternatives share a JSON representation category, such as
+`String|Timestamp` or `Duration|Timestamp`, remain ambiguous; `Build` rejects
+operations that need an unrecoverable active type. Other collection
+transformations are supported only where their binding and operation can be
+lowered without materializing an unsupported representation.
 
 Zone arguments, data-dependent string parsing, ambiguous unions, and
 operations whose SQL lowering cannot preserve the active Timestamp
@@ -164,12 +167,19 @@ Conformance tests compare PostgreSQL results with local evaluation for
 schema-known Timestamp values in JSON and JSONB. They cover nullable and nested
 fields, typed Timestamp lists, membership, uniqueness, sorting, list and
 struct serialization, the supported Timestamp/Int/Bool/Float disjoint-union
-cases, and canonical serialization. Boundary cases include nanoseconds on
+cases, including `Timestamp|Int|Float|Null` with native JSON spelling or JSONB
+numeric metadata, and canonical serialization. Duration mixed-numeric cases
+are also covered by the JSON union tests. Both cover mixed-union list
+`contains()`/`unique()`, signed zero, and comparison with a schema-known Float
+stored in plain JSONB. Raw JSONB mixed-numeric unions reject type-sensitive
+operations during Build when no sidecar is configured. Boundary
+cases include nanoseconds on
 either side of a second boundary, pre-epoch instants, years 0000 and 9999, and
 different zone offsets normalized to the same instant. Tests confirm that a
-JSON string under `Any` remains an HFF String, that `Build` rejects
-`Timestamp|Int|Float` and ambiguous `String|Timestamp` and `Bytes|Timestamp`
-operations, and that null, missing members, and no-value remain distinct.
+JSON string under `Any` remains an HFF String, that `Build` rejects metadata-free
+JSONB operations requiring an Int/Float distinction and ambiguous
+`String|Timestamp` and `Bytes|Timestamp` operations, and that null, missing
+members, and no-value remain distinct.
 Storage fixtures use canonical values consistent with their declared schema;
 `Build` does not validate stored rows.
 

@@ -198,9 +198,9 @@ those serialization operations for JSONB when signed-zero provenance may have
 been erased.
 
 The [JSON union example](https://github.com/ornew/hff/tree/main/examples/sql-json-unions)
-shows schema-known `Timestamp|Float|Null` and `Duration|Float|Null` bindings,
-guards, and an OR predicate. It builds parameterized SQL without connecting to
-a database.
+shows schema-known Timestamp/Duration unions with Int, Float, and null
+alternatives, JSONB metadata bindings, and scalar/list predicates. It builds
+parameterized SQL without connecting to a database.
 
 This is a limited supported subset, not general tagged-union support. Other
 unions and operations may be rejected by `Build`, especially when the
@@ -388,11 +388,108 @@ value:string="2026-01-01T00:00:00.000000123Z"
 value:json="\"2026-01-01T00:00:00.000000123Z\""
 ```
 
-`Timestamp|Int|Float` remains unsupported because JSON numeric values do not
-identify whether the active HFF type is Int or Float; this slice adds no new
-metadata format to resolve that ambiguity. JSONB `string()` and `json()` of a
-union that may contain Float remain rejected because storage may have lost
-signed-zero provenance; this union lowering has no lossless recovery path.
+For `Timestamp|Int|Float|Null` and `Duration|Int|Float|Null`, native JSON
+spelling preserves the Int-versus-Float distinction. JSONB requires
+`WithTypeMetadata` for operations that observe that distinction; Build rejects
+those operations when the sidecar is omitted. The existing version-1 sidecar
+restores numeric kinds and values, including signed zero when its optional
+`text` is present. Both unions support type inspection, explicit guards,
+comparisons, membership, list `contains()`/`unique()`, and `string()`/`json()`
+serialization when the stored numeric metadata preserves the needed value.
+These are supported operations, not a guarantee that every collection
+transformation is available.
+
+For example, these JSONB scalars can be a Timestamp, Int, Float, or null. The
+root JSON Pointer `""` identifies a scalar value in its sidecar:
+
+```sql
+CREATE TABLE temporal_values (
+    id bigint PRIMARY KEY,
+    value jsonb NOT NULL,
+    value_types jsonb NOT NULL,
+    items jsonb NOT NULL,
+    items_types jsonb NOT NULL
+);
+INSERT INTO temporal_values VALUES
+    (1, '"2026-10-01T00:00:00.000000123Z"', '{"version":1,"types":{}}',
+        '["2026-10-01T00:00:00.000000123Z",9007199254740992]',
+        '{"version":1,"types":{"/1":{"type":"float","text":"9007199254740992.0"}}}'),
+    (2, '9007199254740993', '{"version":1,"types":{"":{"type":"int"}}}',
+        '[7,"2026-10-01T00:00:00.000000123Z"]',
+        '{"version":1,"types":{"/0":{"type":"int"}}}'),
+    (3, '9007199254740992', '{"version":1,"types":{"":{"type":"float","text":"9007199254740992.0"}}}',
+        '[-0.0,0]', '{"version":1,"types":{"/0":{"type":"float","text":"-0.0"},"/1":{"type":"int"}}}'),
+    (4, '-0.0', '{"version":1,"types":{"":{"type":"float","text":"-0.0"}}}',
+        '[null]', '{"version":1,"types":{}}'),
+    (5, 'null', '{"version":1,"types":{}}', '[]', '{"version":1,"types":{}}');
+```
+
+For a JSONB list, pointers are relative to that list's document. For example,
+`["2026-10-01T00:00:00.000000123Z",9007199254740992]` can use
+`{"version":1,"types":{"/1":{"type":"float","text":"9007199254740992.0"}}}`.
+The Float marker preserves the numeric subtype, and `text` preserves the
+originally significant spelling or signed zero when later serialization needs
+it. The caller keeps each sidecar consistent with its corresponding JSONB
+column.
+
+Declare the alternatives and bind the data and sidecar columns together:
+
+```go
+valueType := schema.Union(
+    schema.TimestampType, schema.IntType, schema.FloatType, schema.NullType,
+)
+itemsType := schema.ListOf(valueType)
+e, err := engine.New(
+    engine.WithSchema(schema.Struct(
+        schema.Field("value", valueType),
+        schema.Field("items", itemsType),
+    )),
+    engine.WithCapabilities(capabilities.Standard()),
+)
+if err != nil {
+    return err
+}
+program, err := e.Compile(ctx,
+    `value:in("2026-10-01T00:00:00.000000123Z":timestamp,1.5) | items:contains(1.5) | items:unique`,
+)
+if err != nil {
+    return err
+}
+query, err := hffsql.Build(ctx, program,
+    hffsql.WithDialect(hffsql.PostgreSQL),
+    hffsql.WithBindings(hffsql.BindJSON(
+        hff.Path{"value"},
+        hffsql.Column("temporal_values", "value"),
+        hffsql.JSONB,
+        hffsql.WithTypeMetadata(hffsql.Column("temporal_values", "value_types")),
+    ), hffsql.BindJSON(
+        hff.Path{"items"},
+        hffsql.Column("temporal_values", "items"),
+        hffsql.JSONB,
+        hffsql.WithTypeMetadata(hffsql.Column("temporal_values", "items_types")),
+    )),
+)
+```
+
+`value:[timestamp]:year=2026`, `value:[int]:exists`, `value:[float]:exists`,
+`value=value`, `items:contains(1.5)`, and `items:unique` are supported for both
+Timestamp and Duration mixed-numeric schemas when the numeric representation is
+recoverable. The same schemas can bind native JSON without a sidecar because
+its numeric spelling distinguishes Int from Float. The [runnable JSON union
+example](https://github.com/ornew/hff/tree/main/examples/sql-json-unions)
+builds parameterized predicates for scalar and list Timestamp/Duration mixed
+unions using JSONB sidecars; it does not connect to a database. Without
+metadata, operations on a mixed-union value bound to raw JSONB fail at Build
+when they need to distinguish Int from Float. A separate Float-only JSONB
+binding can still be compared with a mixed-union value bound as native JSON;
+the Float schema fixes the first operand's numeric type.
+
+For JSONB, Float `string()` and `json()` serialization use the sidecar's `text`
+when needed to preserve negative zero or another otherwise-lost value. For
+example, the `-0.0` row above needs that text. A Float-only JSONB binding can
+be compared against a mixed-union value bound as native JSON; metadata is
+required on a mixed-union JSONB binding whose active numeric subtype would
+otherwise be ambiguous.
 Unions whose alternatives share a JSON representation category, such as
 `String|Timestamp` or `Duration|Timestamp`, also remain ambiguous. `Build`
 rejects operations when it cannot recover the active HFF type or preserve the

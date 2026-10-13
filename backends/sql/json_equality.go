@@ -155,6 +155,18 @@ func (b *builder) jsonEqualValue(n hff.Node, left string, lf JSONFormat, lt hff.
 	if code, handled, err := b.jsonAnyScalarEqual(n, left, lf, lt, right, rf, rt); handled {
 		return code, err
 	}
+	if jsonTaggedScalarComparable(lt, lf, rt, rf) && (needsDynamicJSONEquality(lt) || needsDynamicJSONEquality(rt)) {
+		comparison, err := b.dynamicJSONTaggedScalarPair(n,
+			expression{left, "TRUE", hff.AnyType}, lf,
+			expression{right, "TRUE", hff.AnyType}, rf,
+			hff.Equal, lt, rt)
+		if err != nil {
+			return "", err
+		}
+		lnull := "(" + left + " IS NULL OR " + string(lf) + "_typeof(" + left + ")='null')"
+		rnull := "(" + right + " IS NULL OR " + string(rf) + "_typeof(" + right + ")='null')"
+		return "(CASE WHEN " + lnull + " THEN " + rnull + " WHEN " + rnull + " THEN FALSE ELSE COALESCE(" + comparison.code + ",FALSE) END)", nil
+	}
 	if (needsDynamicJSONEquality(lt) || needsDynamicJSONEquality(rt)) && !definiteJSONContainerPair(lt, rt) {
 		if jsonHasTaggedString(lt) || jsonHasTaggedString(rt) {
 			return "", b.failure(n, "dynamic JSON comparison cannot preserve Bytes, Duration, or Timestamp type identity")

@@ -14,20 +14,54 @@ import (
 func main() {
 	ctx := context.Background()
 	e, err := engine.New(engine.WithSchema(schema.Struct(
-		schema.Field("observed", schema.Union(schema.TimestampType, schema.FloatType, schema.NullType)),
-		schema.Field("elapsed", schema.Union(schema.DurationType, schema.FloatType, schema.NullType)),
+		schema.Field("observed", schema.Union(
+			schema.TimestampType, schema.IntType, schema.FloatType, schema.NullType,
+		)),
+		schema.List("observed_items", schema.Union(
+			schema.TimestampType, schema.IntType, schema.FloatType, schema.NullType,
+		)),
+		schema.Field("elapsed", schema.Union(
+			schema.DurationType, schema.IntType, schema.FloatType, schema.NullType,
+		)),
+		schema.List("elapsed_items", schema.Union(
+			schema.DurationType, schema.IntType, schema.FloatType, schema.NullType,
+		)),
 	)), engine.WithCapabilities(capabilities.Standard()))
 	if err != nil {
 		panic(err)
 	}
 
-	program, err := e.Compile(ctx, `observed:[timestamp]:year>=2020 | elapsed:[duration]:seconds>1`)
+	program, err := e.Compile(ctx,
+		`observed:in("2026-10-01T00:00:00Z":timestamp,1.5) | elapsed:in("1h":duration,1.5) | observed_items:contains(1.5) | elapsed_items:unique`,
+	)
 	if err != nil {
 		panic(err)
 	}
 	query, err := hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(
-		hffsql.BindJSON(hff.Path{"observed"}, hffsql.Column("records", "observed"), hffsql.JSONB),
-		hffsql.BindJSON(hff.Path{"elapsed"}, hffsql.Column("records", "elapsed"), hffsql.JSONB),
+		hffsql.BindJSON(
+			hff.Path{"observed"},
+			hffsql.Column("records", "observed"),
+			hffsql.JSONB,
+			hffsql.WithTypeMetadata(hffsql.Column("records", "observed_types")),
+		),
+		hffsql.BindJSON(
+			hff.Path{"observed_items"},
+			hffsql.Column("records", "observed_items"),
+			hffsql.JSONB,
+			hffsql.WithTypeMetadata(hffsql.Column("records", "observed_items_types")),
+		),
+		hffsql.BindJSON(
+			hff.Path{"elapsed"},
+			hffsql.Column("records", "elapsed"),
+			hffsql.JSONB,
+			hffsql.WithTypeMetadata(hffsql.Column("records", "elapsed_types")),
+		),
+		hffsql.BindJSON(
+			hff.Path{"elapsed_items"},
+			hffsql.Column("records", "elapsed_items"),
+			hffsql.JSONB,
+			hffsql.WithTypeMetadata(hffsql.Column("records", "elapsed_items_types")),
+		),
 	))
 	if err != nil {
 		panic(err)
