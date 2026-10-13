@@ -192,7 +192,7 @@ func (b *builder) dynamicJSONPair(n hff.Node, left, right expression, op hff.Ope
 	leftType, rightType := b.jsonStoredType(leftNode), b.jsonStoredType(rightNode)
 	if jsonRecoverableTaggedScalarUnion(leftType) && jsonRecoverableTaggedScalarUnion(rightType) &&
 		jsonRootHasKind(leftType, hff.TimestampType) == jsonRootHasKind(rightType, hff.TimestampType) {
-		return b.dynamicJSONTaggedScalarPair(n, left, right, op, jsonRootHasKind(leftType, hff.TimestampType))
+		return b.dynamicJSONTaggedScalarPair(n, left, right, op, leftType, rightType)
 	}
 	for i := 0; i < 2; i++ {
 		child, _ := n.Child(i)
@@ -235,10 +235,10 @@ func (b *builder) dynamicJSONPair(n hff.Node, left, right expression, op hff.Ope
 	return expression{"(" + code + " ELSE NULL::boolean END)", "TRUE", hff.BoolType}, nil
 }
 
-// Duration or Timestamp, Int, and Bool use different JSON categories. A declared union
-// containing only these families can compare two dynamic values without
-// external type metadata.
-func (b *builder) dynamicJSONTaggedScalarPair(n hff.Node, left, right expression, op hff.Operator, timestamp bool) (expression, error) {
+// Duration or Timestamp, one numeric subtype, and Bool use different JSON
+// categories. A declared union containing only these families can compare two
+// dynamic values without external type metadata.
+func (b *builder) dynamicJSONTaggedScalarPair(n hff.Node, left, right expression, op hff.Operator, leftType, rightType hff.Type) (expression, error) {
 	lf, leftOK := b.jsonValues[left.code]
 	rf, rightOK := b.jsonValues[right.code]
 	if !leftOK || !rightOK {
@@ -250,19 +250,34 @@ func (b *builder) dynamicJSONTaggedScalarPair(n hff.Node, left, right expression
 	rt := "(" + right.code + " #>> '{}'::text[])"
 	stringKind := hff.DurationType
 	parse := b.parseDurationInline
-	if timestamp {
+	if jsonRootHasKind(leftType, hff.TimestampType) {
 		stringKind = hff.TimestampType
 		parse = jsonTimestampNanoseconds
 	}
 	stringValue := b.scalarComparison(
 		expression{parse(lt), "TRUE", stringKind},
 		expression{parse(rt), "TRUE", stringKind}, op)
-	integer := b.scalarComparison(
-		expression{jsonScalarCast(lt, hff.IntType), "TRUE", hff.IntType},
-		expression{jsonScalarCast(rt, hff.IntType), "TRUE", hff.IntType}, op)
 	code := "(CASE WHEN NOT (" + both(left.present, right.present) + ") OR " + left.code + " IS NULL OR " + right.code + " IS NULL" +
-		" THEN FALSE WHEN " + both(lc+"='string'", rc+"='string'") + " THEN " + stringValue.code +
-		" WHEN " + both(lc+"='number'", rc+"='number'") + " THEN " + integer.code
+		" THEN FALSE WHEN " + both(lc+"='string'", rc+"='string'") + " THEN " + stringValue.code
+	leftInt, leftFloat := jsonNumericCandidates(leftType)
+	rightInt, rightFloat := jsonNumericCandidates(rightType)
+	if (leftInt || leftFloat) && (rightInt || rightFloat) {
+		leftKind, rightKind := hff.IntType, hff.IntType
+		if leftFloat {
+			leftKind = hff.FloatType
+		}
+		if rightFloat {
+			rightKind = hff.FloatType
+		}
+		// Mixed numeric comparison may add LATERAL projections outside this
+		// CASE. Guard the cast inputs before they can see tagged strings.
+		leftNumber := "(CASE WHEN " + lc + "='number' THEN " + lt + " END)"
+		rightNumber := "(CASE WHEN " + rc + "='number' THEN " + rt + " END)"
+		numeric := b.scalarComparison(
+			expression{jsonScalarCast(leftNumber, leftKind), "TRUE", leftKind},
+			expression{jsonScalarCast(rightNumber, rightKind), "TRUE", rightKind}, op)
+		code += " WHEN " + both(lc+"='number'", rc+"='number'") + " THEN " + numeric.code
+	}
 	if op == hff.Equal || op == hff.NotEqual {
 		boolean := b.scalarComparison(
 			expression{jsonScalarCast(lt, hff.BoolType), "TRUE", hff.BoolType},

@@ -106,12 +106,11 @@ Duration schema, while the same JSON string under `Any` remains a String.
 JSONB does not normalize string contents, so Duration decoding requires no
 numeric type metadata. This support covers a schema-known Duration or nullable
 Duration field, including typed nested fields and collection elements. For the
-schema-known unions `Duration|Int|Null`, `Duration|Bool|Null`, and
-`Duration|Int|Bool|Null`,
-supported operations dispatch by JSON category: strings select Duration,
-booleans select Bool, numbers select Int when Int is an alternative, and JSON
-null remains null. These category distinctions work for both JSON and JSONB
-without Duration metadata.
+schema-known unions `Duration|Int|Null`, `Duration|Bool|Null`,
+`Duration|Int|Bool|Null`, and `Duration|Float|Null`, supported operations
+dispatch by JSON category: strings select Duration, booleans select Bool, and
+numbers select the declared numeric alternative. JSON null remains null. These
+category distinctions work for both JSON and JSONB without Duration metadata.
 
 For example, a document can hold each alternative in the same column:
 
@@ -178,6 +177,30 @@ The following forms are supported against that declared schema:
 | Collection and callback type | `items:unique`, `items:map(x=>x:type):contains("bool")` |
 | `string()` output | `value:string="0.000000001s"` |
 | `json()` output | `value:json="\"0.000000001s\""` |
+
+For `Duration|Float|Null`, the supported subset includes type inspection,
+type guards, comparisons, and membership. For example, these expressions
+dispatch using the JSON category:
+
+```hff
+value:type="duration"
+value:[duration]:nanoseconds=1
+value:[float]>0.5
+value=value
+value:in("1ns":duration,1.5)
+```
+
+The Float branch's `type()` result is `number`; use `[float]` to distinguish it
+from Int. JSONB needs no numeric type metadata to distinguish the string-backed
+Duration branch from the numeric Float branch. Native JSON preserves the
+Float's signed zero for `string()` and `json()` serialization. Build rejects
+those serialization operations for JSONB when signed-zero provenance may have
+been erased.
+
+The [JSON union example](https://github.com/ornew/hff/tree/main/examples/sql-json-unions)
+shows schema-known `Timestamp|Float|Null` and `Duration|Float|Null` bindings,
+guards, and an OR predicate. It builds parameterized SQL without connecting to
+a database.
 
 This is a limited supported subset, not general tagged-union support. Other
 unions and operations may be rejected by `Build`, especially when the
@@ -326,25 +349,55 @@ Other collection transformations may be rejected if their SQL lowering would
 need to materialize a Timestamp value the backend cannot represent. The output
 of `string()` and `json()` is canonical UTC text.
 
-The schema-known disjoint union `Timestamp|Int|Null` is also supported for
-type inspection, Timestamp guards and operations, comparisons, membership,
-and `string()`/`json()` serialization. JSON strings identify the Timestamp
-alternative, JSON numbers identify Int, and JSON null remains null:
+The schema-known disjoint unions `Timestamp|Bool|Null` and
+`Timestamp|Float|Null` are also supported for `type()`, explicit Timestamp
+guards, comparisons, and membership. Typed lists of these unions support
+`contains()`, `unique()`, and callback cases where the resulting types are
+representable.
+JSON strings identify Timestamp, booleans identify Bool, numbers identify
+Float in the second union, and JSON null remains null. The previously supported
+`Timestamp|Int|Null` union follows the same rule for its integer alternative.
+For a `Timestamp|Bool|Null` schema on `value` and `items`, a filter can inspect
+the active branch and search the list:
 
 ```hff
 value:type="timestamp"
 value:[timestamp]:year=2026
-value:in("2026-01-01T00:00:00.000000123Z":timestamp,2026)
+value:in("2026-01-01T00:00:00.000000123Z":timestamp,true)
 value=value
+items:contains(true)
+items:unique
+items:map(x=>x:type):contains("timestamp")
+```
+
+With a `Timestamp|Float|Null` schema, the numeric alternative is Float. Its
+HFF `type()` result is `"number"`, so use a type guard to test specifically for
+Float:
+
+```hff
+value:[float]:exists
+value:in("2026-01-01T00:00:00.000000123Z":timestamp,1.5)
+items:contains(1.5)
+```
+
+The `Timestamp|Int|Null` subset also supports `string()` and `json()` when the
+active value can be serialized faithfully:
+
+```hff
 value:string="2026-01-01T00:00:00.000000123Z"
 value:json="\"2026-01-01T00:00:00.000000123Z\""
 ```
 
-This does not generalize to unions whose alternatives share a JSON
-representation category, such as `String|Timestamp` or
-`Duration|Timestamp`; operations that need the active type are rejected by
-`Build`. Other dynamic union operations remain supported only when the schema
-and JSON representation preserve the HFF type.
+`Timestamp|Int|Float` remains unsupported because JSON numeric values do not
+identify whether the active HFF type is Int or Float; this slice adds no new
+metadata format to resolve that ambiguity. JSONB `string()` and `json()` of a
+union that may contain Float remain rejected because storage may have lost
+signed-zero provenance; this union lowering has no lossless recovery path.
+Unions whose alternatives share a JSON representation category, such as
+`String|Timestamp` or `Duration|Timestamp`, also remain ambiguous. `Build`
+rejects operations when it cannot recover the active HFF type or preserve the
+requested result. Other dynamic union operations remain supported only when
+the schema and JSON representation preserve the HFF type.
 
 Time-zone arguments—including `timestamp:string(tz)`—and data-dependent string
 parsing are unsupported. Operations outside the listed subset are rejected
@@ -1249,10 +1302,10 @@ a source-located `hff.BackendError` from `Build`:
   `timestamptz` columns use the separate `BindTimestamp` binding.
 - Native Duration columns use `bigint` nanoseconds. Schema-known JSON/JSONB
   Duration values use canonical duration strings; `Any` strings remain Strings.
-  The `Duration|Int|Null`, `Duration|Bool|Null`, and `Duration|Int|Bool|Null`
-  subsets support the operations listed above. Broader dynamic dispatch across
-  tagged unions remains unsupported when the active type cannot be recovered
-  or the requested operation cannot be lowered.
+  The `Duration|Int|Null`, `Duration|Bool|Null`, `Duration|Int|Bool|Null`, and
+  `Duration|Float|Null` subsets support the operations listed above. Broader
+  dynamic dispatch across tagged unions remains unsupported when the active
+  type cannot be recovered or the requested operation cannot be lowered.
 - JSONB float64 serialization is unsupported when storage has lost numeric
   representation needed to produce the result. More generally, operations
   requiring a runtime type not fixed by schema or metadata remain unsupported.

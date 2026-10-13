@@ -133,3 +133,33 @@ func TestJSONAmbiguousDurationUnionIsRejected(t *testing.T) {
 		}
 	}
 }
+
+func TestJSONDurationFloatUnionBuildsWithoutNumericMetadata(t *testing.T) {
+	ctx := context.Background()
+	e, err := engine.New(engine.WithSchema(schema.Struct(
+		schema.Field("value", schema.Union(schema.DurationType, schema.FloatType, schema.NullType)),
+	)), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
+		for _, source := range []string{
+			`value:type="duration"`,
+			`value:[duration]:nanoseconds=1`,
+			`value:[float]>0.5`,
+			`value=value`,
+			`value:in("1ns":duration,1.5)`,
+		} {
+			program, err := e.Compile(ctx, source)
+			if err != nil {
+				t.Fatal(source, err)
+			}
+			_, err = hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(
+				hffsql.BindJSON(hff.Path{"value"}, hffsql.Column("value"), format),
+			))
+			if err != nil {
+				t.Errorf("%s %s: %v", format, source, err)
+			}
+		}
+	}
+}

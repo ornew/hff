@@ -94,15 +94,27 @@ orders them by exact instant. Schema-known Timestamp lists also support
 list/struct construction and serialized when the resulting value is
 representable.
 
-The category-disjoint schema union `Timestamp|Int|Null` is supported for type
-inspection, Timestamp guards and operations, comparisons, membership, and
-`string()`/`json()` serialization. JSON strings identify Timestamp, JSON
-numbers identify Int, and null remains null. This does not generalize to
-unions whose alternatives share a JSON representation category, such as
-`String|Timestamp` or `Duration|Timestamp`; `Build` rejects operations that
-need an unrecoverable active type. Other collection transformations are
-supported only where their binding and operation can be lowered without
-materializing an unsupported representation.
+Category-disjoint schema unions `Timestamp|Bool|Null` and
+`Timestamp|Float|Null` are supported for `type()`, explicit Timestamp guards,
+comparisons, and membership. Typed lists of these unions support `contains()`,
+`unique()`, and callback operations where the result remains representable.
+JSON strings identify Timestamp, booleans identify Bool, numbers identify Float in the
+second union, and null remains null. The previously supported
+`Timestamp|Int|Null` subset also supports `string()` and `json()` when the
+active value can be serialized faithfully. HFF `type()` reports `"number"` for
+both Int and Float, so use `[float]` for a Float-specific guard. For JSONB
+union values that may contain Float, `string()` and `json()` remain rejected
+because storage may have lost signed-zero provenance; this union lowering has
+no lossless recovery path.
+
+`Timestamp|Int|Float` remains unsupported because the numeric JSON category
+does not let this lowering select between both HFF numeric alternatives. No
+new metadata format is introduced. Unions whose alternatives share a JSON
+representation category, such as `String|Timestamp` or
+`Duration|Timestamp`, are also ambiguous; `Build` rejects operations that need
+an unrecoverable active type. Other collection transformations are supported
+only where their binding and operation can be lowered without materializing an
+unsupported representation.
 
 Zone arguments, data-dependent string parsing, ambiguous unions, and
 operations whose SQL lowering cannot preserve the active Timestamp
@@ -151,14 +163,15 @@ rejects genuinely ambiguous unions.
 Conformance tests compare PostgreSQL results with local evaluation for
 schema-known Timestamp values in JSON and JSONB. They cover nullable and nested
 fields, typed Timestamp lists, membership, uniqueness, sorting, list and
-struct serialization, the supported `Timestamp|Int|Null` union, and canonical
-serialization. Boundary cases include nanoseconds on either side of a second
-boundary, pre-epoch instants, years 0000 and 9999, and different zone offsets
-normalized to the same instant. Tests confirm that a JSON string under `Any`
-remains an HFF String, that `Build` rejects ambiguous `String|Timestamp` and
-`Bytes|Timestamp` operations, and that null, missing members, and no-value
-remain distinct. Storage fixtures use canonical values consistent with their
-declared schema; `Build` does not validate stored rows.
+struct serialization, the supported Timestamp/Int/Bool/Float disjoint-union
+cases, and canonical serialization. Boundary cases include nanoseconds on
+either side of a second boundary, pre-epoch instants, years 0000 and 9999, and
+different zone offsets normalized to the same instant. Tests confirm that a
+JSON string under `Any` remains an HFF String, that `Build` rejects
+`Timestamp|Int|Float` and ambiguous `String|Timestamp` and `Bytes|Timestamp`
+operations, and that null, missing members, and no-value remain distinct.
+Storage fixtures use canonical values consistent with their declared schema;
+`Build` does not validate stored rows.
 
 ## Limitations and open questions
 

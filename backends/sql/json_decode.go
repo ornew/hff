@@ -57,14 +57,14 @@ func jsonRootHasKind(typ hff.Type, kind hff.TypeKind) bool {
 	return false
 }
 
-// One string-backed scalar, Int, and Bool occupy disjoint JSON categories, so
-// a finite union of these types retains its runtime family without a type tag.
-// Other tagged unions stay rejected until each observer can dispatch them.
+// One string-backed scalar, one numeric subtype, and Bool occupy disjoint JSON
+// categories. A finite union of these types retains its runtime family without
+// a type tag. Int|Float still needs preserved spelling or numeric metadata.
 func jsonRecoverableTaggedScalarUnion(typ hff.Type) bool {
 	if typ.Kind() != hff.UnionType {
 		return false
 	}
-	tagged, other := false, false
+	tagged, other, integer, floating := false, false, false, false
 	for _, member := range typ.Members() {
 		switch member.Kind() {
 		case hff.DurationType, hff.TimestampType:
@@ -72,12 +72,16 @@ func jsonRecoverableTaggedScalarUnion(typ hff.Type) bool {
 				return false
 			}
 			tagged = true
-		case hff.IntType, hff.BoolType:
+		case hff.IntType:
+			integer, other = true, true
+		case hff.FloatType:
+			floating, other = true, true
+		case hff.BoolType:
 			other = true
 		case hff.NullType:
 		default:
 			return false
 		}
 	}
-	return tagged && other
+	return tagged && other && !(integer && floating)
 }

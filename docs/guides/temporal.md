@@ -276,22 +276,40 @@ events:json="[\"2026-10-01T00:00:00.000000123Z\"]"
 payload:json="{\"created\":\"2026-10-01T00:00:00.000000123Z\"}"
 ```
 
-The schema-known disjoint union `Timestamp|Int|Null` is also supported for
-type inspection, Timestamp guards and operations, comparisons, membership, and
-`string()`/`json()` serialization. JSON strings select Timestamp, numbers
-select Int, and JSON null remains null:
+Schema-known disjoint unions `Timestamp|Bool|Null` and
+`Timestamp|Float|Null` are supported for `type()`, explicit Timestamp guards,
+comparisons, and membership. Typed lists of these unions support `contains()`,
+`unique()`, and callback cases where the result is representable. JSON strings
+select Timestamp, booleans select Bool, numbers select Float in the second
+union, and JSON null remains null. For example, if `value` and `events` have a
+`Timestamp|Bool|Null` schema:
 
 ```hff
 value:type="timestamp"
-value:in("2026-01-01T00:00:00.000000123Z":timestamp,2026)
-value:json="\"2026-01-01T00:00:00.000000123Z\""
+value:in("2026-01-01T00:00:00.000000123Z":timestamp,true)
+events:contains(true)
+events:unique
+events:map(x=>x:type):contains("timestamp")
 ```
 
-These capabilities apply when schema and JSON categories preserve the active
-HFF type. Other collection transformations may still fail to build if they
-require an unsupported materialized value. Time-zone arguments,
-data-dependent Timestamp parsing, and ambiguous string-backed unions such as
-`String|Timestamp` are rejected by `Build`.
+With a `Timestamp|Float|Null` schema, the numeric branch is Float:
+
+```hff
+value:[float]:exists
+value:in("2026-01-01T00:00:00.000000123Z":timestamp,1.5)
+events:contains(1.5)
+```
+
+The supported `Timestamp|Int|Null` subset also permits `string()` and `json()`
+when the active value is recoverable. `type()` reports `"number"` for both Int
+and Float, so use `[float]` for a Float-specific guard. JSONB `string()`/`json()`
+of a union that may contain Float remain rejected because storage may have lost
+signed-zero provenance; this union lowering has no lossless recovery path.
+`Timestamp|Int|Float` is rejected because JSON numbers do not distinguish the
+two numeric alternatives. Other collection transformations may still fail to
+build when they require an unsupported materialized value. Time-zone
+arguments, data-dependent Timestamp parsing, and ambiguous string-backed
+unions such as `String|Timestamp` are rejected by `Build`.
 The [PostgreSQL JSON guide](../backends/postgresql/json.md#timestamp-values-in-json-documents)
 describes the full binding contract and operation limits.
 
@@ -471,6 +489,18 @@ the HFF type: an `Any` value containing the same text remains a String. The
 [JSON binding guide](../backends/postgresql/json.md#duration-values-in-json-documents)
 shows the table, schema, binding, and query. This does not add Duration tags to
 the JSONB numeric metadata format.
+
+The same guide documents a limited `Duration|Float|Null` JSON union. JSON
+strings identify Duration, numbers identify Float, and null remains null in
+both JSON and JSONB without numeric type metadata. Use `[float]` rather than
+`type="float"` to distinguish Float: HFF `type()` reports both Int and Float
+as `number`. Native JSON preserves signed zero for `string()` and `json()`
+serialization. Build rejects those serialization operations for JSONB when
+signed-zero provenance may have been erased.
+
+The [JSON union example](https://github.com/ornew/hff/tree/main/examples/sql-json-unions)
+shows both Timestamp and Duration Float unions with guards and an OR query. It
+builds a parameterized predicate without opening a database connection.
 
 ### PostgreSQL computed durations
 

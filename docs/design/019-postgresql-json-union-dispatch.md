@@ -68,15 +68,30 @@ null according to the existing HFF contract; it is not treated as an
 alternative tag. Missing members and no-value continue to follow their
 existing presence and propagation rules.
 
-For category-disjoint unions such as `Duration|Int` and
-`Duration|Bool|Null`, a JSON string selects the Duration branch, a number
-selects Int when present, a boolean selects Bool when present, and JSON null
-remains null. The same rule applies in JSONB when the declared alternatives
-make the numeric branch unambiguous. For `Int|Float`, JSONB numeric metadata is
-required wherever the operation observes which numeric subtype is present or
-needs representation details that JSONB discarded. Native JSON may retain the
-numeric spelling needed by the active profile, subject to that profile's
-existing rules.
+For category-disjoint unions such as `Duration|Int`, `Duration|Bool|Null`,
+`Duration|Int|Bool|Null`, `Duration|Float|Null`, `Timestamp|Bool|Null`, and
+`Timestamp|Float|Null`, a JSON string selects the string-backed schema type, a
+number selects the declared numeric alternative, a boolean selects Bool when
+present, and JSON null remains null. The same rule applies in JSONB when the
+declared alternatives make the active branch recoverable. The
+`Duration|Float|Null` subset supports type inspection, type guards,
+comparisons, and membership without numeric metadata. Since `type()` reports
+both Int and Float as `number`, use a `[float]` guard to distinguish Float.
+Native JSON preserves Float signed zero for serialization. Build rejects JSONB
+Float-union serialization when storage may have erased signed-zero provenance.
+For `Int|Float`, JSONB numeric
+metadata is required wherever the operation observes which numeric subtype is
+present or needs representation details that JSONB discarded. Native JSON may
+retain the numeric spelling needed by the active profile, subject to that
+profile's existing rules.
+
+Support remains operation-specific: category-disjointness alone does not
+make every result representable. For example, the current Timestamp lowering
+supports `Timestamp|Int|Null`, `Timestamp|Bool|Null`, and
+`Timestamp|Float|Null` for selected operations, but rejects
+`Timestamp|Int|Float` because it cannot choose between both numeric HFF types
+from the stored JSON number. JSONB serialization of a Float branch also
+requires lossless signed-zero provenance.
 
 For a representation-ambiguous union such as `String|Duration` or
 `Bytes|Duration`, ordinary JSON string storage does not identify the active
@@ -87,8 +102,10 @@ reinterpret its `int` or `float` markers as string, Bytes, or Duration tags.
 
 ### Operation semantics
 
-- `type()` reports the active HFF type when it can be recovered. It must not
-  report a type inferred solely from a representation shared by alternatives.
+- `type()` follows the HFF contract for the recovered alternative. In
+  particular, both Int and Float report `"number"`; an explicit `[float]` or
+  `[int]` guard is needed to distinguish those subtypes. It must not report a
+  type inferred solely from a representation shared by alternatives.
 - Truthiness and explicit type guards dispatch using the recovered
   alternative. A guard may narrow the alternatives only when the underlying
   representation can establish the test faithfully.
@@ -176,8 +193,10 @@ and leaves any format extension for a separate decision.
 ## Testing
 
 The implemented JSON Duration subset has Build/unit coverage for
-`Duration|Int|Null`, `Duration|Bool|Null`, and
-`Duration|Int|Bool|Null`, plus Build rejection for ambiguous
+`Duration|Int|Null`, `Duration|Bool|Null`, `Duration|Int|Bool|Null`, and
+`Duration|Float|Null`, including type inspection, guards, comparisons,
+membership, and null handling for JSON and JSONB without numeric metadata. It
+also has Build rejection coverage for ambiguous
 `String|Duration` and `Bytes|Duration` operations that require the active
 type. PostgreSQL/local parity cases cover supported scalar and list uses of
 these disjoint unions.
