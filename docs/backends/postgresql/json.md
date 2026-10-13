@@ -917,8 +917,19 @@ their input order and representation, including signed zero. A list mixing a
 temporal string with a number, or containing null or another non-orderable
 value, produces ordinary null. JSONB mixed Int/Float values require numeric
 type metadata when their subtype is needed; raw JSONB mixed-subtype bindings
-remain Build errors. This support applies to `sort()` and does not imply that
-arbitrary callbacks over these unions are supported.
+remain Build errors.
+
+Selected list callbacks are also supported for these schema-known unions:
+`any()` and `all()` with type guards, `map()` to `type()`, `string()`, or the
+identity value, identity `flatmap()`, and `foldl()`/`foldr()` with an Int guard.
+The callback result must have a supported representation. In particular,
+guarded no-value from a fold item propagates through the fold. Native JSON or
+JSONB with the required numeric metadata preserves Int/Float identity and
+signed-zero details where those results observe them; raw JSONB remains a
+Build error when it has erased a required distinction. This list is a tested
+subset, not support for arbitrary callback expressions over temporal/numeric
+unions. See the [temporal guide](../../guides/temporal.md#store-schema-known-timestamps-in-json-or-jsonb)
+for examples.
 
 `concat(list)` preserves left-to-right order, duplicates, and null elements.
 JSON- or JSONB-backed lists can be concatenated with schema-compatible list

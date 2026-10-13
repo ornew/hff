@@ -103,13 +103,24 @@ func TestPostgreSQLJSONTemporalMixedNumericUnionMatchesLocal(t *testing.T) {
 				`items:sort[1]:[int]:exists`,
 				`items:sort:json="[9007199254740992.0,9007199254740993]"`,
 				`items:sort:json="[-0.0,0,0.0]"`,
+				`items:all(x=>x:[int]>0)`,
+				`items:map(x=>x:type):contains("number")`,
+				`items:map(x=>x:string):contains("-0.0")`,
+				`items:map(x=>x):contains(9007199254740992.0)`,
+				`items:map(x=>x):json="[-0.0,0,0.0]"`,
+				`items:flatmap(x=>[x]):size>0`,
+				`items:flatmap(x=>[x]):contains(9007199254740992.0)`,
+				`items:foldl(0,(a,x)=>a+x:[int]):[int]>0`,
+				`items:foldr(0,(x,a)=>a+x:[int]):[int]>0`,
 			}
 			if tc.name == "timestamp" {
 				sources = append(sources, `value:[timestamp]:year=2026`, `value:in("2026-01-01T00:00:00.000000123Z":timestamp,1)`,
-					`items:sort[0]:[timestamp]:year=0`, `items:sort[0]:[timestamp]:year=2026`)
+					`items:sort[0]:[timestamp]:year=0`, `items:sort[0]:[timestamp]:year=2026`,
+					`items:any(x=>x:[timestamp]:year=2026)`)
 			} else {
 				sources = append(sources, `value:[duration]:hours=1`, `value:in("1h":duration,1)`,
-					`items:sort[0]:[duration]:hours=1`)
+					`items:sort[0]:[duration]:hours=1`,
+					`items:any(x=>x:[duration]:hours=1)`)
 			}
 			for _, mode := range []struct {
 				name   string

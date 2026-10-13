@@ -339,6 +339,24 @@ example](https://github.com/ornew/hff/blob/main/examples/sql-json-unions/main.go
 builds this sort predicate separately from its other predicates; it does not
 execute a database query.
 
+The same schema-known lists support a selected set of callbacks: `any()` and
+`all()` with type guards, `map()` to `type()`, `string()`, or the identity
+value, identity `flatmap()`, and `foldl()`/`foldr()` with an Int guard. Callback
+results must have a supported representation; a failed Int guard produces
+no-value and propagates through a fold. For example:
+
+```hff
+observed_items:any(item=>item:[timestamp])
+observed_items:map(item=>item:type):contains("timestamp")
+observed_items:foldl(0,(acc,item)=>acc+(item:[int]))
+```
+
+For JSONB, provide numeric metadata when an operation needs Int/Float identity
+or representation details such as signed zero. Without it, Build rejects the
+operation when JSONB has erased a required distinction. The runnable example
+builds an `any()` guard and a `map()` projection alongside the separate sort
+predicate; it does not execute the SQL.
+
 ## Parse and measure durations
 
 Duration strings combine signed decimal components with `h`, `m`, `s`, `ms`,

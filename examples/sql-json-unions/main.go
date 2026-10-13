@@ -89,4 +89,25 @@ func main() {
 	}
 	fmt.Println("Sort predicate built:", sortQuery.Where() != "")
 	fmt.Println("Sort parameter count:", len(sortQuery.Args()))
+
+	callbackProgram, err := e.Compile(ctx,
+		`observed_items:any(item=>item:[timestamp]) | observed_items:map(item=>item:type):contains("timestamp")`,
+	)
+	if err != nil {
+		panic(err)
+	}
+	callbackQuery, err := hffsql.Build(ctx, callbackProgram,
+		hffsql.WithDialect(hffsql.PostgreSQL),
+		hffsql.WithBindings(hffsql.BindJSON(
+			hff.Path{"observed_items"},
+			hffsql.Column("records", "observed_items"),
+			hffsql.JSONB,
+			hffsql.WithTypeMetadata(hffsql.Column("records", "observed_items_types")),
+		)),
+	)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Callback predicate built:", callbackQuery.Where() != "")
+	fmt.Println("Callback parameter count:", len(callbackQuery.Args()))
 }
