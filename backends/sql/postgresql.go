@@ -664,7 +664,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		if err != nil {
 			return expression{}, err
 		}
-		return b.parameter(n, value)
+		return b.foldedParameter(n, value)
 	}
 	if name == "timestamp" {
 		return b.timestampLiteralCall(n)

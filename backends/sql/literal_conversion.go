@@ -18,6 +18,30 @@ type literalConversion struct {
 	err     error
 }
 
+// A failed conversion is HFF null, but its SQL carrier still has the type
+// established by ordinary lowering. Extension functions may be overloaded or
+// polymorphic, so an untyped SQL NULL is not an interchangeable argument.
+func (b *builder) foldedParameter(n hff.Node, value hff.Value) (expression, error) {
+	result, err := b.parameter(n, value)
+	if err != nil || value.Kind() != hff.NullKind || n.Type().Kind() == hff.NullType || n.Type().Kind() == hff.NeverType {
+		return result, err
+	}
+	if kind, ok := computedScalarKind(n.Type()); ok {
+		typ := sqlType(kind)
+		if kind == hff.TimestampType {
+			typ = "numeric"
+		}
+		result.code = "NULL::" + typ
+	} else if method, ok := n.Method(); ok {
+		signatures := method.Signatures()
+		if len(signatures) == 1 && signatures[0].ID() == "string.number" {
+			// An unresolved Int/Float result uses JSON in ordinary lowering.
+			result.code = "NULL::json"
+		}
+	}
+	return result, nil
+}
+
 // constantValue recognizes a closed set of builtin conversions without
 // binding parameters or invoking backend extensions. Eligibility and lowering
 // share this cache, so exact duration parsing happens once per plan node.

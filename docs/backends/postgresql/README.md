@@ -454,6 +454,13 @@ the operation. SQL currently supports only the PostgreSQL dialect and scalar
 expressions; a registered translator does not make unsupported collection or
 composite types available.
 
+When a supported literal conversion fails inside an extension argument,
+PostgreSQL receives SQL `NULL` with the conversion result's concrete carrier
+type when one is known: `boolean` for Bool, `bytea` for Bytes, `bigint` for
+Duration, `numeric` for Timestamp, and `json` for numeric JSON unions. The HFF
+value remains null and its presence is unchanged. A statically known Null or
+Never result remains an untyped SQL `NULL`.
+
 ## Inspect the PostgreSQL profile
 
 `hffsql.Profile(hffsql.PostgreSQL)` reports the translator's declared support

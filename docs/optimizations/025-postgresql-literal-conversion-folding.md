@@ -101,7 +101,9 @@ constant result into the query's typed arguments. For direct native scalar
 scalar, so it can be omitted; a null receiver still propagates null. General
 list searches can match null and retain their ordinary lowering. Remaining
 SQL parameters retain source order. Numeric Float parsing remains native, and
-nonliteral inputs retain runtime lowering.
+nonliteral inputs retain runtime lowering. When a failed folded conversion is
+passed to a SQL extension, its SQL `NULL` retains the concrete result carrier
+type where one exists; the HFF value remains null with presence unchanged.
 
 ## Decision and limits
 
