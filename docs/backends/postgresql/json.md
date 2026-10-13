@@ -1242,11 +1242,28 @@ per-key Map fallback. An unconstrained `Any` leaf retains generic recursive
 equality, and an unconstrained `Any` root compared with a container retains the
 generic root plan. Stored-value representability and JSONB metadata
 requirements remain in force; consistency between stored values and sidecar
-metadata is the caller's responsibility. This bounded specialization does not
-yet cover the shared equality paths used by `in()`, `contains()`, or
-`unique()`. See the [measured comparison](../../optimizations/007-postgresql-guided-json-equality.md)
-and [bounded container-union equality](../../optimizations/024-postgresql-container-union-equality.md)
-for tested shapes and controls.
+metadata is the caller's responsibility. The same schema-guided recursive
+equality is available to `in()`, `contains()`, and `unique()` when reachable
+List/Map/Struct alternatives are bounded and representation checks succeed.
+An `Any` comparison root remains generic, as does a nested `Any` leaf. These
+membership paths do not remove normalization that may happen earlier on the
+whole receiver. See the [measured root comparison](../../optimizations/007-postgresql-guided-json-equality.md),
+[bounded root equality](../../optimizations/024-postgresql-container-union-equality.md),
+and [bounded membership comparison](../../optimizations/027-postgresql-schema-membership-equality.md)
+records for their distinct scopes and fixtures.
+
+For example, with `value`, `needle`, and list elements declared as
+`String|List<Int>|List<Float>`, these queries use the membership operations
+while retaining the declared alternatives:
+
+```hff
+value:in(needle)
+items:contains(needle)
+items:unique
+```
+
+When the columns use JSONB, provide numeric type metadata wherever the stored
+representation cannot otherwise recover the declared numeric kind.
 
 Dynamic-to-dynamic ordering is available for compatible strings and numbers;
 booleans support equality and inequality, while lists and objects support

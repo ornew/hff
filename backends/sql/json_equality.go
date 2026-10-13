@@ -171,6 +171,9 @@ func (b *builder) jsonEqualValue(n hff.Node, left string, lf JSONFormat, lt hff.
 		if jsonHasTaggedString(lt) || jsonHasTaggedString(rt) {
 			return "", b.failure(n, "dynamic JSON comparison cannot preserve Bytes, Duration, or Timestamp type identity")
 		}
+		if code, handled, err := b.boundedJSONMembershipEqual(n, left, lf, lt, right, rf, rt); handled || err != nil {
+			return code, err
+		}
 		l, err := b.comparisonDocumentAgainst(n, left, lf, lt, rt)
 		if err != nil {
 			return "", err

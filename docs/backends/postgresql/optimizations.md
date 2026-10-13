@@ -8,6 +8,18 @@ other schemas and data.
 
 ## SQL translation choices
 
+### Reuse bounded equality in JSON membership
+
+For bounded List, Map, and Struct alternatives, `in()`, `contains()`, and
+`unique()` can use schema-guided recursive equality after representation and
+metadata checks. `Any` roots and nested `Any` leaves retain generic equality;
+upstream normalization of a complete membership receiver also remains. The
+measured SQL removed recursive document construction, though some barrier
+counts increased. Plain `EXPLAIN` confirmed smaller plan trees in the tested
+empty-table fixture; no execution timing was collected. See [bounded JSON
+membership equality](../../optimizations/027-postgresql-schema-membership-equality.md)
+for profiles, parity scope, and limits.
+
 ### Keep literals as bound parameters
 
 HFF literals remain typed query parameters in `Query.Args()`. Scalar literals

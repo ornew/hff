@@ -10,10 +10,16 @@ import (
 // numbers at any compared position. Keep unmatched JSONB numbers as data,
 // rather than turning them into null and accidentally matching a null needle.
 func (b *builder) comparisonDocumentAgainst(n hff.Node, raw string, format JSONFormat, typ, other hff.Type) (string, error) {
-	if format == JSONB && jsonNativeSchema(typ) && !jsonMayContainNumbers(other) {
+	if keepRawJSONComparisonNumbers(format, typ, other) {
 		return "COALESCE(" + raw + "::json,'null'::json)", nil
 	}
 	return b.comparisonDocument(n, raw, format, typ)
+}
+
+// A nonnumeric counterpart cannot match numeric data. Keeping the raw JSONB
+// number also prevents a rejected Float decode from becoming a null match.
+func keepRawJSONComparisonNumbers(format JSONFormat, typ, other hff.Type) bool {
+	return format == JSONB && jsonNativeSchema(typ) && !jsonMayContainNumbers(other)
 }
 
 func jsonNativeSchema(typ hff.Type) bool {
