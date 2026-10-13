@@ -56,12 +56,26 @@ or default-planner index-use claim is made.
 ### Prune numeric comparison branches excluded by JSON schema
 
 Dynamic JSON comparisons emit only Int or Float branches admitted by the
-stored schema. An Any value or a schema that permits both numeric subtypes
-keeps runtime dispatch; exact mixed Int/Float comparison remains unchanged.
-Null/no-value and runtime category mismatch behavior are preserved. The
-[schema-guided numeric dispatch record](../../optimizations/020-postgresql-schema-numeric-dispatch.md)
+compiled receiver type. An Any value or a receiver type that permits both
+numeric subtypes keeps runtime dispatch; exact mixed Int/Float comparison
+remains unchanged. Null/no-value and runtime category mismatch behavior are
+preserved. The [schema-guided numeric dispatch record](../../optimizations/020-postgresql-schema-numeric-dispatch.md)
 shows the measured SQL-shape differences; no runtime-speed or plan claim is
 made.
+
+### Prune impossible categories in dynamic JSON pair comparisons
+
+For dynamic-versus-dynamic comparisons, the translator intersects the JSON
+categories permitted by both compiled operand types. It can skip numeric
+subtype branches or recursive container equality when no matching category
+can occur on both sides. Existing stored-value normalization, JSONB metadata
+recovery, and unsupported-union checks still run before category pruning. Any
+retains its full category set, but a restricted opposite operand can still
+narrow the intersection; Any-versus-Any stays generic. Comparisons between
+reachable containers retain recursive equality, and Float normalization still
+applies whenever a Float branch is possible. See the [dynamic pair category
+pruning record](../../optimizations/021-postgresql-json-pair-category-pruning.md)
+for SQL-shape examples and limits; no timing or speed claim is made.
 
 ### Lower homogeneous scalar membership directly
 

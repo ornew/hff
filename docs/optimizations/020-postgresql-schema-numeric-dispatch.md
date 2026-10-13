@@ -31,6 +31,7 @@ comparisons continue to use the exact cross-subtype comparison path.
 ## Reproduction
 
 The baseline is commit [9d1f24e](https://github.com/ornew/hff/commit/9d1f24e).
+The implementation is commit [926b927](https://github.com/ornew/hff/commit/926b927).
 The SQL-shape fixture has JSONB columns `records.choice` and
 `records.fchoice`, compiled as `String|Int` and `String|Float` respectively.
 Neither column uses numeric metadata: each compiled type identifies its only

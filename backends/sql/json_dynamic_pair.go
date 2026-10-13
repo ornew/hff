@@ -218,20 +218,41 @@ func (b *builder) dynamicJSONPair(n hff.Node, left, right expression, op hff.Ope
 	lc, rc := "json_typeof("+left.code+")", "json_typeof("+right.code+")"
 	ln, rn := "("+left.code+" #>> '{}'::text[])", "("+right.code+" #>> '{}'::text[])"
 	code := "CASE WHEN NOT (" + both(left.present, right.present) + ") OR " + left.code + " IS NULL OR " + right.code + " IS NULL OR " + lc + "='null' OR " + rc + "='null' THEN FALSE"
+	// The compiled operand types constrain reachable runtime categories.
+	// Keep stored-type normalization and representability checks above, but
+	// do not build exact numeric or recursive kernels for impossible pairs.
+	leftCompiled, rightCompiled := leftNode.Type(), rightNode.Type()
 	for _, kind := range []hff.TypeKind{hff.StringType, hff.BoolType} {
-		if kind == hff.BoolType && op != hff.Equal && op != hff.NotEqual {
+		if !acceptsKind(leftCompiled, kind) || !acceptsKind(rightCompiled, kind) ||
+			(kind == hff.BoolType && op != hff.Equal && op != hff.NotEqual) {
 			continue
 		}
 		comparison := b.scalarComparison(expression{jsonScalarCast(ln, kind), "TRUE", kind}, expression{jsonScalarCast(rn, kind), "TRUE", kind}, op)
 		code += " WHEN " + both(lc+"='"+jsonCategory(kind)+"'", rc+"='"+jsonCategory(kind)+"'") + " THEN " + comparison.code
 	}
-	code += " WHEN " + both(lc+"='number'", rc+"='number'") + " THEN " + b.dynamicJSONNumbers(ln, rn, op, true, true, true, true)
+	leftInt, leftFloat := jsonNumericCandidates(leftCompiled)
+	rightInt, rightFloat := jsonNumericCandidates(rightCompiled)
+	if (leftInt || leftFloat) && (rightInt || rightFloat) {
+		code += " WHEN " + both(lc+"='number'", rc+"='number'") + " THEN " + b.dynamicJSONNumbers(ln, rn, op, leftInt, leftFloat, rightInt, rightFloat)
+	}
 	if op == hff.Equal || op == hff.NotEqual {
-		equal := b.dynamicJSONTreeEqual(left.code, right.code)
-		if op == hff.NotEqual {
-			equal = "NOT " + equal
+		var containers []string
+		if acceptsKind(leftCompiled, hff.ListType) && acceptsKind(rightCompiled, hff.ListType) {
+			containers = append(containers, both(lc+"='array'", rc+"='array'"))
 		}
-		code += " WHEN " + both(lc+"="+rc, lc+" IN ('array','object')") + " THEN " + equal
+		object := func(typ hff.Type) bool {
+			return acceptsKind(typ, hff.StructType) || acceptsKind(typ, hff.MapType)
+		}
+		if object(leftCompiled) && object(rightCompiled) {
+			containers = append(containers, both(lc+"='object'", rc+"='object'"))
+		}
+		if len(containers) > 0 {
+			equal := b.dynamicJSONTreeEqual(left.code, right.code)
+			if op == hff.NotEqual {
+				equal = "NOT " + equal
+			}
+			code += " WHEN (" + strings.Join(containers, " OR ") + ") THEN " + equal
+		}
 	}
 	return expression{"(" + code + " ELSE NULL::boolean END)", "TRUE", hff.BoolType}, nil
 }
