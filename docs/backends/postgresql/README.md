@@ -185,6 +185,31 @@ below, `lower()`, `upper()`, `contains()`, `startswith()`, `endswith()`,
 `concat()`, `frombase64()`, and `frombase64r()`; boolean `not()`, `and()`, and
 `or()` are supported.
 
+### Literal conversions during Build
+
+PostgreSQL `Build` can resolve a closed chain of exact built-in conversions
+over literals into typed SQL values in supported value positions, including
+predicates. It does not use extensions as constant evaluators. For example,
+these forms can feed directly into their native predicates:
+
+- `age>"18":number` converts integer-spelled text to an Int parameter.
+- `flag="true":bool` converts the exact boolean spelling to a Bool parameter.
+- `elapsed>"1h":duration` parses a Duration and binds nanoseconds.
+- `blob="YQ==":frombase64` decodes Bytes and binds the backend's hex text
+  parameter for PostgreSQL `bytea` decoding.
+- `name=42:string` formats the non-Float scalar as text.
+
+The compiled HFF plan is not changed. Capability and Profile checks still
+apply. Invalid conversions remain null. In direct native scalar `in()`, a
+null needle does not match a non-null receiver and its SQL argument can be
+omitted; a null receiver still propagates null. General list searches retain
+their normal null matching. A number string containing a decimal point or
+exponent stays on PostgreSQL's native Float input path. Timestamp parsing is
+limited to the existing accepted RFC 3339 literal form. Other conversion
+sources keep their ordinary runtime lowering or Build rejection. See
+[PostgreSQL translation optimizations](optimizations.md#fold-closed-built-in-conversions-during-build)
+for the measured SQL shapes and limits.
+
 ### Regular expressions
 
 PostgreSQL 15 and later supports `~`, `!~`, and `string:matches()` when the

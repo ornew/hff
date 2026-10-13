@@ -96,7 +96,7 @@ func TestJSONKernelBudgets(t *testing.T) {
 func TestDurationTextRoundTrip(t *testing.T) {
 	for _, d := range []time.Duration{0, 1, -1, time.Hour, time.Hour + time.Minute + 123456789, time.Duration(math.MinInt64), time.Duration(math.MaxInt64)} {
 		text := durationText(d)
-		got, ok := parseDuration(text).AsDuration()
+		got, ok := core.ParseDuration(text).AsDuration()
 		if !ok || got != d {
 			t.Fatal(d, text, got)
 		}

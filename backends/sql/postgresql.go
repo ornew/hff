@@ -35,6 +35,7 @@ type builder struct {
 	parameterProvenance   map[hff.BindingID]Binding
 	activeRelationAliases map[string]int
 	orderBlind            map[hff.Node]bool
+	literalConversions    map[hff.Node]literalConversion
 }
 
 // present tracks HFF's internal no-value separately from SQL NULL.
@@ -106,7 +107,7 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 	// A typed parameter reference is already an immutable SQL value. Keep it
 	// bound directly; projecting it adds a relation without preventing any
 	// duplicated computation. Computed expressions still need their barriers.
-	if n.Kind() == hff.LiteralNode {
+	if n.Kind() == hff.LiteralNode || b.literalConversions[n].handled {
 		return value, nil
 	}
 	// Give each value and any dynamic no-value flag a relational name. Parent
@@ -484,7 +485,13 @@ func (b *builder) truth(n hff.Node, value expression) string {
 }
 
 func (b *builder) literal(n hff.Node) (expression, error) {
-	value, _ := n.Literal()
+	value, handled, err := b.constantValue(n)
+	if err != nil {
+		return expression{}, err
+	}
+	if !handled {
+		return expression{}, b.failure(n, "expected a supported constant SQL value")
+	}
 	return b.parameter(n, value)
 }
 
@@ -652,6 +659,12 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		if _, custom := signatures[0].Declaration(); custom {
 			return b.extension(n, method)
 		}
+	}
+	if value, handled, err := b.constantValue(n); handled || err != nil {
+		if err != nil {
+			return expression{}, err
+		}
+		return b.parameter(n, value)
 	}
 	if name == "timestamp" {
 		return b.timestampLiteralCall(n)

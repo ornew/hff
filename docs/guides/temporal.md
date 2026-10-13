@@ -450,6 +450,12 @@ Native composite Duration storage is also unavailable. The
 shows the complete binding setup and can be run with
 `go run ./examples/sql-stored-durations` from the repository root.
 
+In a PostgreSQL predicate, a closed literal conversion such as
+`elapsed>"1h":duration` can be resolved to a nanoseconds parameter during
+`Build`; invalid conversions still behave as null. This does not change the
+compiled HFF plan or the meaning of Duration parsing. Conversion folding also
+applies in other supported literal value positions.
+
 #### Filter a relation of Duration values
 
 A direct scalar relation item can also bind a `bigint` nanosecond column. Make

@@ -49,6 +49,16 @@ Float decomposition remains in some structural sort keys. See the [native
 Float lowering record](../../optimizations/023-postgresql-native-float-lowering.md)
 and [Float model design](../../design/021-backend-native-float-semantics.md).
 
+### Fold closed built-in conversions during Build
+
+PostgreSQL `Build` resolves supported literal-only chains of exact built-in
+method IDs into typed SQL values in eligible value positions. This preserves
+source argument order and conversion failures without changing the compiled
+HFF plan or using extensions as constant evaluators. Float-looking `number()`
+input and Float operations stay on PostgreSQL's native path. See [literal
+conversion folding](../../optimizations/025-postgresql-literal-conversion-folding.md)
+for tested SQL shapes, accepted forms, and evidence limits.
+
 ### Compose direct predicates in mixed boolean filters
 
 Eligible native scalar leaves can remain in the outer `WHERE` when a filter

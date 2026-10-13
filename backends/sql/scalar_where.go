@@ -36,7 +36,8 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 		}
 		left, _ := n.Child(0)
 		right, _ := n.Child(1)
-		if right.Kind() != hff.LiteralNode {
+		value, constant, err := b.constantValue(right)
+		if err != nil || !constant {
 			return false
 		}
 		if b.directScalarLengthEligible(left, right) {
@@ -46,11 +47,12 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 		if !ok {
 			return false
 		}
-		value, _ := right.Literal()
 		return (kind == hff.IntType && value.Kind() == hff.IntKind) ||
 			(kind == hff.FloatType && value.Kind() == hff.FloatKind) ||
 			(kind == hff.StringType && value.Kind() == hff.StringKind) ||
-			(kind == hff.BoolType && value.Kind() == hff.BoolKind)
+			(kind == hff.BoolType && value.Kind() == hff.BoolKind) ||
+			(kind == hff.BytesType && value.Kind() == hff.BytesKind) ||
+			(kind == hff.DurationType && value.Kind() == hff.DurationKind)
 	case hff.NullTestNode:
 		child, _ := n.Child(0)
 		_, _, ok := b.directScalarColumn(child)
@@ -81,8 +83,8 @@ func (b *builder) directScalarLengthEligible(call, right hff.Node) bool {
 	if !ok || kind != hff.StringType {
 		return false
 	}
-	value, _ := right.Literal()
-	return value.Kind() == hff.IntKind
+	value, constant, err := b.constantValue(right)
+	return err == nil && constant && value.Kind() == hff.IntKind
 }
 
 func (b *builder) directScalarStringCallEligible(n hff.Node) bool {
@@ -109,10 +111,10 @@ func (b *builder) directScalarStringCallEligible(n hff.Node) bool {
 	}
 	for i := 1; i < n.ChildCount(); i++ {
 		argument, _ := n.Child(i)
-		if argument.Kind() != hff.LiteralNode {
+		value, constant, err := b.constantValue(argument)
+		if err != nil || !constant {
 			return false
 		}
-		value, _ := argument.Literal()
 		if value.Kind() != hff.StringKind && value.Kind() != hff.NullKind {
 			return false
 		}
@@ -132,17 +134,19 @@ func (b *builder) directScalarInEligible(n hff.Node) bool {
 	}
 	for i := 1; i < n.ChildCount(); i++ {
 		argument, _ := n.Child(i)
-		if argument.Kind() != hff.LiteralNode {
+		value, constant, err := b.constantValue(argument)
+		if err != nil || !constant {
 			return false
 		}
-		value, _ := argument.Literal()
 		if value.Kind() == hff.NullKind {
 			continue
 		}
 		if (kind != hff.IntType || value.Kind() != hff.IntKind) &&
 			(kind != hff.FloatType || value.Kind() != hff.FloatKind) &&
 			(kind != hff.StringType || value.Kind() != hff.StringKind) &&
-			(kind != hff.BoolType || value.Kind() != hff.BoolKind) {
+			(kind != hff.BoolType || value.Kind() != hff.BoolKind) &&
+			(kind != hff.BytesType || value.Kind() != hff.BytesKind) &&
+			(kind != hff.DurationType || value.Kind() != hff.DurationKind) {
 			return false
 		}
 	}
@@ -172,7 +176,7 @@ func (b *builder) directScalarColumn(n hff.Node) (string, hff.TypeKind, bool) {
 		return "", hff.InvalidType, false
 	}
 	kind, ok := scalarKind(n.Type())
-	if !ok || (kind != hff.IntType && kind != hff.FloatType && kind != hff.StringType && kind != hff.BoolType) {
+	if !ok || (kind != hff.IntType && kind != hff.FloatType && kind != hff.StringType && kind != hff.BoolType && kind != hff.BytesType && kind != hff.DurationType) {
 		return "", hff.InvalidType, false
 	}
 	return column, kind, true
@@ -238,8 +242,10 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 		column, kind, _ := b.directScalarColumn(child)
 		var test string
 		switch kind {
-		case hff.IntType, hff.FloatType:
+		case hff.IntType, hff.FloatType, hff.DurationType:
 			test = column + " <> 0"
+		case hff.BytesType:
+			test = "octet_length(" + column + ") > 0"
 		case hff.StringType:
 			test = column + " COLLATE \"C\" <> '' COLLATE \"C\""
 		default:
@@ -308,7 +314,10 @@ func (b *builder) directScalarStringCall(n hff.Node) (string, error) {
 	nullArgument := false
 	for i := 1; i < n.ChildCount(); i++ {
 		argument, _ := n.Child(i)
-		value, _ := argument.Literal()
+		value, _, err := b.constantValue(argument)
+		if err != nil {
+			return "", err
+		}
 		if value.Kind() == hff.NullKind {
 			nullArgument = true
 			continue
@@ -353,7 +362,10 @@ func (b *builder) directScalarIn(n hff.Node) (string, error) {
 	var needles []string
 	for i := 1; i < n.ChildCount(); i++ {
 		argument, _ := n.Child(i)
-		value, _ := argument.Literal()
+		value, _, err := b.constantValue(argument)
+		if err != nil {
+			return "", err
+		}
 		if value.Kind() == hff.NullKind {
 			continue
 		}

@@ -2,7 +2,6 @@ package local
 
 import (
 	"math"
-	"math/big"
 	"strings"
 	"time"
 
@@ -29,7 +28,7 @@ func (e *evaluation) temporal(id string, receiver core.Value, args []core.Value)
 		if err := e.charge(n * n); err != nil {
 			return result{}, err
 		}
-		return ordinary(parseDuration(text)), nil
+		return ordinary(core.ParseDuration(text)), nil
 	}
 	if strings.HasPrefix(id, "duration.") {
 		d, _ := receiver.AsDuration()
@@ -139,66 +138,4 @@ func parseTimestamp(text string) core.Value {
 		return core.Null()
 	}
 	return core.Timestamp(t)
-}
-
-func parseDuration(text string) core.Value {
-	negative := false
-	if len(text) > 0 && (text[0] == '+' || text[0] == '-') {
-		negative = text[0] == '-'
-		text = text[1:]
-	}
-	if text == "0" {
-		return core.Duration(0)
-	}
-	if text == "" {
-		return core.Null()
-	}
-	total := new(big.Rat)
-	for len(text) > 0 {
-		i, digits := 0, 0
-		for i < len(text) && text[i] >= '0' && text[i] <= '9' {
-			i++
-			digits++
-		}
-		if i < len(text) && text[i] == '.' {
-			i++
-			for i < len(text) && text[i] >= '0' && text[i] <= '9' {
-				i++
-				digits++
-			}
-		}
-		if digits == 0 {
-			return core.Null()
-		}
-		amount, ok := new(big.Rat).SetString(text[:i])
-		if !ok {
-			return core.Null()
-		}
-		text = text[i:]
-		unit := int64(0)
-		for _, u := range []struct {
-			name string
-			ns   int64
-		}{
-			{"ms", 1000000}, {"us", 1000}, {"ns", 1}, {"h", 3600000000000}, {"m", 60000000000}, {"s", 1000000000},
-		} {
-			if strings.HasPrefix(text, u.name) {
-				unit = u.ns
-				text = text[len(u.name):]
-				break
-			}
-		}
-		if unit == 0 {
-			return core.Null()
-		}
-		amount.Mul(amount, new(big.Rat).SetInt64(unit))
-		total.Add(total, amount)
-	}
-	if negative {
-		total.Neg(total)
-	}
-	if !total.IsInt() || !total.Num().IsInt64() {
-		return core.Null()
-	}
-	return core.Duration(time.Duration(total.Num().Int64()))
 }
