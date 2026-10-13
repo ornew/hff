@@ -29,6 +29,7 @@ remains explicit, while no-value and null behavior match the general lowering.
 ## Reproduction
 
 The baseline is commit [d448008](https://github.com/ornew/hff/commit/d448008).
+The implementation is included in commit [21bd6ef](https://github.com/ornew/hff/commit/21bd6ef).
 The comparison is between the previous projection lowering and the direct
 Float predicates. Representative filters are `factor<1.5`, `factor=-0.0`,
 `!factor<1.5`, and `age>18 factor<1.5`. The comparisons keep the same bound

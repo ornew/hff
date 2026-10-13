@@ -90,12 +90,17 @@ func TestScalarLiteralsRemainTypedParametersWithoutProjections(t *testing.T) {
 }
 
 func TestRepeatedScalarPathsShareTheirProjection(t *testing.T) {
-	query, err := hffsql.Build(context.Background(), compile(t, `age>=18 age<=100 age:exists`), hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if count := strings.Count(query.Where(), `"records"."age"`); count != 1 {
-		t.Fatalf("scalar column is read %d times, want one shared projection: %s", count, query.Where())
+	for _, source := range []string{
+		`age+1>=18 age+2<=100 age:exists`,
+		`age>=18 age<=100 age:exists age:string!=""`,
+	} {
+		query, err := hffsql.Build(context.Background(), compile(t, source), hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if count := strings.Count(query.Where(), `SELECT "records"."age" AS v`); count != 1 {
+			t.Fatalf("%s: scalar column has %d projections, want one shared projection: %s", source, count, query.Where())
+		}
 	}
 }
 

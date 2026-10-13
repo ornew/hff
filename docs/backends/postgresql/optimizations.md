@@ -38,6 +38,21 @@ fixture-specific plan observation, with no timing measurement. See [direct
 native Float predicates](../../optimizations/018-postgresql-float-predicate-shape.md)
 for the measured filters and evidence limits.
 
+### Compose direct predicates in mixed boolean filters
+
+Eligible native scalar leaves can remain in the outer `WHERE` when a filter
+also contains predicates that need general lowering. Generic siblings share
+one scalar subquery, which retains shared JSON parsing, metadata restoration,
+or exact Float work. If planned generic scopes share a schema path or ancestor
+path, a conservative check falls back to general lowering for the whole filter.
+This also covers cheap native columns and can miss some safe composition
+opportunities.
+Parameter binding remains in source order. This changes the generated SQL
+shape, not HFF null/no-value semantics or PostgreSQL's physical evaluation
+order. The [mixed predicate composition record](../../optimizations/019-postgresql-mixed-predicate-composition.md)
+shows three examples and a fixture-specific plan inspection; no execution-speed
+or default-planner index-use claim is made.
+
 ### Lower homogeneous scalar membership directly
 
 For eligible same-type scalar membership, the translator can use SQL
