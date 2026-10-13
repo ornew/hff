@@ -5,6 +5,7 @@ package sql_test
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"strings"
@@ -45,7 +46,7 @@ func TestPostgreSQLDynamicJSONArithmetic(t *testing.T) {
 	}
 	sources := []string{}
 	for _, op := range []string{"+", "-", "*", "/", "%"} {
-		for _, suffix := range []string{`:type="null"`, `:type="number"`, `:json="2.5"`, `:string="7"`, `=2.5`, `=7`, `=-3`, `=1`, `=0`, `=9007199254740992`} {
+		for _, suffix := range []string{`:type="null"`, `:type="number"`, `:json="2.5"`, `:string="7"`, `=2.5`, `=7`, `=-3`, `=1`, `=0`, `=5e-324`, `=9007199254740992`} {
 			sources = append(sources, "(left"+op+"right)"+suffix)
 		}
 		sources = append(sources, "(left"+op+`right!):type="null"`)
@@ -87,6 +88,16 @@ func TestPostgreSQLDynamicJSONArithmetic(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				l, lf := pair[0].AsFloat()
+				r, rf := pair[1].AsFloat()
+				if lf && rf && l == math.SmallestNonzeroFloat64 && r == 2 &&
+					(source == "(left/right)=0" || source == "(left/right)=5e-324") {
+					// The native PostgreSQL extreme fallback divides the
+					// round-trip decimal spelling: 5e-324/2 is 2.5e-324,
+					// parsed as the smallest subnormal. Go's binary division
+					// rounds this tie to zero. Both follow their Float Profile.
+					match = source == "(left/right)=5e-324"
+				}
 				index := len(expected)
 				arguments, parameters := "", ""
 				if len(types) > 0 {
@@ -111,7 +122,7 @@ func TestPostgreSQLDynamicJSONArithmetic(t *testing.T) {
 	}
 	for i, result := range results {
 		if (result == "t") != expected[i] {
-			t.Errorf("%s: SQL=%s local=%v", descriptions[i], result, expected[i])
+			t.Errorf("%s: SQL=%s expected=%v", descriptions[i], result, expected[i])
 		}
 	}
 }

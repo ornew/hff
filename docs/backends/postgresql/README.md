@@ -315,6 +315,15 @@ are identity operations. These methods preserve the input numeric subtype. For
 JSONB values, an ambiguous integer/float subtype requires the metadata
 described in the JSON guide.
 
+For dynamic JSON arithmetic and rounding, compiled types and type guards let
+the translator omit numeric branches that cannot occur, after the usual stored
+representation and metadata checks. Int-only values avoid the Float input
+branch where the operation permits; Int division still returns Float.
+Float operations retain PostgreSQL's general Float kernel. This
+reduces some generated SQL without changing the Float Profile or promising a
+runtime speedup. See the [JSON numeric arithmetic guide](json.md#numeric-arithmetic)
+for examples and limits.
+
 For statically known Int and Float expressions, PostgreSQL `Build` removes a
 narrow set of arithmetic identities while preserving the surviving operand's
 null, no-value, and type behavior:

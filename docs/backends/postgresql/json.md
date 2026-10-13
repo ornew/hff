@@ -727,6 +727,30 @@ remain exact over the represented values. See the
 [backend-native Float design](../../design/021-backend-native-float-semantics.md)
 for the language contract and backend profile details.
 
+For a dynamic JSON value, the compiled schema and any compiled type guard
+restrict which numeric families can reach an operation. The SQL translator
+uses those restrictions after its existing stored-value and metadata checks;
+it omits only the unreachable arithmetic branch. For example, `i` declared as
+`String|Int|Null` has only an Int input family, while a
+`String|Float|Null` value retains PostgreSQL's general Float kernel:
+
+```hff
+i+2>0
+f+2.0>0
+(data:[string|int]+2):type="int"
+i/2>0
+```
+
+An `Int|Float` value or `Any` value keeps every numeric family it may contain.
+Mixed arithmetic still promotes Int as specified, and Int division still
+returns Float even though its input family is Int. These restrictions do not
+validate stored rows at Build time;
+the declared schema, JSON representation, and any required JSONB metadata
+must remain consistent. This SQL-shape optimization does not alter the
+PostgreSQL-native Float Profile or promise an execution-speed improvement.
+See [PostgreSQL translation optimizations](optimizations.md#prune-numeric-arithmetic-branches-excluded-by-json-schema)
+for the shape evidence and applicability limits.
+
 Float arithmetic lowering follows the PostgreSQL `float.*` Profile, including
 the documented extreme-magnitude fallback. It does not promise a particular
 SQL size or execution time. The earlier exact-decomposition reuse measurement

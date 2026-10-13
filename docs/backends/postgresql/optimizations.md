@@ -96,6 +96,21 @@ preserved. The [schema-guided numeric dispatch record](../../optimizations/020-p
 shows the measured SQL-shape differences; no runtime-speed or plan claim is
 made.
 
+### Prune numeric arithmetic branches excluded by JSON schema
+
+For JSON-backed arithmetic, negation, and numeric rounding, the translator
+intersects the compiled value type with the stored schema's possible numeric
+families after the existing representation and metadata checks. A
+`String|Int` value therefore has only an Int input family; Int division still
+returns Float. A
+`String|Float` value retains PostgreSQL's general Float kernel, and an
+`Int|Float` or `Any` value keeps each numeric family it can reach. Int
+overflow, Int-to-Float promotion, Int division results, and the PostgreSQL
+native Float Profile remain unchanged. Parity and SQL-shape checks passed, but
+no runtime measurement was made. See the [schema-guided arithmetic branch
+record](../../optimizations/028-postgresql-schema-numeric-arithmetic.md) for
+filters and limits.
+
 ### Prune impossible categories in dynamic JSON pair comparisons
 
 For dynamic-versus-dynamic comparisons, the translator intersects the JSON
