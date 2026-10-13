@@ -60,6 +60,19 @@ shorter and had no `OFFSET 0` barriers, but no plan or execution timing was
 collected. The [native String predicate shape](../../optimizations/015-postgresql-string-predicate-shape.md)
 record gives the exact filters and limits.
 
+### Emit direct membership predicates for JSONB String lists
+
+For a directly bound JSONB `List<String>` and one or more literal String
+needles, `contains()` can lower to one `@>` predicate without projection
+barriers; every needle must occur in the list, and duplicates do not require
+extra occurrences. Nullable containers retain an explicit null test; null or
+dynamic needles, guarded/metadata-backed values, and other list shapes use the
+general path. This SQL-shape result does not establish production index
+selection or execution speed. Plain `EXPLAIN` on the empty fixture showed a
+Bitmap Index Scan for two GIN operator classes.
+See the [JSONB String-list membership](../../optimizations/016-postgresql-jsonb-string-list-membership.md)
+record for the fixture and limits.
+
 ### Project computed steps once
 
 Computed expressions are lowered through relational `LATERAL` projections.

@@ -7,7 +7,7 @@ import (
 	"github.com/ornew/hff"
 )
 
-// Direct scalar tests need no intermediate relation. Nullable leaves include
+// Direct filter tests need no intermediate relation. Nullable leaves include
 // an explicit non-null test so the complete expression has the same Boolean
 // result as HFF even outside a WHERE clause. Keep every other expression on
 // the general lowering path.
@@ -57,7 +57,7 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 	case hff.BoolNode:
 		child, _ := n.Child(0)
 		if child.Kind() == hff.CallNode {
-			return b.directScalarInEligible(child) || b.directScalarStringCallEligible(child)
+			return b.directScalarInEligible(child) || b.directScalarStringCallEligible(child) || b.directJSONBContainsEligible(child)
 		}
 		_, _, ok := b.directScalarColumn(child)
 		return ok
@@ -223,6 +223,9 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 		if child.Kind() == hff.CallNode {
 			if b.directScalarInEligible(child) {
 				return b.directScalarIn(child)
+			}
+			if b.directJSONBContainsEligible(child) {
+				return b.directJSONBContains(child)
 			}
 			return b.directScalarStringCall(child)
 		}
