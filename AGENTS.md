@@ -23,6 +23,10 @@ or guide with each implemented feature. Update affected contracts and examples.
 - Use Go 1.27.1. Separate standard-library and external imports. Run `gofmt`
   and `go vet` before committing Go changes, along
   with relevant project checks documented under `docs/development/`.
+- Prioritize performance and execution cost when evaluating language contracts;
+  compatibility alone does not prevent reconsidering semantics. For a semantic
+  change, present alternatives and tradeoffs and wait for an Ask decision before
+  dependent work.
 - Honor an explicit temporary test/build hold: do not run tests, vet,
   benchmarks, or heavy builds until the owner releases it.
 - Treat `../pego` as a read-only reference during HFF work.
