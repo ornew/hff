@@ -1213,7 +1213,13 @@ int64 through float64. JSONB needs numeric metadata wherever normalization
 would lose a value or its HFF numeric kind; schema-known numeric candidates can
 remove that need when they determine the kind. The sign of zero does not alter
 ordinary numeric comparison results; its metadata text matters to operations
-that observe the exact representation, such as serialization.
+that observe the exact representation, such as serialization. For scalar
+dynamic pairs, PostgreSQL can compare the original JSON values or
+metadata-restored JSONB values without serializing them to canonical JSON first.
+This does not skip schema, representability, or metadata checks. When compatible
+list or object values are possible, structural equality retains the recursive
+path. See [scalar pair SQL shape](optimizations.md#compare-scalar-json-pairs-without-canonical-json-conversion)
+for details.
 
 An incompatible runtime family at the comparison root produces ordinary HFF
 null, which matches no row as a predicate. A runtime-null or no-value operand

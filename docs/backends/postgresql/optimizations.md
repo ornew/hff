@@ -77,6 +77,18 @@ applies whenever a Float branch is possible. See the [dynamic pair category
 pruning record](../../optimizations/021-postgresql-json-pair-category-pruning.md)
 for SQL-shape examples and limits; no timing or speed claim is made.
 
+### Compare scalar JSON pairs without canonical JSON conversion
+
+When two JSON-backed dynamic values can only compare as scalars, the translator
+can consume their original JSON values or metadata-restored JSONB values
+directly. Reachable numeric families are decoded once for the comparison.
+Schema checks, JSONB metadata recovery, and unsupported-union checks still run
+before this path. If matching list or object values are possible, structural
+equality retains the normalized recursive path. See [scalar JSON pair
+decoding](../../optimizations/022-postgresql-scalar-pair-decode.md) for the
+SQL-shape and fixture-specific `EXPLAIN` evidence. No execution timing was
+collected.
+
 ### Lower homogeneous scalar membership directly
 
 For eligible same-type scalar membership, the translator can use SQL

@@ -66,52 +66,36 @@ func jsonMayContainNumbers(typ hff.Type) bool {
 // tree walk. Any and ambiguous numbers require preserved JSON spelling; plain
 // JSONB cannot recover those distinctions from value magnitude.
 func (b *builder) comparisonDocument(n hff.Node, raw string, format JSONFormat, typ hff.Type) (string, error) {
-	if err := b.checkJSONStringSchemas(n, typ); err != nil {
+	if err := b.checkComparisonDocumentSchema(n, format, typ); err != nil {
 		return "", err
 	}
+	return b.normalizedComparisonDocument(n, raw, format, typ)
+}
+
+func (b *builder) normalizedComparisonDocument(n hff.Node, raw string, format JSONFormat, typ hff.Type) (string, error) {
 	if err := checkContext(b.ctx); err != nil {
 		return "", err
 	}
-	if typ.Kind() == hff.AnyType {
-		if format != JSON {
-			return "", b.failure(n, "dynamic JSON equality requires preserved numeric types or type metadata")
-		}
+	shape := makeComparisonShape(typ)
+	if shape.any {
 		return "COALESCE(" + raw + ",'null'::json)", nil
 	}
-	members := []hff.Type{typ}
-	if typ.Kind() == hff.UnionType {
-		members = typ.Members()
-		for _, member := range members {
-			if member.Kind() == hff.AnyType {
-				return b.comparisonDocument(n, raw, format, member)
-			}
-		}
-	}
-	integer, floating := jsonNumericCandidates(typ)
-	if integer && floating && format != JSON {
-		return "", b.failure(n, "dynamic JSON equality requires preserved numeric types or type metadata")
-	}
+
 	class := string(format) + "_typeof(" + raw + ")"
 	code := "CASE WHEN " + raw + " IS NULL OR " + class + "='null' THEN 'null'::json"
 	// Merge structural alternatives just as field access does: each runtime
 	// key/element is normalized using all applicable declared member types.
-	var listTypes []hff.Type
-	var objects []hff.Type
-	for _, member := range members {
+	for _, member := range shape.members {
 		condition := class + "='" + jsonCategory(member.Kind()) + "'"
 		var value string
 		switch member.Kind() {
 		case hff.NullType, hff.NeverType:
 			continue
-		case hff.ListType:
-			listTypes = append(listTypes, member.Element())
-			continue
-		case hff.StructType, hff.MapType:
-			objects = append(objects, member)
+		case hff.ListType, hff.StructType, hff.MapType:
 			continue
 		case hff.IntType, hff.FloatType:
 			text := "(" + raw + " #>> '{}'::text[])"
-			if integer && floating {
+			if shape.integer && shape.floating {
 				operator := "!~"
 				if member.Kind() == hff.FloatType {
 					operator = "~"
@@ -134,49 +118,33 @@ func (b *builder) comparisonDocument(n hff.Node, raw string, format JSONFormat, 
 		}
 		code += " WHEN " + condition + " THEN " + value
 	}
-	if len(listTypes) > 0 {
+	if shape.list {
 		alias := b.nextAlias()
-		item, err := b.comparisonDocument(n, alias+".value", format, hff.NewUnionType(listTypes...))
+		item, err := b.normalizedComparisonDocument(n, alias+".value", format, shape.element)
 		if err != nil {
 			return "", err
 		}
 		code += " WHEN " + class + "='array' THEN (SELECT COALESCE(json_agg(" + item + " ORDER BY " + alias + ".ord),'[]'::json) FROM " + string(format) + "_array_elements(" + raw + ") WITH ORDINALITY AS " + alias + "(value,ord))"
 	}
-	if len(objects) > 0 {
+	if shape.object {
 		alias := b.nextAlias()
-		var fallback []hff.Type
-		fields := map[string][]hff.Type{}
-		var keys []string
-		for _, object := range objects {
-			if object.Kind() == hff.MapType {
-				fallback = append(fallback, object.Element())
-			} else {
-				for _, field := range object.Fields() {
-					if _, exists := fields[field.Name]; !exists {
-						keys = append(keys, field.Name)
-					}
-					fields[field.Name] = append(fields[field.Name], field.Type)
-				}
-			}
-		}
 		item := "CASE"
-		for _, key := range keys {
+		for _, key := range shape.keys {
 			parameter, err := b.parameter(n, hff.String(key))
 			if err != nil {
 				return "", err
 			}
-			choices := append(append([]hff.Type(nil), fields[key]...), fallback...)
-			value, err := b.comparisonDocument(n, alias+".value", format, hff.NewUnionType(choices...))
+			value, err := b.normalizedComparisonDocument(n, alias+".value", format, shape.fields[key])
 			if err != nil {
 				return "", err
 			}
 			item += " WHEN " + alias + ".key COLLATE \"C\"=" + parameter.code + " COLLATE \"C\" THEN " + value
 		}
-		otherwise, err := b.comparisonDocument(n, alias+".value", format, hff.NewUnionType(fallback...))
+		otherwise, err := b.normalizedComparisonDocument(n, alias+".value", format, shape.fallback)
 		if err != nil {
 			return "", err
 		}
-		if len(keys) == 0 {
+		if len(shape.keys) == 0 {
 			item = otherwise
 		} else {
 			item += " ELSE " + otherwise + " END"
@@ -202,13 +170,26 @@ func (b *builder) dynamicJSONPair(n hff.Node, left, right expression, op hff.Ope
 		}
 	}
 	values := []expression{left, right}
+	stored := []hff.Type{leftType, rightType}
+	for i := range values {
+		format, ok := b.jsonValues[values[i].code]
+		if !ok {
+			return expression{}, b.failure(n, "dynamic comparison requires recoverable JSON representations")
+		}
+		if err := b.checkComparisonDocumentSchema(n, format, stored[i]); err != nil {
+			return expression{}, err
+		}
+	}
+	if !sharedJSONContainer(leftNode.Type(), rightNode.Type()) || (op != hff.Equal && op != hff.NotEqual) {
+		return b.scalarJSONPair(n, left, leftFormat, leftType, right, rightFormat, rightType, op)
+	}
 	for i := range values {
 		format, ok := b.jsonValues[values[i].code]
 		if !ok {
 			return expression{}, b.failure(n, "dynamic comparison requires recoverable JSON representations")
 		}
 		child, _ := n.Child(i)
-		code, err := b.comparisonDocument(n, values[i].code, format, b.jsonStoredType(child))
+		code, err := b.normalizedComparisonDocument(n, values[i].code, format, b.jsonStoredType(child))
 		if err != nil {
 			return expression{}, err
 		}
@@ -355,40 +336,73 @@ func jsonTaggedScalarFamily(typ hff.Type, format JSONFormat) (hff.TypeKind, bool
 	return tagged, !(integer && floating && format != JSON)
 }
 
+type jsonNumericSide struct {
+	integer, floating, ambiguous bool
+}
+
 func (b *builder) dynamicJSONNumbers(left, right string, op hff.Operator, leftInt, leftFloat, rightInt, rightFloat bool) string {
+	return b.jsonNumericPair(left, right, op,
+		jsonNumericSide{leftInt, leftFloat, leftInt && leftFloat},
+		jsonNumericSide{rightInt, rightFloat, rightInt && rightFloat})
+}
+
+// Decode each reachable numeric family once in this scalar subquery. A mixed
+// comparison references its Float several times, and ambiguous family pairs
+// reuse the same conversions in multiple branches. Never hoist these guarded
+// casts out of the numeric caller's CASE or callback scope.
+func (b *builder) jsonNumericPair(left, right string, op hff.Operator, l, r jsonNumericSide) string {
 	outer, paths := b.steps, b.sharedPaths
 	b.steps, b.sharedPaths = nil, nil
 	defer func() { b.steps, b.sharedPaths = outer, paths }()
-	var branches []string
-	for _, l := range []struct {
-		kind    hff.TypeKind
-		allowed bool
-	}{{hff.IntType, leftInt}, {hff.FloatType, leftFloat}} {
-		if !l.allowed {
-			continue
+	type family struct {
+		condition string
+		value     expression
+	}
+	count := func(side jsonNumericSide) int {
+		n := 0
+		if side.integer {
+			n++
 		}
-		for _, r := range []struct {
+		if side.floating {
+			n++
+		}
+		return n
+	}
+	shared := count(l)*count(r) > 1 || (l.integer && r.floating) || (l.floating && r.integer)
+	if shared {
+		left, right = b.project(left), b.project(right)
+	}
+	families := func(text string, side jsonNumericSide) []family {
+		var values []family
+		for _, candidate := range []struct {
 			kind    hff.TypeKind
 			allowed bool
-		}{{hff.IntType, rightInt}, {hff.FloatType, rightFloat}} {
-			if !r.allowed {
+		}{{hff.IntType, side.integer}, {hff.FloatType, side.floating}} {
+			if !candidate.allowed {
 				continue
 			}
-			condition := func(text string, kind hff.TypeKind, ambiguous bool) string {
-				if !ambiguous {
-					return "TRUE"
-				}
+			condition := "TRUE"
+			if side.ambiguous {
 				operator := "!~"
-				if kind == hff.FloatType {
+				if candidate.kind == hff.FloatType {
 					operator = "~"
 				}
-				return text + " " + operator + " '[.eE]'"
+				condition = text + " " + operator + " '[.eE]'"
 			}
-			convert := func(text string, kind hff.TypeKind, ambiguous bool) expression {
-				return expression{"(CASE WHEN " + condition(text, kind, ambiguous) + " THEN " + jsonScalarCast(text, kind) + " ELSE NULL END)", "TRUE", kind}
+			code := "(CASE WHEN " + condition + " THEN " + jsonScalarCast(text, candidate.kind) + " ELSE NULL END)"
+			if shared {
+				code = b.project(code)
 			}
-			comparison := b.scalarComparison(convert(left, l.kind, leftInt && leftFloat), convert(right, r.kind, rightInt && rightFloat), op)
-			branches = append(branches, "WHEN "+both(condition(left, l.kind, leftInt && leftFloat), condition(right, r.kind, rightInt && rightFloat))+" THEN "+comparison.code)
+			values = append(values, family{condition, expression{code, "TRUE", candidate.kind}})
+		}
+		return values
+	}
+	leftFamilies, rightFamilies := families(left, l), families(right, r)
+	var branches []string
+	for _, leftFamily := range leftFamilies {
+		for _, rightFamily := range rightFamilies {
+			comparison := b.scalarComparison(leftFamily.value, rightFamily.value, op)
+			branches = append(branches, "WHEN "+both(leftFamily.condition, rightFamily.condition)+" THEN "+comparison.code)
 		}
 	}
 	code := "(CASE " + strings.Join(branches, " ") + " ELSE FALSE END)"
