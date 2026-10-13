@@ -53,6 +53,16 @@ order. The [mixed predicate composition record](../../optimizations/019-postgres
 shows three examples and a fixture-specific plan inspection; no execution-speed
 or default-planner index-use claim is made.
 
+### Prune numeric comparison branches excluded by JSON schema
+
+Dynamic JSON comparisons emit only Int or Float branches admitted by the
+stored schema. An Any value or a schema that permits both numeric subtypes
+keeps runtime dispatch; exact mixed Int/Float comparison remains unchanged.
+Null/no-value and runtime category mismatch behavior are preserved. The
+[schema-guided numeric dispatch record](../../optimizations/020-postgresql-schema-numeric-dispatch.md)
+shows the measured SQL-shape differences; no runtime-speed or plan claim is
+made.
+
 ### Lower homogeneous scalar membership directly
 
 For eligible same-type scalar membership, the translator can use SQL

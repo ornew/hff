@@ -121,10 +121,19 @@ func (b *builder) dynamicJSONComparison(n hff.Node, left, right expression, op h
 			integer = both(matches, "("+text+" !~ '[.eE]')")
 			floating = both(matches, "("+text+" ~ '[.eE]')")
 		}
-		intValue := expression{"(CASE WHEN " + integer + " THEN " + jsonScalarCast(text, hff.IntType) + " ELSE NULL END)", "TRUE", hff.IntType}
-		floatValue := expression{"(CASE WHEN " + floating + " THEN " + jsonScalarCast(text, hff.FloatType) + " ELSE NULL END)", "TRUE", hff.FloatType}
-		intComparison, floatComparison := compare(intValue), compare(floatValue)
-		code := "(CASE WHEN " + nullOrAbsent + " THEN FALSE WHEN " + integer + " THEN " + intComparison.code + " WHEN " + floating + " THEN " + floatComparison.code + " ELSE NULL::boolean END)"
+		// Lower only numeric families admitted by the schema. A FALSE
+		// dispatch condition does not prevent comparison lowering from
+		// emitting Float parsing and exact mixed-comparison projections.
+		code := "(CASE WHEN " + nullOrAbsent + " THEN FALSE"
+		if canInt {
+			intValue := expression{"(CASE WHEN " + integer + " THEN " + jsonScalarCast(text, hff.IntType) + " ELSE NULL END)", "TRUE", hff.IntType}
+			code += " WHEN " + integer + " THEN " + compare(intValue).code
+		}
+		if canFloat {
+			floatValue := expression{"(CASE WHEN " + floating + " THEN " + jsonScalarCast(text, hff.FloatType) + " ELSE NULL END)", "TRUE", hff.FloatType}
+			code += " WHEN " + floating + " THEN " + compare(floatValue).code
+		}
+		code += " ELSE NULL::boolean END)"
 		return expression{code, "TRUE", hff.BoolType}, nil
 	default:
 		return expression{}, b.failure(n, "dynamic JSON comparison requires a supported scalar counterpart")

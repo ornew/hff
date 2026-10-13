@@ -34,6 +34,7 @@ opportunities.
 ## Reproduction
 
 The baseline is commit [17b406b](https://github.com/ornew/hff/commit/17b406b).
+The implementation is commit [9d1f24e](https://github.com/ornew/hff/commit/9d1f24e).
 The candidate comparisons use these filters:
 
 ```hff
