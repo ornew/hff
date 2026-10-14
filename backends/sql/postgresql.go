@@ -766,10 +766,10 @@ func (b *builder) call(n hff.Node) (expression, error) {
 	if name == "timestamp" {
 		return b.timestampLiteralCall(n)
 	}
-	if name == "any" || name == "all" {
+	if name == "any" || name == "all" || name == "count" && n.ChildCount() > 1 {
 		return b.jsonPredicate(n, name)
 	}
-	if name == "size" {
+	if name == "size" || name == "count" && n.ChildCount() == 1 {
 		if value, handled, err := b.relationSize(n); handled {
 			return value, err
 		}
@@ -779,7 +779,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 			return value, err
 		}
 	}
-	if name == "map" || name == "flatmap" {
+	if name == "map" || name == "flatmap" || name == "filter" {
 		return b.jsonTransform(n, name)
 	}
 	if name == "foldl" || name == "foldr" {
@@ -796,7 +796,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		}
 	}
 	switch name {
-	case "duration", "hours", "minutes", "seconds", "milliseconds", "microseconds", "nanoseconds", "year", "month", "dayofmonth", "dayofyear", "before", "after", "add", "matches", "base64", "base64r", "frombase64", "frombase64r", "lower", "upper", "round", "ceil", "floor", "bool", "number", "fromjson", "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "has", "get", "keys", "values", "items", "in", "unique", "sort":
+	case "duration", "hours", "minutes", "seconds", "milliseconds", "microseconds", "nanoseconds", "year", "month", "dayofmonth", "dayofyear", "before", "after", "add", "matches", "base64", "base64r", "frombase64", "frombase64r", "lower", "upper", "round", "ceil", "floor", "bool", "number", "fromjson", "json", "string", "exists", "type", "len", "contains", "startswith", "endswith", "concat", "not", "and", "or", "size", "count", "has", "get", "keys", "values", "items", "in", "unique", "sort":
 	default:
 		return expression{}, b.failure(n, "PostgreSQL does not yet support method "+name)
 	}
@@ -875,7 +875,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 	if name == "get" || name == "values" || name == "items" {
 		return b.jsonObjectAccess(n, name, values)
 	}
-	if name == "size" || name == "has" || name == "keys" {
+	if name == "size" || name == "count" || name == "has" || name == "keys" {
 		for _, value := range values {
 			if value.kind == hff.AnyType {
 				return b.dynamicJSONShape(n, name, values)

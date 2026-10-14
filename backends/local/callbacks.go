@@ -7,7 +7,7 @@ import (
 
 func higherMethod(id string) bool {
 	switch id {
-	case "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr":
+	case "list.any", "list.all", "list.count", "list.filter", "list.map", "list.flatmap", "list.foldl", "list.foldr":
 		return true
 	}
 	return false
@@ -77,9 +77,10 @@ func (e *evaluation) higher(n plan.Node, receiver core.Value, id string) (result
 		}
 		return accumulator, nil
 	}
-	predicate := id == "list.any" || id == "list.all"
+	predicate := id == "list.any" || id == "list.all" || id == "list.count" || id == "list.filter"
+	var count int64
 	var output []core.Value
-	if !predicate {
+	if id == "list.filter" || !predicate {
 		if err := e.allocate(1); err != nil {
 			return result{}, err
 		}
@@ -96,6 +97,15 @@ func (e *evaluation) higher(n plan.Node, receiver core.Value, id string) (result
 			}
 			if id == "list.all" && !yes {
 				return ordinary(core.Bool(false)), nil
+			}
+			if id == "list.count" && yes {
+				count++
+			}
+			if id == "list.filter" && yes {
+				if err := e.allocate(1); err != nil {
+					return result{}, err
+				}
+				output = append(output, value)
 			}
 			continue
 		}
@@ -122,6 +132,12 @@ func (e *evaluation) higher(n plan.Node, receiver core.Value, id string) (result
 		}
 	}
 	if predicate {
+		if id == "list.count" {
+			return ordinary(core.Int(count)), nil
+		}
+		if id == "list.filter" {
+			return ordinary(core.OwnedList(output)), nil
+		}
 		return ordinary(core.Bool(id == "list.all")), nil
 	}
 	return ordinary(core.OwnedList(output)), nil

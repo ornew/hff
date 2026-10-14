@@ -12,9 +12,9 @@ func supportedMethod(id string) bool {
 	switch id {
 	case "string.fromjson", "any.json", "any.string", "any.type", "any.exists", "any.in", "bool.and", "bool.or", "bool.not", "number.round", "number.ceil", "number.floor", "string.len", "bytes.len", "string.contains", "string.matches", "string.startswith", "string.endswith", "string.lower", "string.upper", "string.bool", "string.number", "string.concat":
 		return true
-	case "list.size", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "object.size", "object.has", "object.get", "object.keys", "object.values", "object.items":
+	case "list.size", "list.count", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "object.size", "object.has", "object.get", "object.keys", "object.values", "object.items":
 		return true
-	case "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr":
+	case "list.any", "list.all", "list.filter", "list.map", "list.flatmap", "list.foldl", "list.foldr":
 		return true
 	case "string.frombase64", "string.frombase64r", "bytes.base64", "bytes.base64r":
 		return true
@@ -89,7 +89,7 @@ func (e *evaluation) call(n plan.Node) (result, error) {
 	if !found {
 		return null(), nil
 	}
-	if higherMethod(signature.ID()) {
+	if higherMethod(signature.ID()) && n.ChildCount() > 1 {
 		return e.higher(n, receiver.value, signature.ID())
 	}
 	// Boolean methods preserve receiver-null propagation but evaluate their

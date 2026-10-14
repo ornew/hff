@@ -6,6 +6,24 @@ catalog](../reference/methods.md); this guide focuses on useful query patterns.
 
 ## List queries
 
+`count()` returns the number of elements. Its predicate form counts elements
+whose callback result converts to true; `filter()` returns the original
+matching elements in their existing order:
+
+```hff
+items:count
+items:count(item=>item.active)=2
+items:filter(item=>item.active):size>=1
+```
+
+Both predicate methods treat a guarded no-value callback result as false for
+that element. A null receiver yields null. `filter()` does not map or otherwise
+change retained values; filtering an empty list returns an empty list. The
+zero-argument `count()` requires `method:list.count`; the callback form and
+`filter()` also require the `Callbacks` capability. Nested callbacks require
+`NestedCallbacks` as well. A selected backend can still reject a query it
+cannot lower faithfully.
+
 ```hff
 tags:size>=2
 tags:has(-1)

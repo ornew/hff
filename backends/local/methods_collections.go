@@ -6,7 +6,7 @@ import (
 
 func (e *evaluation) collectionMethod(id string, receiver core.Value, args []core.Value) (result, error) {
 	switch id {
-	case "list.size":
+	case "list.size", "list.count":
 		xs, _ := receiver.ListView()
 		return ordinary(core.Int(int64(len(xs)))), nil
 	case "object.size":

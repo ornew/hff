@@ -32,6 +32,10 @@ func TestSharedConformanceJSONBuildContracts(t *testing.T) {
 	supported["exists_observes_falsy_values"] = true
 	supported["explicit_type_guard"] = true
 	supported["any_and_all_empty_lists"] = true
+	supported["count_with_and_without_predicate"] = true
+	supported["count_guard_failure_is_false"] = true
+	supported["filter_keeps_original_values_in_order"] = true
+	supported["filter_guard_failure_omits_element"] = true
 	supported["callback_predicate_guard"] = true
 	supported["null_type_is_observable"] = true
 	supported["object_lookup_distinguishes_missing"] = true

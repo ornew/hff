@@ -129,6 +129,9 @@ partial serialization.
 | Signature | Purpose |
 |:--|:--|
 | `list:size() -> number` | Element count |
+| `list:count() -> number` | Element count |
+| `list:count(func(T) -> bool) -> number` | Count elements whose callback result converts to true |
+| `list:filter(func(T) -> bool) -> list` | Keep elements whose callback result converts to true |
 | `list:has(number) -> bool` | Index-presence test |
 | `list:contains(any...) -> bool` | All supplied elements are present; at least one argument |
 | `list:unique() -> bool` | Whether every element is distinct |
@@ -142,6 +145,14 @@ partial serialization.
 | `list:foldr(A, func(T, A) -> A) -> A` | Right fold, callback arguments `(x, acc)` |
 
 List element count uses `size()`, including implicit boolean conversion.
+`count()` without a callback returns the element count. With a predicate
+callback, it counts elements whose callback result converts to true. The
+callback is evaluated for each element; guarded no-value converts to false for
+that element. An empty list counts as zero. A null receiver yields null.
+`filter(predicate)` retains the original elements whose callback result
+converts to true, in their original order; it does not transform them. Guarded
+no-value converts to false for that element. Filtering an empty list returns
+an empty list, and a null receiver yields null.
 `has()` supports the same negative indices as element access. `unique()` returns
 whether every element is distinct using structural equality. `has()` returns
 false for an out-of-range integer-valued index, and null for a non-integer index. `sort()` is stable
@@ -155,6 +166,12 @@ known. Empty lists return false for any and true for all. Null receivers yield
 null. Guarded no-value from a predicate callback converts to false for that
 element and does not invalidate other elements. A cancellation still aborts the
 call; it is never a false predicate result.
+
+`count(predicate)` and `filter(predicate)` use the same callback syntax and
+ordinary boolean conversion, but inspect the whole list because their result
+depends on every element. Callback order is left to right. Cancellation or a
+resource-limit error aborts the method rather than returning a partial count or
+list.
 
 ```hff
 items:any(x=>x.price>10)

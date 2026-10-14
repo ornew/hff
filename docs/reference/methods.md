@@ -89,6 +89,9 @@ See [string and byte rules](../../spec/methods.md#strings-and-bytes).
 | Signature | Result and use |
 |:--|:--|
 | `list:size() -> number` | Element count. |
+| `list:count() -> number` | Element count. |
+| `list:count(func(T) -> bool) -> number` | Count elements whose callback result converts to true. |
+| `list:filter(func(T) -> bool) -> list` | Keep original elements whose callback result converts to true. |
 | `list:has(number) -> bool` | Whether an integer-valued index exists; negative indexes count from the end. |
 | `list:contains(any...) -> bool` | Whether every supplied value is an element; requires at least one argument. |
 | `list:unique() -> bool` | Whether all elements are distinct by HFF equality. |
@@ -104,15 +107,27 @@ See [string and byte rules](../../spec/methods.md#strings-and-bytes).
 `any()` and `all()` short-circuit in list order; empty-list results are false
 and true respectively. Callback types are inferred. Nested callbacks require
 the `NestedCallbacks` capability and are bounded by `MaxCallbackDepth`.
+`count()` without a callback returns the element count. Its predicate form
+counts truthy callback results, treating guarded no-value as false for that
+element. `filter(predicate)` keeps the matching original values in order;
+guarded no-value is false, and filtering an empty list returns an empty list.
+Both methods return null for a null receiver. Callback forms require the
+`Callbacks` capability. Backend support is conditional on the bound
+representation and, for an ordered relation result from `filter()`, a unique
+order mapping.
 See [list rules](../../spec/methods.md#lists) and the
 [callback guide](../guides/callbacks.md).
 
-The PostgreSQL backend currently supports schema-known JSON/JSONB list
-`contains()`, `unique()`, `sort()`, `concat(list)`, `any()`, and `all()`, plus
-`map()` and `flatmap()` when callback result types are known; scalar `in()` is
-also supported inside callbacks. Folds are supported with known accumulator
-types. `json()` and `string()` support null, bool, int64, string, and finite
-float values from scalar columns and native JSON in the schema-known profile.
+For PostgreSQL, schema-known JSON/JSONB lists support `count()` and
+`filter(predicate)` when the callback and retained values can be represented.
+Bound relations support both count forms without a unique order; relation
+`filter(predicate)` requires a unique order because it returns a list.
+Schema-known JSON/JSONB lists also support `contains()`, `unique()`, `sort()`,
+`concat(list)`, `any()`, and `all()`, plus `map()` and `flatmap()` when callback
+result types are known; scalar `in()` is also supported inside callbacks.
+Folds are supported with known accumulator types. `json()` and `string()`
+support null, bool, int64, string, and finite float values from scalar columns
+and native JSON in the schema-known profile.
 JSONB Float serialization requires metadata when storage may have lost an
 observable representation such as signed zero. Float text follows the
 backend's `float.format` Profile detail. PostgreSQL supports `fromjson()` for

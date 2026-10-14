@@ -42,6 +42,11 @@ func (b *builder) jsonStoredType(n hff.Node) hff.Type {
 	}
 	if method, ok := n.Method(); ok {
 		switch method.Name() {
+		case "filter":
+			// A filter selects original elements without changing their storage
+			// representation, even when the compiler widened an Any branch.
+			receiver, _ := n.Child(0)
+			return sortListType(b.jsonStoredType(receiver))
 		case "foldl", "foldr":
 			// Successfully lowered folds have normalized JSON-native state.
 			typ, _ := b.jsonFoldType(n, n.Type())

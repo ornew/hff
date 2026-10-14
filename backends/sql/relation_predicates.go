@@ -115,6 +115,10 @@ func (b *builder) relationPredicate(n hff.Node, name string) (expression, bool, 
 	if len(b.steps) > 0 {
 		from += " CROSS JOIN LATERAL " + strings.Join(b.steps, " CROSS JOIN LATERAL ")
 	}
+	if name == "count" {
+		code := "(CASE WHEN " + strings.Join(absent, " OR ") + " THEN NULL::bigint ELSE (SELECT count(*) FROM " + from + " WHERE (" + b.predicateCode(c.correlation) + ") AND " + predicate + ") END)"
+		return expression{code: code, present: "TRUE", kind: hff.IntType}, true, nil
+	}
 	code := "(CASE WHEN " + strings.Join(absent, " OR ") + " THEN NULL ELSE " + operator + " (SELECT 1 FROM " + from + " WHERE (" + b.predicateCode(c.correlation) + ") AND " + predicate + ") END)"
 	return expression{code: code, present: "TRUE", kind: hff.BoolType}, true, nil
 }

@@ -8,10 +8,10 @@ import (
 
 // Lower a lexical callback into a row source, isolating its projections from
 // the enclosing expression. Each row retains its source ordinal and no-value.
-func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONFormat, callback hff.Node) (from, ordinal string, result expression, stored hff.Type, err error) {
+func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONFormat, callback hff.Node, itemType hff.Type, wantPredicate bool) (from, ordinal, item, predicate string, result expression, stored hff.Type, err error) {
 	parameters, ok := callback.Parameters()
 	if !ok || len(parameters) != 1 {
-		return "", "", expression{}, hff.Type{}, b.failure(n, "list transformation requires one callback parameter")
+		return "", "", "", "", expression{}, hff.Type{}, b.failure(n, "list transformation requires one callback parameter")
 	}
 	alias := b.nextAlias()
 	outer := b.steps
@@ -27,7 +27,7 @@ func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONForm
 	loss := b.losesFloat(receiver, nil)
 	restoreProvenance := b.callbackProvenance(id, receiver)
 	defer restoreProvenance()
-	b.parameters[id] = jsonParameter{code: alias + ".value", format: format, lossy: loss}
+	b.parameters[id] = jsonParameter{code: alias + ".value", format: format, typ: itemType, lossy: loss}
 	defer func() {
 		b.steps = outer
 		b.sharedPaths = outerPaths
@@ -40,7 +40,7 @@ func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONForm
 	body, _ := callback.Child(0)
 	result, err = b.expression(body)
 	if err != nil {
-		return "", "", expression{}, hff.Type{}, err
+		return "", "", "", "", expression{}, hff.Type{}, err
 	}
 	from = string(format) + "_array_elements(" + value.code + ") WITH ORDINALITY AS " + alias + "(value,ord)"
 	if len(b.steps) > 0 {
@@ -48,7 +48,10 @@ func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONForm
 	}
 	// Capture recovered storage types while parameter bindings and enclosing
 	// fold state are still available. Deferred restoration ends this scope.
-	return from, alias + ".ord", result, b.jsonStoredType(body), nil
+	if wantPredicate {
+		predicate = b.truth(body, result)
+	}
+	return from, alias + ".ord", alias + ".value", predicate, result, b.jsonStoredType(body), nil
 }
 
 func (b *builder) jsonTransform(n hff.Node, name string) (expression, error) {
@@ -64,10 +67,35 @@ func (b *builder) jsonTransform(n hff.Node, name string) (expression, error) {
 	if err != nil {
 		return expression{}, err
 	}
+	filterItemType := hff.Type{}
+	if name == "filter" {
+		// Filtering retains the original values. Restore their representation
+		// before selecting rows so later operations still observe the same
+		// Int/Float and tagged-string distinctions.
+		stored := sortListType(b.jsonStoredType(receiver))
+		if stored.Kind() != hff.ListType {
+			return expression{}, b.failure(n, "filter requires a recoverable list schema")
+		}
+		filterItemType = stored.Element()
+		document, err := b.comparisonDocument(receiver, value.code, format, stored)
+		if err != nil {
+			return expression{}, err
+		}
+		projected := b.project(document)
+		array := b.project("(CASE WHEN json_typeof(" + projected + ")='array' THEN " + projected + " ELSE NULL::json END)")
+		b.jsonValues[array] = JSON
+		value, format = expression{array, value.present, hff.ListType}, JSON
+	}
 	callback, _ := n.Child(1)
-	from, ordinal, result, resultType, err := b.jsonCallbackRows(n, value, format, callback)
+	from, ordinal, item, predicate, result, resultType, err := b.jsonCallbackRows(n, value, format, callback, filterItemType, name == "filter")
 	if err != nil {
 		return expression{}, err
+	}
+	if name == "filter" {
+		code := "(CASE WHEN " + value.code + " IS NULL THEN NULL::json ELSE (SELECT COALESCE(json_agg(" + item + " ORDER BY " + ordinal + "),'[]'::json) FROM " + from + " WHERE " + predicate + ") END)"
+		b.jsonValues[code] = JSON
+		b.rememberNormalizedJSON(code, JSON, sortListType(b.jsonStoredType(receiver)))
+		return expression{code, value.present, hff.ListType}, nil
 	}
 	body, _ := callback.Child(0)
 	var raw string

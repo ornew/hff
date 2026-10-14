@@ -25,7 +25,13 @@ func main() {
 		"tags":   hff.List(hff.String("api"), hff.String("production")),
 		"labels": hff.Object(map[string]hff.Value{"app": hff.String("auth"), "team": hff.Null()}),
 	})
-	for _, query := range []string{`tags:contains("api","production") labels:has("team")`, `tags:sort=["api","production"]`, `labels:keys=["app","team"]`} {
+	for _, query := range []string{
+		`tags:contains("api","production") labels:has("team")`,
+		`tags:count(tag=>tag:startswith("pro"))=1`,
+		`tags:filter(tag=>tag:startswith("pro"))=["production"]`,
+		`tags:sort=["api","production"]`,
+		`labels:keys=["app","team"]`,
+	} {
 		program, err := e.Compile(ctx, query)
 		if err != nil {
 			log.Fatal(err)

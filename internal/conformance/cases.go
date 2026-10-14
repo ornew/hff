@@ -160,6 +160,24 @@ func Cases() []Case {
 			record("mixed_numeric_duplicate", map[string]hff.Value{"items": hff.List(hff.Int(1), hff.Float(1))}, false),
 		}},
 		{Name: "any_and_all_empty_lists", Source: `!items:any(v=>v) items:all(v=>v)`, Records: []Record{record("empty", nil, true)}},
+		{Name: "count_with_and_without_predicate", Source: `items:count=3 items:count(v=>v)=1`, Records: []Record{
+			record("one_truthy", map[string]hff.Value{"items": hff.List(hff.Int(0), hff.Int(1), hff.Null())}, true),
+			record("two_truthy", map[string]hff.Value{"items": hff.List(hff.Int(1), hff.Int(2), hff.Null())}, false),
+			record("empty", nil, false),
+		}},
+		{Name: "count_guard_failure_is_false", Source: `items:count(v=>v!.active)=1`, Records: []Record{
+			record("one_active", map[string]hff.Value{"items": hff.List(hff.Null(), hff.Object(map[string]hff.Value{"active": hff.Bool(false)}), hff.Object(map[string]hff.Value{"active": hff.Bool(true)}))}, true),
+			record("none_active", map[string]hff.Value{"items": hff.List(hff.Null(), hff.Object(map[string]hff.Value{"active": hff.Bool(false)}))}, false),
+		}},
+		{Name: "filter_keeps_original_values_in_order", Source: `items:filter(v=>v):json="[1,2]"`, Records: []Record{
+			record("selected", map[string]hff.Value{"items": hff.List(hff.Int(0), hff.Int(1), hff.Null(), hff.Int(2))}, true),
+			record("reversed", map[string]hff.Value{"items": hff.List(hff.Int(2), hff.Int(1))}, false),
+			record("empty", nil, false),
+		}},
+		{Name: "filter_guard_failure_omits_element", Source: `items:filter(v=>v!.active):size=1`, Records: []Record{
+			record("one_active", map[string]hff.Value{"items": hff.List(hff.Null(), hff.Object(map[string]hff.Value{"active": hff.Bool(true)}))}, true),
+			record("none_active", map[string]hff.Value{"items": hff.List(hff.Null())}, false),
+		}},
 		{Name: "callback_predicate_guard", Source: `items:any(v=>v!.active)`, Records: []Record{
 			record("failed_guard_then_match", map[string]hff.Value{"items": hff.List(hff.Null(), hff.Object(map[string]hff.Value{"active": hff.Bool(true)}))}, true),
 		}},

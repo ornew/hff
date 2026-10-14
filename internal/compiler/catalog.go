@@ -73,6 +73,11 @@ func builtins(name string) []declaration {
 	case "size":
 		fixed("list", list, integer)
 		fixed("object", object, integer)
+	case "count":
+		fixed("list", list, integer)
+		fixed("list", list, integer, any)
+	case "filter":
+		fixed("list", list, list, any)
 	case "has":
 		fixed("list", list, boolean, number)
 		fixed("object", object, boolean, str)

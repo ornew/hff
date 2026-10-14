@@ -169,7 +169,7 @@ logical short-circuiting. It supports every built-in method family in the
 | Bool | `and(bool)`, `or(bool)`, `not()` |
 | Number | `round()`, `ceil()`, `floor()` |
 | String and bytes | Text, JSON/base64, timestamp/duration conversions, and byte length |
-| List | Size, index presence, membership, uniqueness, sort, concat, callbacks, and folds |
+| List | Size and count, filtering, index presence, membership, uniqueness, sort, concat, callbacks, and folds |
 | Object | Size, key presence, get, keys, values, and items |
 | Timestamp and duration | Parsing, comparison, arithmetic, components, and formatting |
 

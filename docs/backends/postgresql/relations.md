@@ -243,6 +243,13 @@ row or callback evaluation order, local HFF runtime budgets, or an index plan.
 A visible correlation merely gives PostgreSQL a predicate it may be able to
 use with an appropriate index and plan.
 
+`count()` returns the number of related rows, and `count(predicate)` counts
+the callback results that convert to true; these count results do not expose
+row order. `filter(predicate)` returns the original matching items in relation
+order and therefore requires `WithUniqueOrder`. Its callback uses ordinary
+boolean conversion, with guarded no-value counting as false. PostgreSQL `Build`
+rejects relation filters whose result order cannot be represented.
+
 When the callback is composed of direct native scalar fields, literals, and
 Boolean `AND`/`OR`/`NOT`, eligible scalar predicates can be lowered directly
 inside the correlated subquery. For the earlier filter

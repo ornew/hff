@@ -65,6 +65,10 @@ func (b *builder) jsonPredicate(n hff.Node, name string) (expression, error) {
 	if len(b.steps) > 0 {
 		from += " CROSS JOIN LATERAL " + strings.Join(b.steps, " CROSS JOIN LATERAL ")
 	}
+	if name == "count" {
+		code := "(CASE WHEN " + value.code + " IS NULL THEN NULL::bigint ELSE (SELECT count(*) FROM " + from + " WHERE " + predicate + ") END)"
+		return expression{code: code, present: value.present, kind: hff.IntType}, nil
+	}
 	code := "(CASE WHEN " + value.code + " IS NULL THEN NULL ELSE " + operator + " (SELECT 1 FROM " + from + " WHERE " + predicate + ") END)"
 	return expression{code: code, present: value.present, kind: hff.BoolType}, nil
 }

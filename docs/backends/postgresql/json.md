@@ -889,9 +889,11 @@ and propagates through the ordinary HFF evaluation rules.
 For schema-known JSON objects, the backend supports `size()`, `has(key)`,
 `get(key)`, `keys()`, `values()`, and `items()`. Enumeration orders keys with
 PostgreSQL's `C` collation. For schema-known JSON lists, it supports `size()`,
-`has(index)`, `contains()`, `unique()`, `sort()`, `concat(list)`, `any()`,
-`all()`, `map()`, and `flatmap()`. `contains()` requires every supplied needle
-to be present; a null
+`count()`, `filter(predicate)`, `has(index)`, `contains()`, `unique()`,
+`sort()`, `concat(list)`, `any()`, `all()`, `map()`, and `flatmap()` when the
+callback and resulting values can be represented by the binding. `filter()`
+preserves JSON list order and does not need a separate order mapping.
+`contains()` requires every supplied needle to be present; a null
 needle is an ordinary value, while a null list receiver propagates null. A
 no-value argument propagates even if an earlier needle matched. `unique()`
 compares each element

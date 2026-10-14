@@ -44,8 +44,12 @@ func specialize(d declaration, receiver core.Type, args []plan.Node, callbackRes
 			if receiver.Kind() == core.AnyType {
 				result = core.NewListType(item)
 			}
-		case "map", "flatmap", "any", "all", "foldl", "foldr":
+		case "map", "flatmap", "any", "all", "filter", "foldl", "foldr":
 			result = callbackResult
+		case "count":
+			if len(args) > 0 {
+				result = callbackResult
+			}
 		}
 	case "object":
 		switch d.name {

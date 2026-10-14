@@ -355,7 +355,7 @@ func (b *builder) jsonCall(n hff.Node, name string, values []expression, format 
 			typ = "list"
 		}
 		return expression{"(CASE WHEN " + r.code + " IS NULL THEN 'null' ELSE '" + typ + "' END)", r.present, hff.StringType}, nil
-	case "size":
+	case "size", "count":
 		code := string(format) + "_array_length(" + r.code + ")::bigint"
 		if r.kind == hff.StructType || r.kind == hff.MapType {
 			code = "(CASE WHEN " + r.code + " IS NULL THEN NULL ELSE (SELECT count(*) FROM " + string(format) + "_object_keys(" + r.code + ")) END)"

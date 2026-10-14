@@ -50,6 +50,32 @@ func TestCallbackNestingPolicy(t *testing.T) {
 		t.Fatal("runtime budget affected compilation:", err)
 	}
 }
+
+func TestCountAndFilterCapabilities(t *testing.T) {
+	ctx := context.Background()
+	withoutCallbacks := newEngine(t, compilerSchema(), engine.WithCapabilities(
+		capabilities.None().Allow(capabilities.Logical, capabilities.Comparison, capabilities.Access,
+			capabilities.Method("list.count"), capabilities.Method("list.size")),
+	))
+	if _, err := withoutCallbacks.Compile(ctx, `items:count>0`); err != nil {
+		t.Fatal("count without a predicate should not require callbacks:", err)
+	}
+	_, err := withoutCallbacks.Compile(ctx, `items:count(x=>x>0)>0`)
+	requireCode(t, err, hff.CapabilityError)
+	withoutCount := newEngine(t, compilerSchema(), engine.WithCapabilities(
+		capabilities.Standard().Without(capabilities.Method("list.count")),
+	))
+	for _, source := range []string{`items:count>0`, `items:count(x=>x>0)>0`} {
+		_, err := withoutCount.Compile(ctx, source)
+		requireCode(t, err, hff.CapabilityError)
+	}
+	withoutFilter := newEngine(t, compilerSchema(), engine.WithCapabilities(
+		capabilities.Standard().Without(capabilities.Method("list.filter")),
+	))
+	_, err = withoutFilter.Compile(ctx, `items:filter(x=>x>0):size>0`)
+	requireCode(t, err, hff.CapabilityError)
+}
+
 func TestCompileConformance(t *testing.T) {
 	e := newEngine(t, compilerSchema())
 	valid := []string{"", `age>10 name~"^A"`, `(age>=10 | age<=5) name="Alice"`, `!name="Female"`, `age name`, `labels.env="prod"`, `labels["app"]="auth"`, `items[-1]>10`, `items[1.0]`, `age+10<10`, `age>(10+2)`, `(10+age)<20`, `flag=(1<2)`, `x:[string]:contains("foo")`, `x:[list[string]]:contains("foo")`, `(age+1):[int]:exists()`, `x:[(string|list[int])]:exists()`, `x:[map[list[string|null]]]:size()`, `items:map(x=>x+age)`, `items:any(x=>x>10)`, `items:all(x=>x!)`, `items:flatmap(x=>[x,age])`, `items:foldl(0,(acc,x)=>acc+x)`, `items:foldr(0,(x,acc)=>x+acc)`, `items:map(x=>[x]:map(y=>y+age))`, `items:map(age=>age+1)`, `items:map(x=>1)`, `items:map(x=>null:size())`, `items:map(x=>null+null)`, `items:map(x=>{"a":"12h":duration()})`, `age=-9223372036854775808`, `age=9223372036854775808`, `age!`, `maybe=null`, `maybe!=null`}

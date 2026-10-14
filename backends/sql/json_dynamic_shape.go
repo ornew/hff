@@ -38,7 +38,7 @@ func (b *builder) dynamicJSONShape(n hff.Node, name string, values []expression)
 		value := ""
 		branchPresence := r.present
 		switch name {
-		case "size":
+		case "size", "count":
 			value = string(format) + "_array_length(" + raw + ")::bigint"
 			if family == "object" {
 				value = "(SELECT count(*) FROM " + string(format) + "_object_keys(" + raw + "))"

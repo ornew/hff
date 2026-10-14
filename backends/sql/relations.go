@@ -324,7 +324,7 @@ func (b *builder) checkRelationConsumer(n hff.Node, parent hff.Node, index int, 
 		} else if consumer.Kind() == hff.BoolNode || consumer.Kind() == hff.NotNode || consumer.Kind() == hff.AndNode || consumer.Kind() == hff.OrNode || consumer.Kind() == hff.NullTestNode {
 		} else if method, ok := consumer.Method(); ok && index == 0 {
 			switch method.Name() {
-			case "any", "all", "size", "has", "contains", "unique", "exists", "type":
+			case "any", "all", "size", "count", "has", "contains", "unique", "exists", "type":
 			case "sort":
 				if !canonicalScalarSort(consumer) {
 					return b.failure(n, "stable sort requires relation ordering when equal values can retain distinct representations")
@@ -420,7 +420,7 @@ func observesRelationContents(parent hff.Node, index int) bool {
 	}
 	if method, ok := parent.Method(); ok && index == 0 {
 		switch method.Name() {
-		case "any", "all", "size", "has", "exists", "type", "map", "flatmap", "foldl", "foldr", "keys":
+		case "any", "all", "size", "count", "has", "exists", "type", "map", "flatmap", "foldl", "foldr", "keys":
 			return false
 		case "sort":
 			return !canonicalScalarSort(parent)
@@ -453,7 +453,7 @@ func orderBlindConsumer(parent hff.Node, index int) bool {
 		return false
 	}
 	switch method.Name() {
-	case "any", "all", "size", "has", "contains", "unique", "exists", "type":
+	case "any", "all", "size", "count", "has", "contains", "unique", "exists", "type":
 		return true
 	case "sort":
 		return canonicalScalarSort(parent)

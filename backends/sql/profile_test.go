@@ -54,6 +54,11 @@ func TestSQLProfilesDoNotInventDatabaseGuarantees(t *testing.T) {
 	if support, _ := base.Feature(capabilities.Method("timestamp.year")); support.Level != hff.Conditional {
 		t.Fatalf("UTC timestamp extraction is not advertised as conditional: %v", support)
 	}
+	for _, method := range []string{"list.count", "list.filter"} {
+		if support, known := base.Feature(capabilities.Method(method)); !known || support.Level != hff.Conditional {
+			t.Fatalf("%s translation support is not advertised as conditional: %v", method, support)
+		}
+	}
 	e, err := engine.New(engine.WithSchema(schema.Struct(schema.String("name"))), engine.WithCapabilities(capabilities.Standard()))
 	if err != nil {
 		t.Fatal(err)

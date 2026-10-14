@@ -63,9 +63,11 @@ features := capabilities.None().Allow(
 )
 ```
 
-The list methods any, all, map, flatmap, foldl, and foldr require Callbacks.
-Missing dependencies are errors, not implicitly enabled features. The Regex
-group adds or removes both regex operators and string.matches. Unknown IDs are
+The callback forms of list count and the list methods any, all, filter, map,
+flatmap, foldl, and foldr require Callbacks. Zero-argument `list:count()` does
+not require Callbacks. Missing dependencies are errors, not implicitly enabled
+features. The Regex group adds or removes both regex operators and
+string.matches. Unknown IDs are
 rejected, including IDs supplied only to `Without`. Removing a known but
 already-disabled ID is valid. For example, this typo is rejected by `Check`
 instead of silently leaving a similarly named method enabled:
