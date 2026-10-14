@@ -18,6 +18,7 @@ func (b *builder) jsonDecodeProjected(n hff.Node, code string, format JSONFormat
 		}
 		normalized := "(CASE WHEN " + string(format) + "_typeof(" + code + ") = 'null' THEN NULL ELSE " + code + " END)"
 		b.jsonValues[normalized] = format
+		b.copyNormalizedJSON(code, normalized, format)
 		return expression{normalized, present, hff.AnyType}, nil
 	}
 	normalized := "(CASE WHEN " + string(format) + "_typeof(" + code + ") = 'null' THEN NULL ELSE " + code + " END)"
@@ -26,6 +27,7 @@ func (b *builder) jsonDecodeProjected(n hff.Node, code string, format JSONFormat
 		return expression{"NULL", present, hff.NullType}, nil
 	case hff.ListType, hff.MapType, hff.StructType:
 		b.jsonValues[normalized] = format
+		b.copyNormalizedJSON(code, normalized, format)
 		return expression{normalized, present, kind}, nil
 	case hff.DurationType:
 		text := "(" + normalized + " #>> '{}'::text[])"

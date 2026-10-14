@@ -219,6 +219,21 @@ or independent JSON-pair scopes. The [numeric comparison kernel record](../../op
 reports generated-SQL and plain-plan shape only; no execution timing was
 collected.
 
+### Reuse validated JSON from map outputs
+
+After full schema validation, a generated `map()` output can retain a
+representation proof keyed by its exact SQL expression, native JSON format,
+and captured stored type. Ordinary aliases and SQL-NULL-to-JSON-null
+normalization preserve that proof; guards, type guards, extraction, and casts
+do not. Presence and Float-loss handling remain separate, and canonical
+serialization is unchanged. This reduces selected `json_array_elements`
+expansion sites and corresponding Function Scan nodes. Projection barriers
+and sampled Result/Nested Loop counts remain unchanged. It does not cover
+`flatmap()`, merged fold state, or arbitrary derived containers. See the
+[normalized map JSON reuse](../../optimizations/034-postgresql-reuse-normalized-map-json.md)
+record for the 11,648-case baseline/candidate parity matrix and limits; no
+execution timing or memory measurement was made.
+
 ### Lower homogeneous scalar membership directly
 
 For eligible same-type scalar membership, the translator can use SQL

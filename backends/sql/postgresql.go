@@ -28,6 +28,7 @@ type builder struct {
 	structBindings        map[string]Binding
 	relationBindings      map[string]Binding
 	jsonValues            map[string]JSONFormat
+	normalizedJSONValues  map[string]normalizedJSON
 	parameters            map[hff.BindingID]jsonParameter
 	sharedPaths           map[string]expression
 	physicalParameters    map[hff.BindingID]Binding
@@ -122,6 +123,7 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 		return value, nil
 	}
 	format, isJSON := b.jsonValues[value.code]
+	source := value.code
 	alias := b.nextAlias()
 	if value.kind == hff.NullType {
 		b.steps = append(b.steps, "(SELECT "+value.present+" AS p OFFSET 0) AS "+alias)
@@ -140,6 +142,9 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 	value.code = alias + ".v"
 	if isJSON {
 		b.jsonValues[value.code] = format
+		if n.Kind() != hff.GuardNode && n.Kind() != hff.TypeGuardNode {
+			b.copyNormalizedJSON(source, value.code, format)
+		}
 	}
 	if share {
 		b.rememberPath(key, value)
@@ -413,7 +418,9 @@ func boolean(code string) expression { return expression{code, "TRUE", hff.BoolT
 func (b *builder) project(code string) string {
 	name := b.nextAlias()
 	b.steps = append(b.steps, "(SELECT "+code+" AS v OFFSET 0) AS "+name)
-	return name + ".v"
+	projected := name + ".v"
+	b.copyNormalizedJSON(code, projected, JSON)
+	return projected
 }
 
 func (b *builder) nextAlias() string {

@@ -75,6 +75,9 @@ func (b *builder) comparisonDocument(n hff.Node, raw string, format JSONFormat, 
 	if err := b.checkComparisonDocumentSchema(n, format, typ); err != nil {
 		return "", err
 	}
+	if b.isNormalizedJSON(raw, format, typ) {
+		return "COALESCE(" + raw + ",'null'::json)", nil
+	}
 	return b.normalizedComparisonDocument(n, raw, format, typ)
 }
 

@@ -119,5 +119,11 @@ func (b *builder) jsonTransform(n hff.Node, name string) (expression, error) {
 	present := both(value.present, "("+value.code+" IS NULL OR "+failure+")")
 	b.steps = append(b.steps, "("+cte+" SELECT "+code+" AS v,"+present+" AS p OFFSET 0) AS "+output)
 	b.jsonValues[output+".v"] = JSON
+	if name == "map" {
+		// Each row was normalized under this captured callback result type.
+		// Keep that exact contract rather than recomputing it outside the
+		// callback's parameter and enclosing-fold scope.
+		b.rememberNormalizedJSON(output+".v", JSON, hff.NewListType(resultType))
+	}
 	return expression{output + ".v", output + ".p", hff.ListType}, nil
 }
