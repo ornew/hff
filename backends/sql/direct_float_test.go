@@ -30,6 +30,7 @@ func TestDirectFloatPredicatesPreserveNumericSubtype(t *testing.T) {
 		`factor`, `!factor`, `factor=null`, `factor!=null`,
 		`!factor<1.5`, `age>18 factor<1.5`, `age>18|factor<1.5`,
 		`factor:in(0.0,-0.0,1.5,null)`,
+		`factor=1`, `factor=9007199254740993`, `factor>9223372036854775807`,
 	} {
 		program, err := e.Compile(ctx, source)
 		if err != nil {
@@ -49,7 +50,6 @@ func TestDirectFloatPredicatesPreserveNumericSubtype(t *testing.T) {
 		}
 	}
 	for _, source := range []string{
-		`factor=1`, `factor=9007199254740993`, `factor>9223372036854775807`,
 		`factor=age`, `factor:in(1)`, `factor+1.0>2.0`, `factor!>1.5`,
 	} {
 		program, err := e.Compile(ctx, source)

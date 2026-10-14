@@ -41,14 +41,31 @@ for the exact fixture and its limits.
 
 Direct native Float comparisons are also available for schema-valid finite
 Float columns and literals, with scalar truth/null tests and same-Float-literal
-`in()` covered by the same focused path. Mixed Int/Float comparisons, computed
-expressions, guards, JSON, and structured values retain the general lowering.
+`in()` covered by the same focused path. Other mixed Int/Float comparisons,
+general computed expressions, guards, JSON, and structured values retain the general
+lowering.
 The focused cases remove `OFFSET 0` barriers, but no plan or runtime-speed
 claim follows from SQL shape alone. Plain `EXPLAIN` on an empty temporary
 indexed Float table showed a Bitmap Index Scan for `factor<1.5`; this is a
 fixture-specific plan observation, with no timing measurement. See [direct
 native Float predicates](../../optimizations/018-postgresql-float-predicate-shape.md)
 for the measured filters and evidence limits.
+
+### Specialize exact mixed-numeric literal thresholds
+
+For pure filter comparisons between a directly bound Int or Float column and
+a typed literal of the other numeric kind, Build can derive an exact direct
+threshold. For example, `i>18.5` becomes `i>=19`, while
+`f>9007199254740993` becomes `f>=9007199254740994`; the compared column values
+are not rounded. The rewrite covers all six comparisons and preserves nullable
+column handling. Eligible identity-derived columns use the existing direct
+path. Other computed, guarded, dynamic, JSON, and value-context operands
+keep the general lowering; same-Float comparisons remain on the direct Float
+path. Shape and plain-plan observations are in the [exact mixed-numeric
+threshold record](../../optimizations/033-postgresql-exact-mixed-numeric-literal-thresholds.md).
+They do not establish runtime speed. An indexed-fixture check with sequential
+scans disabled showed candidate index conditions; it does not establish
+default planner selection.
 
 For JSON-backed scalar Float pairs, PostgreSQL consumes the original or
 metadata-restored value instead of serializing to canonical JSON and decoding

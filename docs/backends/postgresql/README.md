@@ -162,6 +162,15 @@ without rounding the integer through float64; string ordering uses
 PostgreSQL's `C` collation. Boolean literals and operators,
 implicit AND, explicit null comparisons, numeric unary negation, postfix guards
 at scalar leaves, scalar type guards, `exists()`, and `type()` are supported.
+For a direct filter comparison between a native numeric column and a literal
+of the other numeric kind, the builder can derive an exact threshold without
+rounding stored values. For example, an Int column compared with `18.5` can
+use the integer boundary `19`; a Float column compared with the Int
+`9007199254740993` can use the adjacent Float boundary
+`9007199254740994`. Guarded, dynamic, JSON, and value-context comparisons keep
+the general mixed-numeric path. See [exact mixed-numeric literal thresholds](../../optimizations/033-postgresql-exact-mixed-numeric-literal-thresholds.md)
+for applicability and SQL-shape evidence; these measurements do not claim
+runtime speed.
 Native Duration columns and direct scalar `BindRelation` items use signed
 `bigint` nanoseconds. Duration items can be `schema.DurationType` or
 `schema.NullableType(schema.DurationType)`; SQL `NULL` becomes an HFF null item.

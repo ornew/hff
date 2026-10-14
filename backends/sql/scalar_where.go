@@ -47,6 +47,9 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 		if !ok {
 			return false
 		}
+		if _, mixed := mixedLiteralComparison(kind, op, value); mixed {
+			return true
+		}
 		return (kind == hff.IntType && value.Kind() == hff.IntKind) ||
 			(kind == hff.FloatType && value.Kind() == hff.FloatKind) ||
 			(kind == hff.StringType && value.Kind() == hff.StringKind) ||
@@ -272,6 +275,14 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 		return b.directScalarLengthComparison(n, left, right)
 	}
 	column, kind, _ := b.directScalarColumn(left)
+	op, _ := n.Operator()
+	if literal, constant, err := b.constantValue(right); err != nil {
+		return "", err
+	} else if constant {
+		if plan, mixed := mixedLiteralComparison(kind, op, literal); mixed {
+			return b.directMixedLiteralComparison(left, right, column, plan)
+		}
+	}
 	value, err := b.literal(right)
 	if err != nil {
 		return "", err
@@ -280,7 +291,6 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 		column += " COLLATE \"C\""
 		value.code += " COLLATE \"C\""
 	}
-	op, _ := n.Operator()
 	operator := string(op)
 	if op == hff.NotEqual {
 		operator = "<>"
