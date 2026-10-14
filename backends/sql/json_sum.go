@@ -48,7 +48,14 @@ func (b *builder) jsonSum(n hff.Node) (expression, error) {
 		}
 		family = staticSumFamily(projected)
 		if family == hff.InvalidType || computed.kind != family && computed.kind != hff.NullType {
-			return expression{}, b.failure(n, "PostgreSQL sum currently requires a statically known numeric callback result")
+			body, _ := callback.Child(0)
+			document, err := b.computedJSONDocument(body, computed, projected)
+			if err != nil {
+				return expression{}, err
+			}
+			rows := b.nextAlias()
+			source := "(SELECT " + document + " AS value FROM " + from + " WHERE " + computed.present + ") AS " + rows
+			return b.jsonDynamicSumRows(n, value, source, rows+".value")
 		}
 		term, present = computed.code, computed.present
 		if computed.kind == hff.NullType {
@@ -91,7 +98,11 @@ func (b *builder) jsonDynamicSum(n, receiver hff.Node, value expression, format 
 	raw := b.project(document)
 	array := b.project("(CASE WHEN json_typeof(" + raw + ")='array' THEN " + raw + " ELSE NULL::json END)")
 	alias := b.nextAlias()
-	item := alias + ".value"
+	source := "json_array_elements(" + array + ") AS " + alias + "(value)"
+	return b.jsonDynamicSumRows(n, value, source, alias+".value")
+}
+
+func (b *builder) jsonDynamicSumRows(n hff.Node, value expression, from, item string) (expression, error) {
 	category := "json_typeof(" + item + ")"
 	text := "(" + item + " #>> '{}'::text[])"
 	integer := "(" + category + "='number' AND " + text + " !~ '[.eE]')"
@@ -99,7 +110,6 @@ func (b *builder) jsonDynamicSum(n, receiver hff.Node, value expression, format 
 	floatValue := jsonFloatCast(text)
 	term := "(CASE WHEN " + integer + " THEN " + text + "::numeric WHEN " + floating + " THEN (" + floatValue + ")::text::numeric END)"
 	validFloat := "(" + floating + " AND " + floatValue + " IS NOT NULL)"
-	from := "json_array_elements(" + array + ") AS " + alias + "(value)"
 	result := b.nextAlias()
 	total := result + ".total"
 	floatResult := b.floatText(total+"::double precision") + "::json"

@@ -916,18 +916,18 @@ by HFF equality, so repeated stored nulls and repeated nested composite values
 are duplicates. These operations require applicable list/object equality
 capabilities for the types actually compared.
 
-For JSON/JSONB lists, no-argument `sum()` supports recoverable Int, Float, and
-mixed Int/Float contributions. It also supports `List<Any>` when the runtime
-numeric subtype is recoverable. Native JSON preserves the numeric spelling
-needed for this dispatch. JSONB requires version-1 numeric type metadata when
-stored values may have lost the Int/Float distinction; see
-[JSONB type metadata](#storage-requirements-and-limits). Null contributions
-are skipped, and a nonnumeric runtime contribution makes the result null. An
-empty or all-skipped list returns Int zero. If all contributions are Int, the
-sum is exact and returns null when the final value is outside int64. If any
-contribution is Float, the result is Float. Callback projections remain
-limited to a statically homogeneous numeric family. Guarded no-value callback
-results are skipped.
+For JSON/JSONB lists, no-argument and callback `sum()` support recoverable Int,
+Float, and mixed Int/Float contributions. The no-argument form also supports
+`List<Any>` when the runtime numeric subtype is recoverable; callback results
+may likewise be mixed or dynamic when their subtype can be recovered. Native
+JSON preserves the numeric spelling needed for this dispatch. JSONB requires
+version-1 numeric type metadata when stored values may have lost the Int/Float
+distinction; see [JSONB type metadata](#storage-requirements-and-limits).
+Null contributions are skipped, and a nonnumeric runtime contribution makes
+the result null. An empty or all-skipped list returns Int zero. If all
+contributions are Int, the sum is exact and returns null when the final value
+is outside int64. If any contribution is Float, the result is Float. Guarded
+no-value callback results are skipped.
 
 For a native JSON `List<Any>`, a numeric token that cannot be decoded as a
 Float, such as an out-of-range token, is treated as null and skipped. A failed
@@ -940,22 +940,23 @@ default satisfies it, and HFF does not set or inspect the session value.
 Numeric intermediate accumulation can differ from Local's list-order Float
 addition. A non-finite final Float result returns null. For example, with
 `scores` declared as `List<Float|null>`, `mixed` as `List<Int|Float|null>`,
-and `values` as `List<Any>`:
+`values` as `List<Any>`, and `items` as `List<Struct{price:Int|Float|null}>`:
 
 ```hff
 scores:sum=4.0
 scores:sum(score=>score!)=4.0
 mixed:sum=3.5
+mixed:sum(item=>item)=3.5
 values:sum=3.5
+items:sum(item=>item.price)=3.5
 ```
 
 For `[1, 2.5]`, `mixed:sum` and `values:sum` return `3.5`. The `Any` example
 requires numeric subtype metadata for JSONB when its stored numbers do not
 retain their Int/Float distinction. If `values` contains a nonnumeric runtime
-value, its sum returns null. The callback form skips null and guarded no-value
-contributions just like the direct form, but callback projections are not yet
-supported for mixed or dynamic numeric families. This PostgreSQL subset
-follows the backend-native Float model; see the
+value, its sum returns null. Callback forms skip null and guarded no-value
+contributions just like the direct form. This PostgreSQL subset follows the
+backend-native Float model; see the
 [native Float design](../../design/021-backend-native-float-semantics.md).
 
 ### Containment for simple JSONB filters

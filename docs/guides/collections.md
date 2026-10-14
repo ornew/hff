@@ -39,15 +39,20 @@ result is Float and follows the backend's declared Float model; a non-finite
 result is null. The zero-argument form requires `method:list.sum`; the callback
 form requires that method capability and `Callbacks`.
 
-The PostgreSQL JSON/JSONB backend supports no-argument sums over mixed numeric
-lists and recoverable dynamic lists. For a `List<Int|Float|null>` binding,
+The PostgreSQL JSON/JSONB backend supports no-argument and callback sums over
+recoverable mixed numeric lists. For a `List<Int|Float|null>` binding,
 `scores:sum` returns Float for `[1, 2.5]`. A `List<Any>` binding can sum the
-same values when their runtime numeric subtypes are recoverable. For example,
-with `scores` bound as `List<Int|Float|null>` and `values` as `List<Any>`:
+same values when their runtime numeric subtypes are recoverable. Callback
+projections can also produce mixed or dynamic numeric contributions when those
+subtypes remain recoverable. For example, with `scores` bound as
+`List<Int|Float|null>`, `values` as `List<Any>`, and `items` as
+`List<Struct{price:Int|Float|null}>`:
 
 ```hff
 scores:sum=3.5
+scores:sum(item=>item)=3.5
 values:sum=3.5
+items:sum(item=>item.price)=3.5
 ```
 
 Null contributions are skipped; a nonnumeric runtime value in `values` makes
@@ -55,10 +60,9 @@ the result null. An empty or all-skipped list returns Int zero. If every
 contribution is Int, the final sum is exact when it fits int64. If any
 contribution is Float, the result is Float. For JSONB, provide version-1
 numeric type metadata when stored numbers may have lost their Int/Float
-distinction. Callback projections remain limited to a statically homogeneous
-numeric family. See the
+distinction. See the
 [PostgreSQL JSON guide](../backends/postgresql/json.md#schema-known-collection-access)
-for the representation and callback limits. PostgreSQL obtains round-trip-safe
+for the representation limits. PostgreSQL obtains round-trip-safe
 Float text for each contribution, accumulates those decimal values with
 `SUM(numeric)`, and checks the final Float conversion. This requires
 `extra_float_digits > 0`; HFF does not set the database session value. Numeric

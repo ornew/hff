@@ -145,7 +145,8 @@ models. Float aggregate tests are required when those methods are implemented.
 Local `sum()` supports numeric inputs. PostgreSQL JSON/JSONB no-argument list
 `sum()` supports recoverable Int, Float, and mixed Int/Float contributions,
 including `Any` lists whose numeric subtypes can be recovered. Callback
-projections remain limited to a statically homogeneous numeric family.
+projections also support mixed or dynamic numeric contributions when their
+subtypes can be recovered.
 PostgreSQL JSONB needs version-1 numeric metadata when stored numbers may have
 lost their Int/Float distinction. PostgreSQL Float `sum()` converts each
 contribution through round-trip-safe Float text, accumulates with `SUM(numeric)`,
