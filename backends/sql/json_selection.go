@@ -37,7 +37,7 @@ func (b *builder) jsonFind(n hff.Node) (expression, error) {
 		return value, err
 	}
 	callback, _ := n.Child(1)
-	from, ordinal, item, predicate, _, _, err := b.jsonCallbackRows(n, value, JSON, callback, stored.Element(), true)
+	from, ordinal, item, predicate, _, _, _, err := b.jsonCallbackRows(n, value, JSON, callback, stored.Element(), true)
 	if err != nil {
 		return expression{}, err
 	}

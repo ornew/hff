@@ -2,6 +2,7 @@ package sql_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/ornew/hff"
@@ -73,6 +74,7 @@ func itemRoleSources(tc itemRoleFixture) []string {
 		`labels:items:any(p=>other:items:any(q=>p[0]=q[0]))`,
 		`labels:items:any(p=>other:items:any(p=>p[0]="app") p[0]="app")`,
 	}
+	sources = append(sources, itemTransformSources(tc)...)
 	if !tc.mixed {
 		sources = append(sources, `labels:items[0][1]:type="`+tc.tag+`"`, `labels:items[-1][-1]:type="`+tc.tag+`"`,
 			`labels:items:map(p=>p[1]):json=values_json`, `labels:items:any(p=>p[1]!:exists)`, `labels:items:all(p=>p[1]:exists)`, `labels:items:any(p=>p[1])`, `labels:items:filter(p=>p[1]):size>0`,
@@ -143,7 +145,10 @@ func TestJSONItemRolesDoNotBlessUnprovenPairs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, source := range []string{`labels:items:contains(raw)`, `labels:items[0]=raw`, `raw:json!="[]"`} {
+	for _, source := range []string{`labels:items:contains(raw)`, `labels:items[0]=raw`, `raw:json!="[]"`,
+		`labels:items:flatmap(p=>[p,raw]):json!:exists`,
+		`labels:items:map(p=>raw):json!:exists`,
+		`labels:items:map(p=>[p[0],p[1]]):json!:exists`} {
 		p, err := e.Compile(ctx, source)
 		if err != nil {
 			t.Fatal(source, err)
@@ -196,6 +201,80 @@ func TestJSONCallbacksExcludeNonListUnionBranches(t *testing.T) {
 			if err != nil {
 				t.Error(source, format, err)
 			}
+		}
+	}
+}
+
+// Identity and duplication retain pair roles, but never imply key uniqueness.
+func itemTransformSources(tc itemRoleFixture) []string {
+	sources := []string{
+		`labels:items:map(p=>p):json=items_json`,
+		`labels:items:map(p=>p)=labels:items`,
+		`labels:items:map(p=>p):unique`,
+		`labels:items:map(p=>p):map(q=>q[0]):json=keys_json`,
+		`labels:items:map(p=>p):filter(q=>q[0]="app"):json=filtered_json`,
+		`labels:items:map(p=>p):find(q=>q[0]="app"):json=found_json`,
+		`labels:items:map(p=>p!):json=items_json`,
+
+		`labels:items:flatmap(p=>[p]):json=items_json`,
+		`labels:items:flatmap(p=>[p])=labels:items`,
+		`labels:items:flatmap(p=>[p,p]):unique`,
+		`labels:items:flatmap(p=>[p,null]):json:contains("null")`,
+		`labels:items:flatmap(p=>[p,null]):unique`,
+		`labels:items:flatmap(p=>[p,null,null]):distinct:json:contains("null")`,
+		`labels:items:flatmap(p=>[p,p]):distinct:json=items_json`,
+		`labels:items:flatmap(p=>[p,p]):map(q=>q[0]):size=labels:size*2`,
+		`labels:items:flatmap(p=>[p!]):json=items_json`,
+		`labels:items:flatmap(p=>other:items):json!:exists`,
+		`labels:items:map(p=>other:items:find(q=>q[0]=p[0])):json!:exists`,
+		`labels:items:flatmap(p=>other:items:map(q=>p)):json!:exists`,
+		`labels:items:flatmap(p=>other:items:map(q=>p)):distinct:json=items_json`,
+		`labels:items:map(p=>other:items:find(p=>p[0]="app")):map(q=>q[0]):contains("app")`,
+		`labels:items:map(p=>other:items:find(q=>q[0]=p[0])):unique`,
+		`[labels:items[0],other:items[0]]:json!:exists`,
+		`labels:items:map(p=>p):map(p=>p):json=items_json`,
+		`labels:items:flatmap(p=>[p]):flatmap(p=>[p]):json=items_json`,
+		`labels:items:map(p=>p):contains(other:items:map(p=>p)[0])`,
+	}
+	if !tc.mixed {
+		sources = append(sources,
+			`labels:items:map(p=>p)[0][1]:type="`+tc.tag+`"`,
+			`labels:items:flatmap(p=>[p]):any(q=>q[1]:type="`+tc.tag+`")`,
+			`labels:items:map(p=>p):map(q=>q[1]):json=values_json`)
+	}
+	return append(sources, itemTransformGuardSources(tc)...)
+}
+
+func itemTransformGuardSources(_ itemRoleFixture) []string {
+	return []string{
+		`labels!:items:map(p=>p):json!:exists`,
+		`labels:items:map(p=>other!:items:find(q=>q[0]=p[0])):json!:exists`,
+		`labels:items:flatmap(p=>[p,null]):map(q=>q!):json!:exists`,
+		`labels:items:flatmap(p=>[p,null]):flatmap(q=>[q!]):json!:exists`,
+	}
+}
+
+// Long identity chains exercise repeated negative as well as positive role
+// inference. A result without pair origins must remain an ordinary Bytes list.
+func TestJSONItemRoleAnalysisHandlesChainedMaps(t *testing.T) {
+	ctx := context.Background()
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Map("labels", schema.BytesType), schema.List("data", schema.BytesType))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range []string{
+		`labels:items` + strings.Repeat(`:map(p=>p)`, 12) + `:map(p=>p[0]):contains("app")`,
+		`data` + strings.Repeat(`:map(x=>x)`, 12) + `:any(x=>x:base64="YQ==")`,
+	} {
+		p, err := e.Compile(ctx, source)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		_, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(
+			hffsql.BindJSON(hff.Path{"labels"}, hffsql.Column("labels"), hffsql.JSONB),
+			hffsql.BindJSON(hff.Path{"data"}, hffsql.Column("data"), hffsql.JSONB)))
+		if err != nil {
+			t.Fatal(source, err)
 		}
 	}
 }

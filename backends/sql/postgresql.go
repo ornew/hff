@@ -31,6 +31,7 @@ type builder struct {
 	jsonValues            map[string]JSONFormat
 	normalizedJSONValues  map[string]normalizedJSON
 	parameters            map[hff.BindingID]jsonParameter
+	itemRoleMemo          *jsonItemRoleMemo
 	sharedPaths           map[string]expression
 	physicalParameters    map[hff.BindingID]Binding
 	parameterItems        map[hff.BindingID]Binding

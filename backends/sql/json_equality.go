@@ -13,10 +13,16 @@ func structuredKind(k hff.TypeKind) bool {
 // Query collections use JSON, retaining their children as typed SQL arguments.
 // No text from the query is inserted into the SQL source.
 func (b *builder) jsonLiteral(n hff.Node) (expression, error) {
-	if err := b.checkJSONStringSchemas(n, b.jsonStoredType(n)); err != nil {
-		return expression{}, err
+	// A list made entirely of proven item pairs preserves each normalized
+	// key/value position. Its homogeneous public union cannot express that
+	// fact, so validate the individual child carriers when constructing it.
+	paired := n.Kind() == hff.ListNode && b.jsonItemsRoles(n) != nil
+	if !paired {
+		if err := b.checkJSONStringSchemas(n, b.jsonStoredType(n)); err != nil {
+			return expression{}, err
+		}
 	}
-	if n.Kind() == hff.ListNode {
+	if n.Kind() == hff.ListNode && !paired {
 		// Check before NewUnionType canonicalizes the element schema. In
 		// particular Any otherwise erases an explicit Bytes/Duration/Timestamp member.
 		for i := 0; i < n.ChildCount(); i++ {

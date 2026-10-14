@@ -8,10 +8,10 @@ import (
 
 // Lower a lexical callback into a row source, isolating its projections from
 // the enclosing expression. Each row retains its source ordinal and no-value.
-func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONFormat, callback hff.Node, itemType hff.Type, wantPredicate bool) (from, ordinal, item, predicate string, result expression, stored hff.Type, err error) {
+func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONFormat, callback hff.Node, itemType hff.Type, wantPredicate bool) (from, ordinal, item, predicate string, result expression, stored hff.Type, roles jsonItemProvenance, err error) {
 	parameters, ok := callback.Parameters()
 	if !ok || len(parameters) != 1 {
-		return "", "", "", "", expression{}, hff.Type{}, b.failure(n, "list transformation requires one callback parameter")
+		return "", "", "", "", expression{}, hff.Type{}, jsonItemProvenance{}, b.failure(n, "list transformation requires one callback parameter")
 	}
 	alias := b.nextAlias()
 	outer := b.steps
@@ -43,7 +43,7 @@ func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONForm
 	body, _ := callback.Child(0)
 	result, err = b.expression(body)
 	if err != nil {
-		return "", "", "", "", expression{}, hff.Type{}, err
+		return "", "", "", "", expression{}, hff.Type{}, jsonItemProvenance{}, err
 	}
 	from = string(format) + "_array_elements(" + value.code + ") WITH ORDINALITY AS " + alias + "(value,ord)"
 	if len(b.steps) > 0 {
@@ -54,7 +54,7 @@ func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONForm
 	if wantPredicate {
 		predicate = b.truth(body, result)
 	}
-	return from, alias + ".ord", alias + ".value", predicate, result, b.jsonStoredType(body), nil
+	return from, alias + ".ord", alias + ".value", predicate, result, b.jsonStoredType(body), jsonItemProvenance{pair: b.jsonItemRoles(body), list: b.jsonItemsRoles(body)}, nil
 }
 
 func (b *builder) jsonTransform(n hff.Node, name string) (expression, error) {
@@ -90,7 +90,7 @@ func (b *builder) jsonTransform(n hff.Node, name string) (expression, error) {
 		value, format = expression{array, value.present, hff.ListType}, JSON
 	}
 	callback, _ := n.Child(1)
-	from, ordinal, item, predicate, result, resultType, err := b.jsonCallbackRows(n, value, format, callback, filterItemType, name == "filter")
+	from, ordinal, item, predicate, result, resultType, roles, err := b.jsonCallbackRows(n, value, format, callback, filterItemType, name == "filter")
 	if err != nil {
 		return expression{}, err
 	}
@@ -108,17 +108,30 @@ func (b *builder) jsonTransform(n hff.Node, name string) (expression, error) {
 			return expression{}, err
 		}
 		resultType = containsListType(resultType)
-		normalized, err := b.comparisonDocument(body, rawResult, resultFormat, resultType)
-		if err != nil {
-			return expression{}, err
+		var normalized string
+		if roles.list != nil && resultFormat == JSON {
+			// Every returned element is a normalized source pair, even when
+			// the callback duplicates pairs or returns a captured outer pair.
+			normalized = "COALESCE(" + rawResult + ",'null'::json)"
+		} else {
+			normalized, err = b.comparisonDocument(body, rawResult, resultFormat, resultType)
+			if err != nil {
+				return expression{}, err
+			}
 		}
 		// Scalar alternatives fail the operation instead of becoming output
 		// elements. Their numeric subtypes do not need to be restored.
 		raw = "(CASE WHEN " + string(resultFormat) + "_typeof(" + rawResult + ")='array' THEN " + normalized + " ELSE NULL::json END)"
 	} else {
-		raw, err = b.computedJSONDocument(body, result, resultType)
-		if err != nil {
-			return expression{}, err
+		if roles.pair != nil && b.jsonValues[result.code] == JSON {
+			// Use the proof captured before restoring callback bindings.
+			// Generic homogeneous unions cannot express the two slots.
+			raw = "COALESCE(" + result.code + ",'null'::json)"
+		} else {
+			raw, err = b.computedJSONDocument(body, result, resultType)
+			if err != nil {
+				return expression{}, err
+			}
 		}
 	}
 	rows, output := b.nextAlias(), b.nextAlias()

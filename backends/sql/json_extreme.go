@@ -44,7 +44,7 @@ func (b *builder) jsonExtreme(n hff.Node, minimum bool) (expression, error) {
 		callback, _ := n.Child(1)
 		var computed expression
 		var projected hff.Type
-		from, ordinal, _, _, computed, projected, err = b.jsonCallbackRows(n, value, format, callback, stored.Element(), false)
+		from, ordinal, _, _, computed, projected, _, err = b.jsonCallbackRows(n, value, format, callback, stored.Element(), false)
 		if err != nil {
 			return expression{}, err
 		}

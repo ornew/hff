@@ -615,10 +615,14 @@ guard `!` remains supported.
 
 The [runnable items example](https://github.com/ornew/hff/tree/main/examples/sql-json-items)
 uses a `Map<Bytes|null>` to select a named nonempty attachment. Its key and
-value roles remain typed through an `any()` callback. Pair-returning `map()`,
-`flatmap()`, or `fold()` transformations and arrays that combine proven pairs
-with unrelated values retain the general representation path; operations that
-need unrecoverable tagged identity may be rejected.
+value roles remain typed through an `any()` callback. Role provenance also
+survives identity `map()` and `flatmap()` callbacks that return lists made
+from proven pairs and static null entries. This includes duplicated pairs,
+captured pairs, and nested map/flatmap callbacks. The role proof preserves the
+key and value types; it does not prove that keys remain unique. `fold()` and
+reconstructed or mixed arrays without a complete pair proof retain the general
+representation path, and operations that need unrecoverable tagged identity
+may still be rejected.
 
 The schema-known `Bytes|Int|Float|Null` and
 `Bytes|Bool|Int|Float|Null` unions are supported for native JSON and for JSONB

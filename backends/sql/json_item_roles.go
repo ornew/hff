@@ -16,9 +16,34 @@ type jsonItemRoles struct {
 
 // Only operations retaining complete source pairs may retain their roles.
 func (b *builder) jsonItemsRoles(n hff.Node) *jsonItemRoles {
+	return b.memoizedItemRoles(n, true)
+}
+
+func (b *builder) jsonItemsRolesUncached(n hff.Node) *jsonItemRoles {
 	if n.Kind() == hff.GuardNode || n.Kind() == hff.TypeGuardNode {
 		child, _ := n.Child(0)
 		return b.jsonItemsRoles(child)
+	}
+	if n.Kind() == hff.ListNode && n.ChildCount() > 0 {
+		var objects []hff.Type
+		for i := 0; i < n.ChildCount(); i++ {
+			child, _ := n.Child(i)
+			roles := b.jsonItemRoles(child)
+			if roles == nil {
+				// A null element carries no key/value identity; ordinary null
+				// remains comparable data alongside otherwise proven pairs.
+				if child.Type().Kind() == hff.NullType {
+					continue
+				}
+				return nil
+			}
+			objects = append(objects, roles.object)
+		}
+		if len(objects) == 0 {
+			return nil
+		}
+		object := hff.NewUnionType(objects...)
+		return &jsonItemRoles{value: jsonStoredMemberType(object, "", false, false), object: object}
 	}
 	method, ok := n.Method()
 	if !ok {
@@ -29,6 +54,12 @@ func (b *builder) jsonItemsRoles(n hff.Node) *jsonItemRoles {
 	case "items":
 		object := jsonObjectType(b.jsonStoredType(receiver))
 		return &jsonItemRoles{value: jsonStoredMemberType(object, "", false, false), object: object}
+	case "map":
+		callback, _ := n.Child(1)
+		return b.jsonCallbackItemProvenance(callback, receiver).pair
+	case "flatmap":
+		callback, _ := n.Child(1)
+		return b.jsonCallbackItemProvenance(callback, receiver).list
 	case "filter", "distinct", "sort":
 		return b.jsonItemsRoles(receiver)
 	}
@@ -36,6 +67,10 @@ func (b *builder) jsonItemsRoles(n hff.Node) *jsonItemRoles {
 }
 
 func (b *builder) jsonItemRoles(n hff.Node) *jsonItemRoles {
+	return b.memoizedItemRoles(n, false)
+}
+
+func (b *builder) jsonItemRolesUncached(n hff.Node) *jsonItemRoles {
 	if binding, ok := n.Binding(); ok {
 		if parameter, exists := b.parameters[binding.ID()]; exists {
 			return parameter.itemRoles
@@ -105,4 +140,55 @@ func itemLiteralIndex(n hff.Node) (float64, bool) {
 		return -x, known
 	}
 	return 0, false
+}
+
+// A list of pairs and a single pair are different representation proofs.
+// These roles describe structure only: transformations may duplicate keys.
+type jsonItemProvenance struct {
+	pair, list *jsonItemRoles
+}
+
+func (b *builder) jsonCallbackItemProvenance(callback, receiver hff.Node) jsonItemProvenance {
+	// Establish receiver roles first so recursive stored-type analysis can
+	// reuse them inside this one lexical scope instead of retracing chains.
+	roles := b.jsonItemsRoles(receiver)
+	item := jsonStoredMemberType(sortListType(b.jsonStoredType(receiver)), "", false, true)
+	restore := b.jsonCallbackParameters(callback, []hff.Type{item}, []*jsonItemRoles{roles})
+	defer restore()
+	body, _ := callback.Child(0)
+	return jsonItemProvenance{pair: b.jsonItemRoles(body), list: b.jsonItemsRoles(body)}
+}
+
+// Memoization lives only for one role-analysis call and its current lexical
+// scope. Negative results matter too: ordinary nested maps must not trigger
+// exponential repeated stored-type/role inference. Parameter scopes replace
+// this memo and restore it on exit, so proofs never leak across bindings.
+type jsonItemRoleMemo struct {
+	pairs, lists map[hff.Node]*jsonItemRoles
+}
+
+func (b *builder) memoizedItemRoles(n hff.Node, list bool) *jsonItemRoles {
+	owner := b.itemRoleMemo == nil
+	if owner {
+		b.itemRoleMemo = &jsonItemRoleMemo{
+			pairs: make(map[hff.Node]*jsonItemRoles),
+			lists: make(map[hff.Node]*jsonItemRoles),
+		}
+		defer func() { b.itemRoleMemo = nil }()
+	}
+	cache := b.itemRoleMemo.pairs
+	if list {
+		cache = b.itemRoleMemo.lists
+	}
+	if roles, found := cache[n]; found {
+		return roles
+	}
+	var roles *jsonItemRoles
+	if list {
+		roles = b.jsonItemsRolesUncached(n)
+	} else {
+		roles = b.jsonItemRolesUncached(n)
+	}
+	cache[n] = roles
+	return roles
 }

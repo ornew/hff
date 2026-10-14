@@ -57,6 +57,15 @@ func itemRoleOutputs(t testing.TB, object hff.Value) map[string]hff.Value {
 }
 
 func TestPostgreSQLJSONItemRolesMatchLocal(t *testing.T) {
+	runPostgreSQLJSONItemRoleSources(t, itemRoleSources)
+}
+
+func TestPostgreSQLJSONItemTransformGuardPropagation(t *testing.T) {
+	runPostgreSQLJSONItemRoleSources(t, itemTransformGuardSources)
+}
+
+func runPostgreSQLJSONItemRoleSources(t *testing.T, sources func(itemRoleFixture) []string) {
+	t.Helper()
 	container := os.Getenv("HFF_POSTGRES_CONTAINER")
 	if container == "" {
 		t.Fatal("integration tests require HFF_POSTGRES_CONTAINER")
@@ -127,7 +136,7 @@ func TestPostgreSQLJSONItemRolesMatchLocal(t *testing.T) {
 				}
 				var expected []bool
 				var labels []string
-				for index, source := range itemRoleSources(tc) {
+				for index, source := range sources(tc) {
 					p, err := e.Compile(ctx, source)
 					if err != nil {
 						t.Fatal(source, err)

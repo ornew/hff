@@ -212,6 +212,17 @@ func jsonNativeCarrierType(typ, stored hff.Type) hff.Type {
 // Recover a callback value's storage type in its lexical parameter scope.
 // No SQL is built here; existing code/provenance fields remain unchanged.
 func (b *builder) jsonCallbackStoredType(callback hff.Node, types []hff.Type, roles ...*jsonItemRoles) hff.Type {
+	restore := b.jsonCallbackParameters(callback, types, roles)
+	defer restore()
+	body, _ := callback.Child(0)
+	return b.jsonStoredType(body)
+}
+
+// Temporarily recover types and roles by lexical binding ID. Captured outer
+// parameters survive; same-name inner parameters never acquire their roles.
+func (b *builder) jsonCallbackParameters(callback hff.Node, types []hff.Type, roles []*jsonItemRoles) func() {
+	outerMemo := b.itemRoleMemo
+	b.itemRoleMemo = nil
 	parameters, _ := callback.Parameters()
 	if b.parameters == nil {
 		b.parameters = make(map[hff.BindingID]jsonParameter)
@@ -228,7 +239,8 @@ func (b *builder) jsonCallbackStoredType(callback hff.Node, types []hff.Type, ro
 		}
 		b.parameters[p.ID()] = value
 	}
-	defer func() {
+	return func() {
+		b.itemRoleMemo = outerMemo
 		for i, p := range parameters {
 			if existed[i] {
 				b.parameters[p.ID()] = old[i]
@@ -236,7 +248,5 @@ func (b *builder) jsonCallbackStoredType(callback hff.Node, types []hff.Type, ro
 				delete(b.parameters, p.ID())
 			}
 		}
-	}()
-	body, _ := callback.Child(0)
-	return b.jsonStoredType(body)
+	}
 }

@@ -43,12 +43,33 @@ go run ./examples/sql-json-items
 It prints the generated PostgreSQL predicate and arguments, then the Local
 results for the same records. Building the SQL does not connect to a database.
 
-The backend preserves this positional information only when the source
-`items()` result and schema establish the key/value roles. Constant indexes
-`0` and `-2` select the String key; `1` and `-1` select the value. Dynamic
-indexes that need tagged-type dispatch, same-JSON-category alternatives whose
-identity cannot be recovered, and `Any` strings requiring Bytes identity
-remain unsupported. Missing keys, stored null, and guard-produced no-value
-retain their separate HFF behavior. See the
+The backend preserves this positional information when the source `items()`
+result and schema establish the key/value roles. Constant indexes `0` and
+`-2` select the String key; `1` and `-1` select the value. Identity `map()` and
+pair-only `flatmap()` callbacks can preserve those roles, including when they
+duplicate pairs. Dynamic indexes that need tagged-type dispatch,
+same-JSON-category alternatives whose identity cannot be recovered, and `Any`
+strings requiring Bytes identity remain unsupported. Missing keys, stored
+null, and guard-produced no-value retain their separate HFF behavior. See the
 [PostgreSQL JSON guide](../backends/postgresql/json.md#bytes-in-json-documents)
 for the supported subset and its limits.
+
+For a non-null map, these queries show identity preservation, duplicate
+detection, and first-occurrence deduplication:
+
+```hff
+attachments:items:map(pair=>pair)=attachments:items
+attachments:items:flatmap(pair=>[pair,pair]):unique
+attachments:items:flatmap(pair=>[pair,pair]):distinct=attachments:items
+```
+
+The first query compares equal to the source. The second returns false when
+the source has at least one entry because the transformed list duplicates
+every pair; for an empty source it returns true. A null source makes these
+collection methods return null; the equality comparisons and final filter
+truthiness return false. `unique()` returns a Bool reporting
+whether the list already has no duplicates. `distinct()` instead returns the
+first-occurrence list, so the third query compares equal to the source. Role
+proofs retain type information through duplication but do not imply
+uniqueness. Folds and callback results that mix proven pairs with values whose
+roles cannot be established still use the general representation path.

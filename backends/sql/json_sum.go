@@ -55,7 +55,7 @@ func (b *builder) jsonNumericAggregate(n hff.Node, average bool) (expression, er
 		callback, _ := n.Child(1)
 		var computed expression
 		var projected hff.Type
-		from, ordinal, _, _, computed, projected, err = b.jsonCallbackRows(n, value, format, callback, itemType, false)
+		from, ordinal, _, _, computed, projected, _, err = b.jsonCallbackRows(n, value, format, callback, itemType, false)
 		if err != nil {
 			return expression{}, err
 		}
