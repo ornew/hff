@@ -42,7 +42,7 @@ func localProfile(f *Filter) hff.Profile {
 			{Name: "float.parsing", Value: "Go strconv float64 input; subnormals and underflow to signed zero are accepted, overflow becomes null"},
 			{Name: "float.arithmetic", Value: "Go float64 arithmetic; non-finite results and zero division become null"},
 			{Name: "float.rounding", Value: "Go math Round (midpoints away from zero), Ceil and Floor"},
-			{Name: "float.aggregation", Value: "sum keeps Int contributions exact until the first Float, then adds in list order with Go float64; non-finite intermediate or final results become null"},
+			{Name: "float.aggregation", Value: "sum and avg keep Int contributions exact until the first Float, then add in list order with Go float64; avg divides the final total by the contributing count; non-finite intermediate or final results become null"},
 			{Name: "float.format", Value: "Go strconv shortest round-trip Float text with a decimal/exponent subtype marker and signed zero"},
 			{Name: "regex.syntax", Value: "RE2-compatible syntax excluding \\C; substring matching"},
 			{Name: "timezone.builtin", Value: "UTC and fixed offsets; named zones require explicitly supplied TZif data"},

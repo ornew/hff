@@ -44,8 +44,16 @@ func specialize(d declaration, receiver core.Type, args []plan.Node, callbackRes
 			if receiver.Kind() == core.AnyType {
 				result = core.NewListType(item)
 			}
-		case "map", "flatmap", "any", "all", "filter", "foldl", "foldr", "sum", "min", "max":
+		case "map", "flatmap", "any", "all", "filter", "foldl", "foldr", "sum", "min", "max", "avg":
 			result = callbackResult
+			if d.name == "avg" {
+				if len(args) == 0 {
+					if len(aggregateNumericCandidates(element(receiver))) == 0 && !bottom(element(receiver)) {
+						return core.Type{}, false
+					}
+				}
+				result = primitive(core.FloatType)
+			}
 			if (d.name == "sum" || d.name == "min" || d.name == "max") && len(args) == 0 {
 				var valid bool
 				if d.name == "sum" {

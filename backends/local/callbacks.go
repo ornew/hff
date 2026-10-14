@@ -7,7 +7,7 @@ import (
 
 func higherMethod(id string) bool {
 	switch id {
-	case "list.any", "list.all", "list.count", "list.filter", "list.sum", "list.min", "list.max", "list.map", "list.flatmap", "list.foldl", "list.foldr":
+	case "list.any", "list.all", "list.count", "list.filter", "list.sum", "list.min", "list.max", "list.avg", "list.map", "list.flatmap", "list.foldl", "list.foldr":
 		return true
 	}
 	return false
@@ -61,6 +61,9 @@ func (e *evaluation) higher(n plan.Node, receiver core.Value, id string) (result
 	callback, _ := n.Child(callbackIndex)
 	if id == "list.sum" {
 		return e.sumList(xs, callback, true)
+	}
+	if id == "list.avg" {
+		return e.avgList(xs, callback, true)
 	}
 	if id == "list.min" || id == "list.max" {
 		return e.extremeList(xs, callback, true, id == "list.min")

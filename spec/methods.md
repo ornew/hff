@@ -134,6 +134,8 @@ partial serialization.
 | `list:filter(func(T) -> bool) -> list` | Keep elements whose callback result converts to true |
 | `list:sum() -> number` | Sum numeric elements |
 | `list:sum(func(T) -> number) -> number` | Sum numeric callback results |
+| `list:avg() -> float` | Average numeric elements |
+| `list:avg(func(T) -> number) -> float` | Average numeric callback results |
 | `list:min() -> number` | Smallest numeric element |
 | `list:min(func(T) -> number) -> number` | Smallest numeric callback result |
 | `list:max() -> number` | Largest numeric element |
@@ -169,6 +171,15 @@ backend's declared Float model; a non-finite result is null. A null receiver
 yields null. The zero-argument method requires
 `method:list.sum`; the callback form also requires `Callbacks`. Cancellation or
 a resource-limit error aborts instead of returning a partial sum.
+`avg()` accepts numeric list elements or one callback that projects each
+element to a number. It skips null values and guarded no-value callback results.
+A nonnumeric runtime value, an empty list, or a list with no contributing
+values returns null. The result is always Float. Local accumulates Int values
+exactly until a Float contribution occurs, then uses Go `float64` addition in
+list order; an all-Int total is converted to Float before division. The total
+is divided by the number of contributing values. A non-finite result returns
+null. A null receiver yields null. The zero-argument method requires
+`method:list.avg`; the callback form also requires `Callbacks`.
 `min()` and `max()` select from numeric list elements or numeric callback
 results. Null values and guarded no-value callback results are skipped. A
 nonnumeric runtime value makes the result null; an empty list or one with no

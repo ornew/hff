@@ -959,9 +959,9 @@ contributions just like the direct form. This PostgreSQL subset follows the
 backend-native Float model; see the
 [native Float design](../../design/021-backend-native-float-semantics.md).
 
-PostgreSQL `Build` currently rejects list `min()` and `max()`, including on
-JSON/JSONB-backed lists. They are implemented by the Local backend; see the
-[collection guide](../../guides/collections.md#selecting-a-numeric-extreme).
+PostgreSQL `Build` currently rejects list `avg()`, `min()`, and `max()`,
+including on JSON/JSONB-backed lists. These methods are implemented by the
+Local backend; see the [collection guide](../../guides/collections.md).
 
 ### Containment for simple JSONB filters
 

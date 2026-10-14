@@ -116,6 +116,27 @@ without pre-rounding. The first value wins a tie. A null receiver returns null.
 PostgreSQL `Build` currently rejects `min()` and `max()`; these examples are
 for the Local backend.
 
+## Averaging numeric values
+
+Local `avg()` accepts numeric list elements or a callback that projects each
+element to a number:
+
+```hff
+temperatures:avg
+measurements:avg(item=>item.temperature!)
+```
+
+For `temperatures` declared as `List<Int|null>` with values `[2, 4, null]`, the
+first query returns Float `3`. The callback form skips null and guarded
+no-value results as well. A nonnumeric runtime contribution, empty list, or
+all-skipped list returns null. The result is always Float. Local accumulates
+Int contributions exactly until a Float appears; then it adds using Go
+`float64` in list order. An all-Int total converts to Float before division by
+the number of contributing values. A non-finite result returns null. A null
+receiver returns null.
+
+PostgreSQL `Build` currently rejects `avg()`.
+
 ## Object queries
 
 ```hff

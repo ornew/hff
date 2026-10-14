@@ -462,7 +462,8 @@ For JSON/JSONB Float sums, each contribution uses PostgreSQL's round-trip-safe
 Float text before `SUM(numeric)` and a checked final Float conversion. This
 requires `extra_float_digits > 0`; HFF does not change the database setting.
 Numeric intermediate accumulation can differ from Local's list-order Float
-addition. PostgreSQL `Build` currently rejects list `min()` and `max()`.
+addition. PostgreSQL `Build` currently rejects list `avg()`, `min()`, and
+`max()`.
 `sort()` supports recoverable dynamic `Any` and list-union values; see the JSON
 guide for its conditions.
 `map()` and `flatmap()` are supported when callback result types are known.

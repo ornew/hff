@@ -66,6 +66,13 @@ func TestCallbackMethods(t *testing.T) {
 		{`x:min=null`, hff.List(hff.Int(1), hff.String("bad")), true},
 		{`x:min(v=>v!)=1`, hff.List(hff.Null(), hff.Int(2), hff.Int(1)), true},
 		{`x:max(v=>v!)=2`, hff.List(hff.Null(), hff.Int(2), hff.Int(1)), true},
+		{`x:avg=null`, hff.List(), true},
+		{`x:avg=null`, hff.List(hff.Null()), true},
+		{`x:avg:[float]=2.5`, hff.List(hff.Int(2), hff.Int(3)), true},
+		{`x:avg:[float]=1.5`, hff.List(hff.Int(1), hff.Float(2)), true},
+		{`x:avg:[float]:exists`, hff.List(hff.Int(math.MaxInt64), hff.Int(math.MaxInt64)), true},
+		{`x:avg=null`, hff.List(hff.Int(1), hff.String("bad")), true},
+		{`x:avg(v=>v!)=1.5`, hff.List(hff.Null(), hff.Int(1), hff.Int(2)), true},
 		{`x:foldl(0,(a,v)=>a-v)=-6`, hff.List(hff.Int(1), hff.Int(2), hff.Int(3)), true},
 		{`x:foldl(7,(a,v)=>a+v)=7`, hff.List(), true},
 		{`x:foldr(null,(v,a)=>v)=null`, hff.List(), true},
@@ -105,6 +112,7 @@ func TestNumericAggregateCapturesAnyUnion(t *testing.T) {
 		`items:min(v=>choice):[float]:exists`,
 		`items:max(v=>choice):[float]:exists`,
 		`items:sum(v=>choice):[float]:exists`,
+		`items:avg(v=>choice):[float]:exists`,
 	} {
 		program, err := e.Compile(ctx, source)
 		if err != nil {
@@ -127,7 +135,7 @@ func TestNumericExtremesRequireNumericCandidates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, source := range []string{`items:min`, `items:max(v=>v)`} {
+	for _, source := range []string{`items:min`, `items:max(v=>v)`, `items:avg`} {
 		if _, err := e.Compile(ctx, source); err == nil {
 			t.Fatalf("%s compiled without numeric candidates", source)
 		}

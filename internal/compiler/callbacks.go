@@ -77,12 +77,15 @@ func (c *compiler) higherOrder(receiver plan.Node, n *syntax.MethodCall) ([]plan
 			result = primitive(core.BoolType)
 		case "count":
 			result = primitive(core.IntType)
-		case "sum", "min", "max":
+		case "sum", "min", "max", "avg":
 			var valid bool
 			if name == "sum" {
 				result, valid = aggregateNumericResult(result)
-			} else {
+			} else if name == "min" || name == "max" {
 				result, valid = aggregateExtremeResult(result)
+			} else {
+				valid = len(aggregateNumericCandidates(result)) > 0 || bottom(result)
+				result = primitive(core.FloatType)
 			}
 			if !valid {
 				return nil, core.Type{}, c.failure(core.TypeError, lambda, name+" callback must have an applicable numeric result")
