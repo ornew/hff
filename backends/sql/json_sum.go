@@ -18,6 +18,11 @@ func (b *builder) jsonAvg(n hff.Node) (expression, error) {
 }
 
 func (b *builder) jsonNumericAggregate(n hff.Node, average bool) (expression, error) {
+	if average {
+		if value, handled, err := b.relationAverage(n); handled {
+			return value, err
+		}
+	}
 	receiver, _ := n.Child(0)
 	value, err := b.expression(receiver)
 	if err != nil {

@@ -138,6 +138,12 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 		}
 		return value, nil
 	}
+	if column, _, native := b.directPhysicalScalarColumn(n); native && value.code == column && value.present == "TRUE" {
+		if share {
+			b.rememberPath(key, value)
+		}
+		return value, nil
+	}
 	// Give each value and any dynamic no-value flag a relational name. Parent
 	// nodes reference these names rather than expanding child SQL repeatedly.
 	// Preserve constant presence so it simplifies surrounding conditions.
@@ -223,6 +229,9 @@ func (b *builder) rememberPath(key string, value expression) {
 }
 
 func (b *builder) lower(n hff.Node) (expression, error) {
+	if column, kind, native := b.directPhysicalScalarColumn(n); native {
+		return expression{code: column, present: "TRUE", kind: kind}, nil
+	}
 	switch n.Kind() {
 	case hff.MatchAllNode:
 		return boolean("TRUE"), nil
@@ -238,15 +247,14 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 			return expression{}, b.failure(n, "unbound callback parameter")
 		}
 		if item, exists := b.parameterItems[binding.ID()]; exists {
-			// Native Duration items already carry integral nanoseconds. Passing
-			// them through JSON would discard their HFF type (and currently
-			// rejects the representation entirely).
-			if kind, scalar := scalarKind(parameter.typ); scalar && kind == hff.DurationType && item.format == "" && !item.composite && item.structure == nil && item.relation == nil {
+			// Native scalar items already have their typed carrier. A JSON
+			// round trip adds no information and needlessly repeats conversion.
+			if kind, scalar := scalarKind(parameter.typ); scalar && kind != hff.NullType && item.format == "" && !item.timestamp && !item.composite && item.structure == nil && item.relation == nil {
 				column, err := quoteColumn(item.column)
 				if err != nil {
 					return expression{}, err
 				}
-				return expression{code: column, present: "TRUE", kind: hff.DurationType}, nil
+				return expression{code: column, present: "TRUE", kind: kind}, nil
 			}
 			if item.timestamp {
 				code, err := timestampBindingExpression(item)

@@ -161,8 +161,11 @@ can differ from Local's list-order Float addition. PostgreSQL JSON/JSONB
 zero sign can differ from Local's list-order Float addition. PostgreSQL
 relation `avg()` supports numeric callback projections when their bound values
 preserve numeric subtypes; it does not require unique relation order unless a
-nested operation observes order. Native scalar-column `avg()` and broader
-backend aggregate coverage remain future work. Other supported
+nested operation observes order. Its Float inputs use the same
+round-trip-safe text conversion, `AVG(numeric)`, and checked final conversion
+as other PostgreSQL Float aggregates. Intermediate overflow, cancellation,
+and rounding can differ from sequential Float addition. This path also
+requires `extra_float_digits > 0`, which remains caller-owned. Other supported
 boundaries and database-setting dependencies are documented in the backend guide.
 Backend-native Float behavior is not a promise of identical results across
 PostgreSQL versions or other SQL engines.

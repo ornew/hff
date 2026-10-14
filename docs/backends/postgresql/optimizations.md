@@ -618,6 +618,29 @@ termination or runtime speed. See the
 [relation endpoint existence record](../../optimizations/043-postgresql-relation-has-existence.md)
 for the reproduction and limits.
 
+### Average eligible relation projections directly
+
+For a bound relation with a statically numeric projection, PostgreSQL can
+compute a correlated `AVG(numeric)` without materializing the related values
+as JSON. Int values enter as exact `numeric`; Float values pass through
+round-trip-safe Float text before numeric aggregation and a checked Float
+conversion. Null and guarded no-value contributions are skipped, and the
+relation's configured presence/null state remains authoritative. This path
+does not require relation ordering. Guarded or computed relation receivers
+and projections whose numeric family is dynamic or otherwise unrecoverable
+retain the general lowering. An outer-column capture in a supported numeric
+projection remains correlated to the current row.
+
+The checked fixture reduced generated `WHERE` sizes for five relation
+averages: 2,710 to 487 bytes, 2,900 to 495, 3,027 to 865, 2,832 to 695, and
+2,259 to 568. The first four queries reduced bound arguments from four to one;
+the outer-threshold projection reduced three to one. A plain `EXPLAIN` on an
+empty temporary fixture changed the representative physical Int projection
+from 23 plan nodes to 7, while both plans retained two sequential scans. These
+are SQL-shape and plan observations, not timing or execution-cost claims. See
+[direct relation averages](../../optimizations/047-postgresql-relation-average.md)
+for the tested queries, reproduction commands, and applicability limits.
+
 ### Lower direct collection emptiness and cardinality filters
 
 An unguarded, statically typed root JSONB binding without type metadata can

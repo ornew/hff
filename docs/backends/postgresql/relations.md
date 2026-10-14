@@ -260,9 +260,23 @@ represent a unique relation order.
 `avg()` over a relation also does not observe row order. PostgreSQL supports a
 numeric callback projection when each projected value has a recoverable Int or
 Float subtype; the relation does not need `WithUniqueOrder` unless a nested
-operation observes order. For example, an unordered relation can use
-`items:avg(item=>item.price)`. Native scalar-column `avg()` remains
-unsupported.
+operation observes order. Both a no-argument average over statically numeric
+relation items and a numeric callback projection are supported. For example,
+an unordered relation with native Int item values can use `items:avg`, and a
+flattened item relation can use `items:avg(item=>item.price)`.
+
+For an eligible relation binding and statically numeric projection, the
+translator can compute a correlated `AVG(numeric)` directly from related rows
+instead of materializing the relation as JSON. Null and guarded no-value
+contributions are skipped. Dynamic or `Any` projections and guarded or
+computed relation receivers retain general lowering. Float inputs use the
+PostgreSQL Float Profile's round-trip-safe text conversion before numeric
+aggregation and a checked Float conversion afterward; numeric accumulation
+can differ from sequential Float addition. This Float path requires
+`extra_float_digits > 0`; HFF neither sets nor inspects the session setting.
+See the [relation-average SQL-shape
+record](../../optimizations/047-postgresql-relation-average.md) for its
+eligible cases and reproduction details.
 
 `min()` and `max()` also support numeric relation callback projections. They
 skip null and guarded no-value results, return null for empty or all-skipped

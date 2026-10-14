@@ -471,8 +471,9 @@ require `extra_float_digits > 0`; intermediate overflow, cancellation,
 rounding, and zero sign can differ from Local's list-order Float accumulation.
 Relation `avg()` supports numeric callback projections when bound values
 preserve their numeric subtypes. It does not require unique relation ordering
-unless a nested operation observes order. Native scalar-column `avg()` is
-unsupported. JSON/JSONB lists also support `min()` and `max()` when numeric
+unless a nested operation observes order. It also supports no-argument
+averages when relation items have a statically numeric Int or Float binding.
+JSON/JSONB lists also support `min()` and `max()` when numeric
 subtypes can be recovered, including dynamic `Any` values and callback
 projections. JSONB needs version-1 numeric type metadata when storage loses the
 Int/Float distinction. Null and guarded no-value contributions are skipped;

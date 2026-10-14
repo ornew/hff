@@ -149,8 +149,8 @@ database session value. Intermediate overflow, cancellation, rounding, and
 zero sign can differ from Local's list-order Float accumulation. PostgreSQL
 relation `avg()` also supports numeric callback projections when the bound
 values preserve their numeric subtypes. It does not require a unique relation
-order unless a nested operation observes order. Native scalar-column `avg()`
-is not currently supported.
+order unless a nested operation observes order. Relation-backed lists also
+support no-argument averaging when item values have a recoverable numeric type.
 `min()` and `max()` accept numeric elements or numeric callback projections.
 They skip null values and guarded no-value results. A nonnumeric runtime value,
 an empty list, or a list with no contributing values returns null. Mixed Int and

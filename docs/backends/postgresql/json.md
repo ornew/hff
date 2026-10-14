@@ -994,7 +994,8 @@ Intermediate overflow, cancellation, rounding, and zero sign can differ from
 Local's list-order Float addition. Relation `avg()` supports numeric callback
 projections when bound values preserve their numeric subtypes; it does not
 require unique relation ordering unless a nested operation observes order.
-Native scalar-column `avg()` is unsupported. See
+The relation path also supports no-argument averages when its item binding has
+a statically numeric Int or Float type. See
 the [collection guide](../../guides/collections.md#averaging-numeric-values).
 
 ### Numeric list extrema

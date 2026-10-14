@@ -47,48 +47,8 @@ func (b *builder) relationPredicate(n hff.Node, name string) (expression, bool, 
 			absent = append(absent, "("+b.predicateCode(ancestor.structure.present)+") IS NOT TRUE", "("+b.predicateCode(ancestor.structure.null)+") IS TRUE")
 		}
 	}
-	outerSteps, outerPaths := b.steps, b.sharedPaths
-	b.steps = nil
-	b.sharedPaths = nil
-	if b.parameters == nil {
-		b.parameters = make(map[hff.BindingID]jsonParameter)
-	}
-	if b.physicalParameters == nil {
-		b.physicalParameters = make(map[hff.BindingID]Binding)
-	}
-	if b.parameterItems == nil {
-		b.parameterItems = make(map[hff.BindingID]Binding)
-	}
-	id := parameters[0].ID()
-	previous, existed := b.parameters[id]
-	previousPhysical, physicalExisted := b.physicalParameters[id]
-	b.physicalParameters[id] = c.item
-	defer func() {
-		b.steps = outerSteps
-		b.sharedPaths = outerPaths
-		if existed {
-			b.parameters[id] = previous
-		} else {
-			delete(b.parameters, id)
-		}
-		if physicalExisted {
-			b.physicalParameters[id] = previousPhysical
-		} else {
-			delete(b.physicalParameters, id)
-		}
-	}()
-	// A row value is only materialized if the callback observes the item itself.
-	// Field chains can instead project directly from its physical binding.
-	b.parameters[id] = jsonParameter{typ: c.typ, format: JSON, lossy: relationLosesFloat(*mapping.relation)}
-	previousItem, itemExisted := b.parameterItems[id]
-	b.parameterItems[id] = c.item
-	defer func() {
-		if itemExisted {
-			b.parameterItems[id] = previousItem
-		} else {
-			delete(b.parameterItems, id)
-		}
-	}()
+	restore := b.relationParameterScope(c, parameters[0].ID())
+	defer restore()
 	body, _ := callback.Child(0)
 	var predicate string
 	if b.directScalarWhereEligible(body) {
@@ -121,6 +81,45 @@ func (b *builder) relationPredicate(n hff.Node, name string) (expression, bool, 
 	}
 	code := "(CASE WHEN " + strings.Join(absent, " OR ") + " THEN NULL ELSE " + operator + " (SELECT 1 FROM " + from + " WHERE (" + b.predicateCode(c.correlation) + ") AND " + predicate + ") END)"
 	return expression{code: code, present: "TRUE", kind: hff.BoolType}, true, nil
+}
+
+// Row projections live inside the correlated source. Restore lexical bindings
+// and projection caches so nested callbacks cannot leak into their parent.
+func (b *builder) relationParameterScope(c relationConfig, id hff.BindingID) func() {
+	outerSteps, outerPaths := b.steps, b.sharedPaths
+	b.steps, b.sharedPaths = nil, nil
+	if b.parameters == nil {
+		b.parameters = make(map[hff.BindingID]jsonParameter)
+	}
+	if b.physicalParameters == nil {
+		b.physicalParameters = make(map[hff.BindingID]Binding)
+	}
+	if b.parameterItems == nil {
+		b.parameterItems = make(map[hff.BindingID]Binding)
+	}
+	previous, existed := b.parameters[id]
+	physical, physicalExisted := b.physicalParameters[id]
+	item, itemExisted := b.parameterItems[id]
+	b.parameters[id] = jsonParameter{typ: c.typ, format: JSON, lossy: b.bindingLosesFloat(c.item, c.typ)}
+	b.physicalParameters[id], b.parameterItems[id] = c.item, c.item
+	return func() {
+		b.steps, b.sharedPaths = outerSteps, outerPaths
+		if existed {
+			b.parameters[id] = previous
+		} else {
+			delete(b.parameters, id)
+		}
+		if physicalExisted {
+			b.physicalParameters[id] = physical
+		} else {
+			delete(b.physicalParameters, id)
+		}
+		if itemExisted {
+			b.parameterItems[id] = item
+		} else {
+			delete(b.parameterItems, id)
+		}
+	}
 }
 
 // Relation cardinality depends on the correlated row set, not on the physical
@@ -192,13 +191,25 @@ func (b *builder) relationCardinalityAbsent(receiver hff.Node) (string, bool, er
 }
 
 func (b *builder) relationAbsence(receiver hff.Node, c relationConfig) string {
-	absent := []string{"(" + b.predicateCode(c.present) + ") IS NOT TRUE", "(" + b.predicateCode(c.null) + ") IS TRUE"}
+	var absent []string
+	add := func(present, null SQLPredicate) {
+		if !fixedPredicate(present, true) {
+			absent = append(absent, "("+b.predicateCode(present)+") IS NOT TRUE")
+		}
+		if !fixedPredicate(null, false) {
+			absent = append(absent, "("+b.predicateCode(null)+") IS TRUE")
+		}
+	}
+	add(c.present, c.null)
 	parent := receiver
 	for parent.Kind() == hff.FieldNode {
 		parent, _ = parent.Child(0)
 		if ancestor, ok := b.relationMapping(parent, b.physicalParameters); ok && ancestor.structure != nil {
-			absent = append(absent, "("+b.predicateCode(ancestor.structure.present)+") IS NOT TRUE", "("+b.predicateCode(ancestor.structure.null)+") IS TRUE")
+			add(ancestor.structure.present, ancestor.structure.null)
 		}
+	}
+	if len(absent) == 0 {
+		return "FALSE"
 	}
 	return strings.Join(absent, " OR ")
 }
