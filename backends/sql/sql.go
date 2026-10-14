@@ -255,6 +255,15 @@ func Build(ctx context.Context, program hff.Program, options ...Option) (*Query,
 				return nil, configuration("SQL column has conflicting schema types")
 			}
 			columnKinds[column] = kind
+			// Unqualified names may be captured by lateral projections' v/p
+			// columns or callback row sources. Only qualified native bindings
+			// can be reused without first naming their original value.
+			if len(binding.column.parts) > 1 && kind != hff.NullType && metadata == "" {
+				if b.qualifiedNativePaths == nil {
+					b.qualifiedNativePaths = make(map[string]string)
+				}
+				b.qualifiedNativePaths[key] = column
+			}
 		}
 		b.bindings[key] = column
 		if metadata != "" {

@@ -461,9 +461,20 @@ into SQL text; computed expressions and guards retain their `OFFSET 0`
 projection barriers.
 When a step's presence is statically known to be true, the translator can retain
 that constant instead of projecting a separate presence column. Presence that
-depends on null or type guards remains explicit, as do value projections, so
-this simplification preserves null and no-value behavior. It is a conservative
-SQL-shape optimization; no performance improvement is claimed.
+depends on null or type guards remains explicit. Computed and converted values
+retain their projections, so this simplification preserves null and no-value
+behavior. It is a conservative SQL-shape optimization; no performance
+improvement is claimed.
+
+For a native scalar `Bind` with a qualified SQL column reference, the
+translator can also reuse the exact registered raw column inside generic expressions when its
+no-value presence is constant true, including nullable and optional fields.
+SQL NULL remains NULL. This removes only the leaf projection; computed
+methods such as `floor()`, `lower()`, or `len()` still use their value
+lowering, as do guard results, JSON, Timestamp, and structured values. See
+[qualified native-column reuse](../../optimizations/039-postgresql-qualified-column-projection-reuse.md)
+for the scope and measured SQL shapes.
+
 For explicitly bound scalar-column paths and schema-backed JSON, JSONB, and
 composite values, each projection scope has its own path cache. Repeated
 unguarded schema-known accesses can share projections within that scope,

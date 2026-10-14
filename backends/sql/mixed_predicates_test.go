@@ -77,8 +77,8 @@ func TestMixedPredicatesExposeDirectLeavesAndPreserveGenericSharing(t *testing.T
 			if !reflect.DeepEqual(query.Args(), []any{int64(1), int64(10), "Alice", int64(2), int64(30)}) {
 				t.Fatal("interleaved parameters lost source order:", query.Args())
 			}
-			if count := strings.Count(query.Where(), `SELECT "records"."age" AS v`); count != 1 {
-				t.Fatalf("generic siblings duplicated scalar projection: %d", count)
+			if count := strings.Count(query.Where(), `SELECT "records"."age" AS v`); count != 0 {
+				t.Fatalf("generic siblings retained redundant qualified-column projections: %d", count)
 			}
 		}
 	}

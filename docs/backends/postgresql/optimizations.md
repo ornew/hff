@@ -61,6 +61,19 @@ Guarded, structured-parent, JSON, mixed-kind, and callback paths retain their
 general lowering. The [native-column filter record](../../optimizations/038-postgresql-native-column-filters.md)
 reports SQL shape and parity evidence without claiming execution speed.
 
+### Reuse qualified raw columns in generic expressions
+
+When a native scalar binding has a qualified SQL column reference and its
+expression resolves to the exact registered column with constant-true no-value presence, generic
+expressions can reuse that column instead of projecting the raw value again.
+Nullable and optional fields qualify too; SQL NULL remains NULL.
+This removes leaf projections but leaves projections for computed methods,
+guard results, JSON, Timestamp, and structured bindings. Reuse
+stays within existing projection scopes; it does not authorize sharing across
+callback parameters or shadowed bindings. The [qualified native-column
+projection record](../../optimizations/039-postgresql-qualified-column-projection-reuse.md)
+reports SQL-shape and plan observations, not execution timings.
+
 ### Specialize exact mixed-numeric literal thresholds
 
 For pure filter comparisons between a directly bound Int or Float column and

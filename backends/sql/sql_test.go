@@ -89,17 +89,24 @@ func TestScalarLiteralsRemainTypedParametersWithoutProjections(t *testing.T) {
 	}
 }
 
-func TestRepeatedScalarPathsShareTheirProjection(t *testing.T) {
+func TestRepeatedScalarPathsReuseColumnCarriers(t *testing.T) {
 	for _, source := range []string{
 		`age+1>=18 age+2<=100 age:exists`,
 		`age>=18 age<=100 age:exists age:string!=""`,
 	} {
-		query, err := hffsql.Build(context.Background(), compile(t, source), hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if count := strings.Count(query.Where(), `SELECT "records"."age" AS v`); count != 1 {
-			t.Fatalf("%s: scalar column has %d projections, want one shared projection: %s", source, count, query.Where())
+		for _, qualified := range []bool{true, false} {
+			mappings, column, want := bindings(), `"records"."age"`, 0
+			if !qualified {
+				mappings[0] = hffsql.Bind(hff.Path{"age"}, hffsql.Column("age"))
+				column, want = `"age"`, 1
+			}
+			query, err := hffsql.Build(context.Background(), compile(t, source), hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(mappings...))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if count := strings.Count(query.Where(), "SELECT "+column+" AS v"); count != want {
+				t.Fatalf("%s: scalar column has %d projections, want %d: %s", source, count, want, query.Where())
+			}
 		}
 	}
 }

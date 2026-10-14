@@ -17,6 +17,7 @@ type builder struct {
 	ctx                   context.Context
 	program               hff.Program
 	bindings              map[string]string
+	qualifiedNativePaths  map[string]string
 	physicalBindings      []Binding
 	args                  []any
 	steps                 []string
@@ -120,6 +121,15 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 	// duplicated computation. Identity aliases reuse their surviving operand's
 	// projection; other computed expressions still need their barriers.
 	if n.Kind() == hff.LiteralNode || b.literalConversions[n].handled || b.identityAliases[n] {
+		return value, nil
+	}
+	// A qualified raw column is already named in its caller-owned row scope.
+	// Repeating that reference does not repeat computation. Keep computed
+	// values and no-value flags behind their existing projection barriers.
+	if b.qualifiedNativePath(n, value) {
+		if share {
+			b.rememberPath(key, value)
+		}
 		return value, nil
 	}
 	// Give each value and any dynamic no-value flag a relational name. Parent
