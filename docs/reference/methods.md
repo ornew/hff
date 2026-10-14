@@ -92,6 +92,8 @@ See [string and byte rules](../../spec/methods.md#strings-and-bytes).
 | `list:count() -> number` | Element count. |
 | `list:count(func(T) -> bool) -> number` | Count elements whose callback result converts to true. |
 | `list:filter(func(T) -> bool) -> list` | Keep original elements whose callback result converts to true. |
+| `list:sum() -> number` | Sum numeric elements. |
+| `list:sum(func(T) -> number) -> number` | Sum numeric callback results. |
 | `list:has(number) -> bool` | Whether an integer-valued index exists; negative indexes count from the end. |
 | `list:contains(any...) -> bool` | Whether every supplied value is an element; requires at least one argument. |
 | `list:unique() -> bool` | Whether all elements are distinct by HFF equality. |
@@ -115,12 +117,24 @@ Both methods return null for a null receiver. Callback forms require the
 `Callbacks` capability. Backend support is conditional on the bound
 representation and, for an ordered relation result from `filter()`, a unique
 order mapping.
+`sum()` skips null values; its callback form also skips guarded no-value.
+An empty list or one with no contributing values returns Int zero. A runtime
+nonnumeric contribution returns null. All-Int contributions are accumulated
+exactly and return null if the final total does not fit int64. If any
+contribution is Float, the result is Float and follows the backend's Float
+Profile; non-finite results return null. A null receiver yields null. The
+zero-argument form requires `method:list.sum`; callback forms also require the
+`Callbacks` capability.
 See [list rules](../../spec/methods.md#lists) and the
 [callback guide](../guides/callbacks.md).
 
-For PostgreSQL, schema-known JSON/JSONB lists support `count()` and
-`filter(predicate)` when the callback and retained values can be represented.
-Bound relations support both count forms without a unique order; relation
+For PostgreSQL, schema-known JSON/JSONB lists support `sum()` and
+`sum(callback)` when contributions are statically Int or null. Float or
+unresolved dynamic contributions are rejected by `Build`. Schema-known JSON/JSONB
+lists support `count()` and `filter(predicate)` when the callback and retained
+values can be represented.
+Bound relations support both count forms and statically Int sum projections
+without a unique order; relation
 `filter(predicate)` requires a unique order because it returns a list.
 Schema-known JSON/JSONB lists also support `contains()`, `unique()`, `sort()`,
 `concat(list)`, `any()`, and `all()`, plus `map()` and `flatmap()` when callback

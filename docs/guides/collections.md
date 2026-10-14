@@ -11,10 +11,16 @@ whose callback result converts to true; `filter()` returns the original
 matching elements in their existing order:
 
 ```hff
+scores:sum=12
+scores:sum(score=>score!)=12
 items:count
 items:count(item=>item.active)=2
 items:filter(item=>item.active):size>=1
 ```
+
+For a schema-known `List<Int|null>` value `[5, null, 7]`, both sum queries
+return 12. The second query demonstrates that a guarded no-value projection is
+skipped just like a null value.
 
 Both predicate methods treat a guarded no-value callback result as false for
 that element. A null receiver yields null. `filter()` does not map or otherwise
@@ -23,6 +29,15 @@ zero-argument `count()` requires `method:list.count`; the callback form and
 `filter()` also require the `Callbacks` capability. Nested callbacks require
 `NestedCallbacks` as well. A selected backend can still reject a query it
 cannot lower faithfully.
+
+`sum()` accepts a numeric list or a callback that projects each element to a
+number. Null values and guarded no-value projections are skipped. An empty list
+or a list with no contributing values returns Int zero. A runtime nonnumeric
+contribution returns null; all-Int contributions are exact and overflow to
+null if their final total is outside int64. If any contribution is Float, the
+result is Float and follows the backend's declared Float model; a non-finite
+result is null. The zero-argument form requires `method:list.sum`; the callback
+form requires that method capability and `Callbacks`.
 
 ```hff
 tags:size>=2

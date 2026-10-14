@@ -7,7 +7,7 @@ import (
 
 func higherMethod(id string) bool {
 	switch id {
-	case "list.any", "list.all", "list.count", "list.filter", "list.map", "list.flatmap", "list.foldl", "list.foldr":
+	case "list.any", "list.all", "list.count", "list.filter", "list.sum", "list.map", "list.flatmap", "list.foldl", "list.foldr":
 		return true
 	}
 	return false
@@ -59,6 +59,9 @@ func (e *evaluation) higher(n plan.Node, receiver core.Value, id string) (result
 		}
 	}
 	callback, _ := n.Child(callbackIndex)
+	if id == "list.sum" {
+		return e.sumList(xs, callback, true)
+	}
 	if fold {
 		for offset := 0; offset < len(xs); offset++ {
 			index := offset

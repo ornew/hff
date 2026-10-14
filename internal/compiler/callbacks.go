@@ -77,6 +77,12 @@ func (c *compiler) higherOrder(receiver plan.Node, n *syntax.MethodCall) ([]plan
 			result = primitive(core.BoolType)
 		case "count":
 			result = primitive(core.IntType)
+		case "sum":
+			var valid bool
+			result, valid = aggregateNumericResult(result)
+			if !valid {
+				return nil, core.Type{}, c.failure(core.TypeError, lambda, "sum callback must have an applicable numeric result")
+			}
 		case "filter":
 			result = core.NewListType(item)
 		case "map":
@@ -138,4 +144,20 @@ func (c *compiler) higherOrder(receiver plan.Node, n *syntax.MethodCall) ([]plan
 		return nil, core.Type{}, err
 	}
 	return []plan.Node{initial, callback}, accumulator, nil
+}
+
+// A sum with no contributing values is an Int zero. Otherwise its family is
+// determined by the values that may survive null and guarded no-value skips.
+func aggregateNumericResult(typ core.Type) (core.Type, bool) {
+	var numeric []core.Type
+	for _, branch := range branches(typ) {
+		if isNumber(branch) {
+			numeric = append(numeric, branch)
+		}
+	}
+	if len(numeric) == 0 && !bottom(typ) {
+		return core.Type{}, false
+	}
+	numeric = append(numeric, primitive(core.IntType))
+	return union(numeric...), true
 }

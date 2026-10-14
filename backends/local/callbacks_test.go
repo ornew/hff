@@ -2,6 +2,7 @@ package local_test
 
 import (
 	"context"
+	"math"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -40,6 +41,16 @@ func TestCallbackMethods(t *testing.T) {
 		{`x:flatmap(v=>v)=[]`, hff.List(), true},
 		{`x:foldl(0,(a,v)=>a+v)=6`, hff.List(hff.Int(1), hff.Int(2), hff.Int(3)), true},
 		{`x:foldr(0,(v,a)=>v-a)=2`, hff.List(hff.Int(1), hff.Int(2), hff.Int(3)), true},
+		{`x:sum=0`, hff.List(), true},
+		{`x:sum=0`, hff.List(hff.Null(), hff.Null()), true},
+		{`x:sum=6`, hff.List(hff.Int(1), hff.Null(), hff.Int(2), hff.Int(3)), true},
+		{`x:sum:[int]=9223372036854775807`, hff.List(hff.Int(math.MaxInt64), hff.Int(1), hff.Int(-1)), true},
+		{`x:sum=null`, hff.List(hff.Int(math.MaxInt64), hff.Int(1)), true},
+		{`x:sum:[float]=3.5`, hff.List(hff.Int(1), hff.Float(2.5)), true},
+		{`x:sum=null`, hff.List(hff.Int(1), hff.String("bad")), true},
+		{`x:sum=null`, hff.List(hff.Float(1e308), hff.Float(1e308)), true},
+		{`x:sum(v=>v!)=3`, hff.List(hff.Int(1), hff.Null(), hff.Int(2)), true},
+		{`x:sum(v=>v)=0`, hff.List(hff.Null()), true},
 		{`x:foldl(0,(a,v)=>a-v)=-6`, hff.List(hff.Int(1), hff.Int(2), hff.Int(3)), true},
 		{`x:foldl(7,(a,v)=>a+v)=7`, hff.List(), true},
 		{`x:foldr(null,(v,a)=>v)=null`, hff.List(), true},
@@ -89,6 +100,9 @@ func TestCallbackBudgetsAndShortCircuit(t *testing.T) {
 		t.Fatalf("guard skipped later allocations: %v %v", got, err)
 	}
 	f = build(t, `x:foldl(0,(a,v)=>a+v)`, local.WithLimits(hff.Limits{MaxSteps: 4}))
+	_, err = f.Match(ctx, record(hff.List(hff.Int(1), hff.Int(2)), hff.Null()))
+	code(t, err, hff.LimitError)
+	f = build(t, `x:sum`, local.WithLimits(hff.Limits{MaxSteps: 4}))
 	_, err = f.Match(ctx, record(hff.List(hff.Int(1), hff.Int(2)), hff.Null()))
 	code(t, err, hff.LimitError)
 }

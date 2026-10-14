@@ -904,7 +904,7 @@ and propagates through the ordinary HFF evaluation rules.
 For schema-known JSON objects, the backend supports `size()`, `has(key)`,
 `get(key)`, `keys()`, `values()`, and `items()`. Enumeration orders keys with
 PostgreSQL's `C` collation. For schema-known JSON lists, it supports `size()`,
-`count()`, `filter(predicate)`, `has(index)`, `contains()`, `unique()`,
+`count()`, `sum()`, `filter(predicate)`, `has(index)`, `contains()`, `unique()`,
 `sort()`, `concat(list)`, `any()`, `all()`, `map()`, and `flatmap()` when the
 callback and resulting values can be represented by the binding. `filter()`
 preserves JSON list order and does not need a separate order mapping.
@@ -915,6 +915,15 @@ compares each element
 by HFF equality, so repeated stored nulls and repeated nested composite values
 are duplicates. These operations require applicable list/object equality
 capabilities for the types actually compared.
+
+`sum()` is currently limited to Int contributions for JSON/JSONB lists. The
+list element type, or the callback result type, must be statically limited to
+Int and null; guarded no-value callback results are also skipped. Empty and
+all-skipped lists return Int zero, and an out-of-range final total returns
+null. Float or unresolved dynamic contributions are rejected by `Build`. This
+PostgreSQL limitation does not change the language rule that Float sums follow
+the backend's declared Float model; see the
+[native Float design](../../design/021-backend-native-float-semantics.md).
 
 ### Containment for simple JSONB filters
 

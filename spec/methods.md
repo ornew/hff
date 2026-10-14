@@ -132,6 +132,8 @@ partial serialization.
 | `list:count() -> number` | Element count |
 | `list:count(func(T) -> bool) -> number` | Count elements whose callback result converts to true |
 | `list:filter(func(T) -> bool) -> list` | Keep elements whose callback result converts to true |
+| `list:sum() -> number` | Sum numeric elements |
+| `list:sum(func(T) -> number) -> number` | Sum numeric callback results |
 | `list:has(number) -> bool` | Index-presence test |
 | `list:contains(any...) -> bool` | All supplied elements are present; at least one argument |
 | `list:unique() -> bool` | Whether every element is distinct |
@@ -153,6 +155,16 @@ that element. An empty list counts as zero. A null receiver yields null.
 converts to true, in their original order; it does not transform them. Guarded
 no-value converts to false for that element. Filtering an empty list returns
 an empty list, and a null receiver yields null.
+`sum()` accepts a list of numeric values or one callback that projects each
+element to a numeric value. Null values and guarded no-value callback results
+are skipped. A nonnumeric runtime value makes the result null. An empty list or
+one with no contributing values sums to Int zero. If every contribution is Int,
+the exact total is returned when it fits int64; otherwise the result is null. If
+any contribution is Float, the result is Float and its arithmetic follows the
+backend's declared Float model; a non-finite result is null. A null receiver
+yields null. The zero-argument method requires
+`method:list.sum`; the callback form also requires `Callbacks`. Cancellation or
+a resource-limit error aborts instead of returning a partial sum.
 `has()` supports the same negative indices as element access. `unique()` returns
 whether every element is distinct using structural equality. `has()` returns
 false for an out-of-range integer-valued index, and null for a non-integer index. `sort()` is stable

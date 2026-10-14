@@ -85,7 +85,7 @@ func profileSQLMethod(id string) bool {
 	switch id {
 	case "string.duration", "duration.hours", "duration.minutes", "duration.seconds", "duration.milliseconds", "duration.microseconds", "duration.nanoseconds", "string.timestamp", "timestamp.year", "timestamp.month", "timestamp.dayofmonth", "timestamp.dayofyear", "timestamp.hours", "timestamp.minutes", "timestamp.seconds", "timestamp.milliseconds", "timestamp.before", "timestamp.after", "timestamp.add", "any.type", "any.json", "any.string", "any.in", "any.exists",
 		"bytes.len", "bytes.base64", "bytes.base64r", "string.frombase64", "string.frombase64r", "number.round", "number.ceil", "number.floor", "bool.and", "bool.or", "bool.not", "string.bool", "string.number", "string.fromjson", "string.matches", "string.lower", "string.upper", "string.len", "string.contains", "string.startswith", "string.endswith", "string.concat",
-		"list.size", "list.count", "list.filter", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr",
+		"list.size", "list.count", "list.filter", "list.sum", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr",
 		"object.size", "object.has", "object.get", "object.keys", "object.values", "object.items":
 		return true
 	}

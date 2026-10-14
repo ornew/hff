@@ -769,6 +769,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 	if name == "any" || name == "all" || name == "count" && n.ChildCount() > 1 {
 		return b.jsonPredicate(n, name)
 	}
+	if name == "sum" {
+		return b.jsonSum(n)
+	}
 	if name == "size" || name == "count" && n.ChildCount() == 1 {
 		if value, handled, err := b.relationSize(n); handled {
 			return value, err

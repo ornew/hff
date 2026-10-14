@@ -2,6 +2,7 @@ package local
 
 import (
 	"github.com/ornew/hff/internal/core"
+	"github.com/ornew/hff/internal/plan"
 )
 
 func (e *evaluation) collectionMethod(id string, receiver core.Value, args []core.Value) (result, error) {
@@ -9,6 +10,9 @@ func (e *evaluation) collectionMethod(id string, receiver core.Value, args []cor
 	case "list.size", "list.count":
 		xs, _ := receiver.ListView()
 		return ordinary(core.Int(int64(len(xs)))), nil
+	case "list.sum":
+		xs, _ := receiver.ListView()
+		return e.sumList(xs, plan.Node{}, false)
 	case "object.size":
 		obj, _ := receiver.ObjectView()
 		return ordinary(core.Int(int64(len(obj)))), nil
