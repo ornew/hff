@@ -361,6 +361,24 @@ observed_items:map(item=>item:type):contains("timestamp")
 observed_items:foldl(0,(acc,item)=>acc+(item:[int]))
 ```
 
+For a schema-known `List<Timestamp>`, PostgreSQL JSON and JSONB also support a
+bounded computed callback subset: mapping `add(duration)` over each item,
+then serializing or searching the mapped list, and flatmapping each computed
+Timestamp into a singleton list. With `observed_items` containing
+`["0000-01-01T00:00:00Z"]`, adding one nanosecond preserves its full
+precision in the serialized JSON:
+
+```hff
+observed_items:map(item=>item:add("1ns":duration)):json="[\"0000-01-01T00:00:00.000000001Z\"]"
+observed_items:map(item=>item:add("1ns":duration)):contains("0000-01-01T00:00:00.000000001Z":timestamp)
+observed_items:flatmap(item=>[item:add("1ns":duration)]):json="[\"0000-01-01T00:00:00.000000001Z\"]"
+```
+
+Adding one nanosecond to the maximum Timestamp produces null. This support is
+specific to these representable callback results; other
+collection transformations can still fail to build when they require a
+Timestamp representation the backend cannot lower.
+
 For JSONB, provide numeric metadata when an operation needs Int/Float identity
 or representation details such as signed zero. Without it, Build rejects the
 operation when JSONB has erased a required distinction. The runnable example

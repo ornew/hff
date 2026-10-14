@@ -345,9 +345,24 @@ items:json="[\"2026-10-01T00:00:00.000000123Z\"]"
 The same canonical string representation is used when a schema-known struct
 containing Timestamp fields is serialized. A JSON string under `Any` remains
 String; these operations do not infer Timestamp values from JSON strings.
-Other collection transformations may be rejected if their SQL lowering would
-need to materialize a Timestamp value the backend cannot represent. The output
-of `string()` and `json()` is canonical UTC text.
+For schema-known Timestamp lists, a bounded callback subset can also construct
+new Timestamp values and serialize or search the result. This includes mapping
+`add(duration)` over elements, then using `json()` or `contains()`, and
+flatmapping each result into a singleton list. For example, with `items` bound
+as a JSON or JSONB `List<Timestamp>` containing
+`["0000-01-01T00:00:00Z"]`:
+
+```hff
+items:map(x=>x:add("1ns":duration)):json="[\"0000-01-01T00:00:00.000000001Z\"]"
+items:map(x=>x:add("1ns":duration)):contains("0000-01-01T00:00:00.000000001Z":timestamp)
+items:flatmap(x=>[x:add("1ns":duration)]):json="[\"0000-01-01T00:00:00.000000001Z\"]"
+```
+
+Adding one nanosecond to `9999-12-31T23:59:59.999999999Z` yields null rather
+than an out-of-range Timestamp. The output of `string()` and `json()` is
+canonical UTC text. Other collection
+transformations may still be rejected when their SQL lowering cannot represent
+the required Timestamp value.
 
 The schema-known disjoint unions `Timestamp|Bool|Null` and
 `Timestamp|Float|Null` are also supported for `type()`, explicit Timestamp
