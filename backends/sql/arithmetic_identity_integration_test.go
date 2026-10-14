@@ -145,6 +145,8 @@ func TestPostgreSQLArithmeticIdentityRetainsExtensionCarrier(t *testing.T) {
 		{`age+0`, "bigint"}, {`(0+age)`, "bigint"}, {`age*1`, "bigint"},
 		{`age+0.0`, "double precision"}, {`age*1.0`, "double precision"}, {`age/1`, "double precision"},
 		{`ratio*1`, "double precision"}, {`ratio/1`, "double precision"}, {`ratio-0.0`, "double precision"},
+		{`age:round`, "bigint"}, {`age:ceil`, "bigint"}, {`age:floor`, "bigint"},
+		{`ratio:round`, "double precision"},
 	}
 	for _, tc := range cases {
 		p, err := e.Compile(ctx, `name:nullcarrier(`+tc.expression+`)`)

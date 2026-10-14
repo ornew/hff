@@ -484,6 +484,15 @@ evaluators. See [native operation result
 reuse](../../optimizations/040-postgresql-native-operation-reuse.md) for
 eligibility and SQL-shape evidence.
 
+Int- and Null-valued `round()`, `ceil()`, and `floor()` views, plus native
+Duration `nanoseconds()`, can reuse an already projected operand because these
+views preserve its value carrier. Eligible arithmetic, collection, JSON
+access, regex, and method expressions can omit tautological conditions when a later
+operand's presence is proven `TRUE`; guard-dependent presence remains explicit. Float
+rounding and dynamic JSON decoding retain their computed paths. See [native
+identity and presence reuse](../../optimizations/041-postgresql-native-identity-and-presence.md)
+for the exact scope and SQL-shape evidence.
+
 For explicitly bound scalar-column paths and schema-backed JSON, JSONB, and
 composite values, each projection scope has its own path cache. Repeated
 unguarded schema-known accesses can share projections within that scope,

@@ -69,7 +69,11 @@ func TestPostgreSQLNativeOperationReuseMatchesLocal(t *testing.T) {
 				items = hff.List()
 			}
 			words := hff.List(values["s"], values["t"], hff.Null())
-			data := hff.Object(map[string]hff.Value{"n": left, "text": values["s"]})
+			elapsed := "1ns"
+			if (li+ri)%2 == 0 {
+				elapsed = "invalid duration"
+			}
+			data := hff.Object(map[string]hff.Value{"n": left, "text": values["s"], "elapsed": hff.String(elapsed)})
 			values["items"], values["data"], values["words"] = items, data, words
 			records = append(records, hff.Object(values))
 			var row []string
@@ -101,6 +105,12 @@ func TestPostgreSQLNativeOperationReuseMatchesLocal(t *testing.T) {
 		`words:any(x=>x:lower="abc" x:lower!="def")`,
 		`words:any(s=>s:lower="abc" words:any(s=>s:lower="abc" s:lower!="def"))`,
 		`data.n:[int]+2>0 data.n:[int]+2<20`, `data.text:[string]:lower="abc" data.text:[string]:lower!="def"`,
+		`i:round:json=i:floor:json`, `i:ceil:floor:round:json=i:json`,
+		`d:nanoseconds:json=i:json`, `d!:nanoseconds:json=d:nanoseconds:json`,
+		`data.n:[int]:round:json=i:json`, `items:any(x=>x:round+1>i)`,
+		`p:and(q):type="bool"`,
+		`i:round:json=null:floor:json`,
+		`data.elapsed:duration:nanoseconds=1`,
 	}
 	var script strings.Builder
 	var wants []bool

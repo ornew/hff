@@ -98,10 +98,7 @@ func (b *builder) lowerIdentity(n hff.Node, identity arithmeticIdentity) (expres
 	} else {
 		// This expression already belongs to the surviving operand's scope.
 		// Do not add an identical value/presence projection around it.
-		if b.identityAliases == nil {
-			b.identityAliases = make(map[hff.Node]bool)
-		}
-		b.identityAliases[n] = true
+		b.markIdentityAlias(n)
 	}
 	return value, nil
 }

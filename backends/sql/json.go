@@ -250,7 +250,7 @@ func (b *builder) metadataSubpath(n hff.Node) (expression, bool, error) {
 func ordinaryPresence(values []expression) string {
 	present := "TRUE"
 	for i := len(values) - 1; i >= 0; i-- {
-		present = both(values[i].present, "("+values[i].code+" IS NULL OR "+present+")")
+		present = presenceBefore(values[i], present)
 	}
 	return present
 }

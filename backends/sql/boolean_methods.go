@@ -21,7 +21,11 @@ func (b *builder) booleanCall(n hff.Node, name string, values []expression) (exp
 			op, decisive = "OR", "TRUE"
 		}
 		code = "(CASE WHEN " + receiver.code + " IS NULL THEN NULL ELSE (" + receiver.code + " " + op + " " + arg.code + ") END)"
-		present = both(receiver.present, "("+receiver.code+" IS NULL OR "+receiver.code+" IS "+decisive+" OR "+arg.present+")")
+		if arg.present == "TRUE" {
+			present = receiver.present
+		} else {
+			present = both(receiver.present, "("+receiver.code+" IS NULL OR "+receiver.code+" IS "+decisive+" OR "+arg.present+")")
+		}
 	default:
 		return expression{}, b.failure(n, "unsupported boolean method")
 	}

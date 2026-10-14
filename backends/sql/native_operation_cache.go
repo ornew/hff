@@ -37,10 +37,7 @@ func (b *builder) reuseNativeOperation(n hff.Node, operation string, argumentsSt
 		// SQL uses these placeholders: the surviving computation belongs to
 		// the first occurrence, including its original ordered arguments.
 		b.args = b.args[:argumentsStart]
-		if b.identityAliases == nil {
-			b.identityAliases = make(map[hff.Node]bool)
-		}
-		b.identityAliases[n] = true
+		b.markIdentityAlias(n)
 		return cached, true
 	}
 	if b.operationKeys == nil {

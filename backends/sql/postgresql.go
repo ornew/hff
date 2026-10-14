@@ -443,6 +443,15 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 
 func boolean(code string) expression { return expression{code, "TRUE", hff.BoolType} }
 
+// An operation that returns its already projected operand needs no new
+// projection. The marker is cleared before each node is lowered again.
+func (b *builder) markIdentityAlias(n hff.Node) {
+	if b.identityAliases == nil {
+		b.identityAliases = make(map[hff.Node]bool)
+	}
+	b.identityAliases[n] = true
+}
+
 // project names an internal SQL-only intermediate using the same projection
 // barrier as typed plan nodes. It does not introduce an HFF value or parameter.
 func (b *builder) project(code string) string {
@@ -486,6 +495,16 @@ func both(a, b string) string {
 		return a
 	}
 	return "(" + a + " AND " + b + ")"
+}
+
+// An absent earlier value or SQL NULL skips the later operand. A later
+// operand with constant presence cannot introduce no-value, even when its
+// SQL carrier is NULL.
+func presenceBefore(earlier expression, later string) string {
+	if later == "TRUE" {
+		return earlier.present
+	}
+	return both(earlier.present, "("+earlier.code+" IS NULL OR "+later+")")
 }
 
 func (b *builder) truth(n hff.Node, value expression) string {
@@ -653,7 +672,7 @@ func (b *builder) binary(n hff.Node) (expression, error) {
 }
 
 func (b *builder) arithmetic(n hff.Node, left, right expression, op hff.Operator) (expression, error) {
-	present := both(left.present, "("+left.code+" IS NULL OR "+right.present+")")
+	present := presenceBefore(left, right.present)
 	if left.kind == hff.NullType {
 		return expression{"NULL", left.present, hff.NullType}, nil
 	}
@@ -827,6 +846,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		}
 	}
 	if name == "duration" || name == "hours" || name == "minutes" || name == "seconds" || name == "milliseconds" || name == "microseconds" || name == "nanoseconds" {
+		if name == "nanoseconds" && receiver.kind == hff.DurationType && n.Type().Kind() != hff.NullType && n.Type().Kind() != hff.NeverType && builtinUnaryScalarMethod(n, name) {
+			b.markIdentityAlias(n)
+		}
 		return b.durationCall(n, name, receiver)
 	}
 	if name == "sort" {
@@ -839,6 +861,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		return b.bytesCall(n, name, receiver)
 	}
 	if name == "round" || name == "ceil" || name == "floor" {
+		if (receiver.kind == hff.IntType || receiver.kind == hff.NullType) && builtinUnaryScalarMethod(n, name) {
+			b.markIdentityAlias(n)
+		}
 		return b.numericRounding(n, name, receiver)
 	}
 	if name == "bool" || name == "number" {

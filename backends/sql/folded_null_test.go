@@ -22,6 +22,8 @@ var foldedNullCases = []struct {
 	{`"bad":timestamp`, "numeric"},
 	{`"9223372036854775808":number`, "json"},
 	{`"01":number`, "json"},
+	{`"01":number:round`, "json"},
+	{`null:round`, "unknown"},
 	{`null:bool`, "unknown"},
 	{`null:duration`, "unknown"},
 	{`null:timestamp`, "unknown"},

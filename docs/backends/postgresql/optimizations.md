@@ -88,6 +88,16 @@ reuse](../../optimizations/040-postgresql-native-operation-reuse.md) record
 for filters, parity coverage, and SQL-shape measurements; no speed claim
 follows from those measurements.
 
+### Reuse native identity views and proven presence
+
+Int- and Null-valued `round()`, `ceil()`, and `floor()` views and native
+Duration `nanoseconds()` can reuse an already projected operand, preserving
+its carrier and no-value state. Eligible arithmetic, collection, JSON access,
+regex, and method expressions can also omit tautological conditions when a later
+operand's presence is proven `TRUE`. Float rounding, dynamic JSON decoding, and guard-dependent presence
+retain their computed paths. The [identity and presence record](../../optimizations/041-postgresql-native-identity-and-presence.md)
+reports paired parity and SQL-shape evidence; no runtime-speed claim follows.
+
 ### Specialize exact mixed-numeric literal thresholds
 
 For pure filter comparisons between a directly bound Int or Float column and

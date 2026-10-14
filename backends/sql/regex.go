@@ -157,6 +157,6 @@ func (b *builder) regexCall(n hff.Node, operator hff.Operator, receiver, pattern
 		code := "(CASE WHEN NOT " + receiver.present + " OR " + receiver.code + " IS NULL OR NOT " + pattern.present + " OR " + pattern.code + " IS NULL THEN FALSE ELSE " + match + " END)"
 		return expression{code, "TRUE", hff.BoolType}, nil
 	}
-	present := both(receiver.present, "("+receiver.code+" IS NULL OR "+pattern.present+")")
+	present := presenceBefore(receiver, pattern.present)
 	return expression{match, present, hff.BoolType}, nil
 }
