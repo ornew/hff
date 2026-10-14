@@ -243,6 +243,15 @@ row or callback evaluation order, local HFF runtime budgets, or an index plan.
 A visible correlation merely gives PostgreSQL a predicate it may be able to
 use with an appropriate index and plan.
 
+For a plain bound relation, the constant Int filters `items:has(0)` and
+`items:has(-1)` only need to determine whether the relation is nonempty. They
+use the same correlated existence check and do not require `WithUniqueOrder`.
+The lowering retains the configured parent and relation presence/null state,
+so an empty relation is a non-match and a null relation remains null before
+the filter is applied. A relation containing a null-valued item is still
+nonempty. Other indexes, including `items:has(-2)` and invalid Float indexes,
+retain the general cardinality/index lowering.
+
 ### Nest a one-to-many relation
 
 To expose adjustments under each order item, extend the item schema and make

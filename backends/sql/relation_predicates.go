@@ -114,21 +114,34 @@ func (b *builder) relationPredicate(n hff.Node, name string) (expression, bool, 
 // representation of each item. Count rows directly so a native item does not
 // have to be materialized as JSON merely to answer size().
 func (b *builder) relationSize(n hff.Node) (expression, bool, error) {
+	source, handled, err := b.relationCardinalitySource(n)
+	if !handled || err != nil {
+		return expression{}, handled, err
+	}
+	code := "(CASE WHEN " + source.absent + " THEN NULL::bigint ELSE (SELECT count(*) FROM " + source.from + " WHERE (" + source.correlation + ")) END)"
+	return expression{code: code, present: "TRUE", kind: hff.IntType}, true, nil
+}
+
+type relationCardinality struct {
+	absent, from, correlation string
+}
+
+func (b *builder) relationCardinalitySource(n hff.Node) (relationCardinality, bool, error) {
 	receiver, _ := n.Child(0)
 	root := receiver
 	for root.Kind() == hff.FieldNode {
 		root, _ = root.Child(0)
 	}
 	if root.Kind() != hff.VariableNode && root.Kind() != hff.ParameterNode {
-		return expression{}, false, nil
+		return relationCardinality{}, false, nil
 	}
 	mapping, ok := b.relationMapping(receiver, b.physicalParameters)
 	if !ok || mapping.relation == nil {
-		return expression{}, false, nil
+		return relationCardinality{}, false, nil
 	}
 	c := mapping.relation.config
 	if b.activeRelationAliases[c.alias] > 0 || b.shadowsOuterBinding(c.alias) {
-		return expression{}, false, nil
+		return relationCardinality{}, false, nil
 	}
 	absent := []string{"(" + b.predicateCode(c.present) + ") IS NOT TRUE", "(" + b.predicateCode(c.null) + ") IS TRUE"}
 	parent := receiver
@@ -140,20 +153,33 @@ func (b *builder) relationSize(n hff.Node) (expression, bool, error) {
 	}
 	table, err := quoteColumn(c.table)
 	if err != nil {
-		return expression{}, true, err
+		return relationCardinality{}, true, err
 	}
 	alias, err := quoteColumn(Column(c.alias))
 	if err != nil {
-		return expression{}, true, err
+		return relationCardinality{}, true, err
 	}
-	code := "(CASE WHEN " + strings.Join(absent, " OR ") + " THEN NULL::bigint ELSE (SELECT count(*) FROM " + table + " AS " + alias + " WHERE (" + b.predicateCode(c.correlation) + ")) END)"
-	return expression{code: code, present: "TRUE", kind: hff.IntType}, true, nil
+	return relationCardinality{absent: strings.Join(absent, " OR "), from: table + " AS " + alias, correlation: b.predicateCode(c.correlation)}, true, nil
 }
 
 // A relation's valid list indices depend only on its cardinality. This also
 // handles negative indices without requiring a stable order or item encoding.
 func (b *builder) relationHas(n hff.Node) (expression, bool, error) {
 	argumentNode, _ := n.Child(1)
+	// Either end index exists exactly when the correlated list is nonempty.
+	// This remains true without a declared row order and avoids counting all
+	// rows merely to answer has(0) or has(-1).
+	if value, constant, err := b.constantValue(argumentNode); err == nil && constant && value.Kind() == hff.IntKind {
+		index, _ := value.AsInt()
+		if index == 0 || index == -1 {
+			source, handled, err := b.relationCardinalitySource(n)
+			if !handled || err != nil {
+				return expression{}, handled, err
+			}
+			code := "(CASE WHEN " + source.absent + " THEN NULL::boolean ELSE EXISTS (SELECT 1 FROM " + source.from + " WHERE (" + source.correlation + ")) END)"
+			return expression{code: code, present: "TRUE", kind: hff.BoolType}, true, nil
+		}
+	}
 	// Dynamic arguments retain JSON-aware family dispatch and runtime checks.
 	staticKind, scalar := scalarKind(argumentNode.Type())
 	if argumentNode.Type().Kind() == hff.NeverType {

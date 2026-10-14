@@ -143,8 +143,15 @@ func TestTimestampInRelationPredicates(t *testing.T) {
 		if err != nil {
 			t.Fatal(source, err)
 		}
-		if !strings.Contains(query.Where(), "count(*)") || strings.Contains(query.Where(), "json_agg(") {
+		if strings.Contains(query.Where(), "json_agg(") {
 			t.Error(source, "relation index check materialized Timestamp items:", query.Where())
+		}
+		if strings.Contains(source, ":has(0)") || strings.Contains(source, ":has(-1)") {
+			if !strings.Contains(query.Where(), "EXISTS (SELECT 1") || strings.Contains(query.Where(), "count(*)") {
+				t.Error(source, "end index was not lowered to existence:", query.Where())
+			}
+		} else if !strings.Contains(query.Where(), "count(*)") {
+			t.Error(source, "relation cardinality was not counted:", query.Where())
 		}
 	}
 }
@@ -241,7 +248,16 @@ func TestTimestampRelationSizeKeepsParentAndListState(t *testing.T) {
 		if err != nil {
 			t.Fatal(source, err)
 		}
-		for _, name := range []string{"profile_present", "profile_null", "times_present", "times_null", "count(*)"} {
+		expected := []string{"profile_present", "profile_null", "times_present", "times_null"}
+		if source == `profile.times:has(-1)` {
+			expected = append(expected, "EXISTS (SELECT 1")
+			if strings.Contains(query.Where(), "count(*)") {
+				t.Errorf("%s counted rows for existence: %s", source, query.Where())
+			}
+		} else {
+			expected = append(expected, "count(*)")
+		}
+		for _, name := range expected {
 			if !strings.Contains(query.Where(), name) {
 				t.Errorf("%s lost %s: %s", source, name, query.Where())
 			}

@@ -103,10 +103,13 @@ func TestNativeDurationRelationCallbacksBuild(t *testing.T) {
 		if strings.Contains(source, "=>") && !strings.Contains(query.Where(), `"item"."elapsed_ns"`) {
 			t.Errorf("%s: direct Duration item was not read: %s", source, query.Where())
 		}
-		if strings.Contains(source, ":size") || strings.Contains(source, ":has") {
+		if strings.Contains(source, ":size") || source == `items:has(1.5)` {
 			if !strings.Contains(query.Where(), "count(*)") {
 				t.Errorf("%s: relation cardinality was not counted: %s", source, query.Where())
 			}
+		}
+		if source == `items:has(-1)` && (!strings.Contains(query.Where(), "EXISTS (SELECT 1") || strings.Contains(query.Where(), "count(*)")) {
+			t.Errorf("%s: end index was not lowered to existence: %s", source, query.Where())
 		}
 	}
 }

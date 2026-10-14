@@ -581,6 +581,17 @@ need to be projected; a whole item is built only when the callback observes
 that value. Guards, computed relation lists, or alias collisions can require
 the general list-materialization path.
 
+For a plain bound relation, `has(0)` and `has(-1)` can use this witness query
+to test nonemptiness directly. The existing parent and relation presence/null
+case remains around the `EXISTS`; no unique item ordering is needed for these
+constant endpoints. Other indexes, including `has(-2)`, and invalid Float
+indexes retain the cardinality/general path. In the checked empty-table plan,
+an indexed child scan appeared beneath a hashed SubPlan and no aggregate or
+`COUNT` appeared. This is plan-shape evidence, not a claim about per-row early
+termination or runtime speed. See the
+[relation endpoint existence record](../../optimizations/043-postgresql-relation-has-existence.md)
+for the reproduction and limits.
+
 ### Drop ordering only when the proof reaches the consumer
 
 Relation and transformation order is preserved whenever the consumer can
