@@ -100,8 +100,10 @@ normalized, and distinct. Function types are not valid input schema types.
 SQL scalar literals use a `kind` and canonical `text` pair. Int and Duration
 use canonical base-10 integer text; finite Float uses Go's round-trip decimal
 spelling; Bool uses `true` or `false`; String uses its value as text; Null has
-no text. This avoids loss of `int64` precision in JavaScript environments
-while preserving the declared HFF kind.
+no text. String predicate literals must be valid UTF-8 and contain no NUL;
+`Encode` and `Decode` reject values outside that constraint. This avoids loss of
+`int64` precision in JavaScript environments while preserving the declared HFF
+kind.
 
 ### Binding variants
 

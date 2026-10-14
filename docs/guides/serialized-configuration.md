@@ -173,7 +173,9 @@ Relation and flattened-struct state use a tagged predicate tree. Its tags are
 `trusted`, `bool`, `equal`, `null`, `notnull`, `value`, `and`, `or`, and `not`.
 Scalar nodes use `column` with a `column` identifier array and HFF `type`, or
 `literal` with a typed `value`. A literal stores its kind and canonical text.
-The backend quotes identifiers and binds literal values as parameters.
+String predicate literals must be valid UTF-8 and contain no NUL; both
+`Encode` and `Decode` reject a violation. The backend quotes identifiers and
+binds literal values as parameters.
 
 If a state expression needs raw developer-authored SQL, the document names a
 stable trusted-predicate ID. The SQL text and referenced columns live in the
