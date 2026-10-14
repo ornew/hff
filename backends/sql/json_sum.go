@@ -6,8 +6,9 @@ import (
 	"github.com/ornew/hff"
 )
 
-// Sum integer values through PostgreSQL numeric so intermediate totals cannot
-// overflow bigint. A later slice adds Float and dynamic numeric projections.
+// Sum one statically known numeric family through PostgreSQL numeric so
+// intermediate totals do not overflow the result carrier. Dynamic numeric
+// projections need a separate path that preserves each contributing subtype.
 func (b *builder) jsonSum(n hff.Node) (expression, error) {
 	receiver, _ := n.Child(0)
 	value, err := b.expression(receiver)
@@ -27,13 +28,15 @@ func (b *builder) jsonSum(n hff.Node) (expression, error) {
 	}
 	itemType := stored.Element()
 	var from, term, present, ordinal string
+	var family hff.TypeKind
 	if n.ChildCount() == 1 {
-		if !integerSumType(itemType) {
-			return expression{}, b.failure(n, "PostgreSQL sum currently requires Int list elements")
+		family = staticSumFamily(itemType)
+		if family == hff.InvalidType {
+			return expression{}, b.failure(n, "PostgreSQL sum currently requires a statically known numeric family")
 		}
 		alias := b.nextAlias()
 		from = string(format) + "_array_elements(" + value.code + ") AS " + alias + "(value)"
-		term = jsonScalarCast("("+alias+".value #>> '{}'::text[])", hff.IntType)
+		term = jsonScalarCast("("+alias+".value #>> '{}'::text[])", family)
 		present = "TRUE"
 	} else {
 		callback, _ := n.Child(1)
@@ -43,8 +46,9 @@ func (b *builder) jsonSum(n hff.Node) (expression, error) {
 		if err != nil {
 			return expression{}, err
 		}
-		if !integerSumType(projected) || computed.kind != hff.IntType && computed.kind != hff.NullType {
-			return expression{}, b.failure(n, "PostgreSQL sum currently requires an Int callback result")
+		family = staticSumFamily(projected)
+		if family == hff.InvalidType || computed.kind != family && computed.kind != hff.NullType {
+			return expression{}, b.failure(n, "PostgreSQL sum currently requires a statically known numeric callback result")
 		}
 		term, present = computed.code, computed.present
 		if computed.kind == hff.NullType {
@@ -57,25 +61,48 @@ func (b *builder) jsonSum(n hff.Node) (expression, error) {
 	if strings.TrimSpace(term) == "" {
 		return expression{}, b.failure(n, "sum has no numeric projection")
 	}
-	// SUM(bigint) returns numeric. Check the final total before narrowing it
-	// to int64, including the empty/all-skipped Int zero.
-	total := "COALESCE(sum(CASE WHEN " + present + " THEN " + term + " END),0::numeric)"
+	// SUM(numeric) avoids intermediate bigint or Float overflow. PostgreSQL's
+	// direct float-to-numeric cast discards significant digits; the required
+	// round-trip Float text retains them before numeric accumulation.
+	numericTerm := "(" + term + ")::numeric"
+	if family == hff.FloatType {
+		numericTerm = "(" + term + ")::text::numeric"
+	}
+	aggregate := "sum(CASE WHEN " + present + " THEN " + numericTerm + " END)"
 	alias := b.nextAlias()
+	if family == hff.FloatType {
+		floatValue := alias + ".total::double precision"
+		result := "(CASE WHEN " + alias + ".total IS NULL THEN '0'::json WHEN pg_input_is_valid(" + alias + ".total::text,'double precision') THEN " + b.floatText(floatValue) + "::json ELSE 'null'::json END)"
+		code := "(CASE WHEN " + value.code + " IS NULL THEN NULL::json ELSE (SELECT " + result + " FROM (SELECT " + aggregate + " AS total FROM " + from + ") AS " + alias + ") END)"
+		return b.jsonDecode(n, code, JSON, n.Type(), value.present)
+	}
+	total := "COALESCE(" + aggregate + ",0::numeric)"
 	code := "(CASE WHEN " + value.code + " IS NULL THEN NULL::bigint ELSE (SELECT CASE WHEN " + alias + ".total BETWEEN '-9223372036854775808'::numeric AND '9223372036854775807'::numeric THEN " + alias + ".total::bigint ELSE NULL::bigint END FROM (SELECT " + total + " AS total FROM " + from + ") AS " + alias + ") END)"
 	return expression{code: code, present: value.present, kind: hff.IntType}, nil
 }
 
-func integerSumType(typ hff.Type) bool {
+func staticSumFamily(typ hff.Type) hff.TypeKind {
 	switch typ.Kind() {
 	case hff.IntType, hff.NullType, hff.NeverType:
-		return true
+		return hff.IntType
+	case hff.FloatType:
+		return hff.FloatType
 	case hff.UnionType:
+		family := hff.InvalidType
 		for _, member := range typ.Members() {
-			if !integerSumType(member) {
-				return false
+			if member.Kind() == hff.NullType || member.Kind() == hff.NeverType {
+				continue
 			}
+			memberFamily := staticSumFamily(member)
+			if memberFamily == hff.InvalidType || family != hff.InvalidType && family != memberFamily {
+				return hff.InvalidType
+			}
+			family = memberFamily
 		}
-		return true
+		if family == hff.InvalidType {
+			return hff.IntType
+		}
+		return family
 	}
-	return false
+	return hff.InvalidType
 }

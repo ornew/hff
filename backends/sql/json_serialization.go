@@ -95,9 +95,9 @@ func (b *builder) losesFloat(n hff.Node, environment map[hff.BindingID]bool) boo
 	if !jsonHasFloat(n.Type()) {
 		return false
 	}
-	if method, ok := n.Method(); ok && (method.Name() == "number" || method.Name() == "fromjson") {
-		// Parsing consumes exact string content and creates fresh numeric values.
-		// A discarded float receiver branch contributes no float provenance.
+	if method, ok := n.Method(); ok && (method.Name() == "number" || method.Name() == "fromjson" || method.Name() == "sum") {
+		// Parsing or aggregation creates fresh numeric values. The sum result
+		// follows its backend Float model rather than the receiver's spelling.
 		return false
 	}
 	if mapping, exists := b.relationMapping(n, b.physicalParameters); exists {

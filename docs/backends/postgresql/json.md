@@ -916,14 +916,28 @@ by HFF equality, so repeated stored nulls and repeated nested composite values
 are duplicates. These operations require applicable list/object equality
 capabilities for the types actually compared.
 
-`sum()` is currently limited to Int contributions for JSON/JSONB lists. The
-list element type, or the callback result type, must be statically limited to
-Int and null; guarded no-value callback results are also skipped. Empty and
-all-skipped lists return Int zero, and an out-of-range final total returns
-null. Float or unresolved dynamic contributions are rejected by `Build`. This
-PostgreSQL limitation does not change the language rule that Float sums follow
-the backend's declared Float model; see the
-[native Float design](../../design/021-backend-native-float-semantics.md).
+For JSON/JSONB lists, `sum()` and `sum(callback)` support contributions whose
+static type is limited to Int and null, or Float and null. Guarded no-value
+callback results are skipped. Empty and all-skipped inputs return Int zero.
+Int contributions use exact accumulation and an out-of-range final total
+returns null. For Float contributions, PostgreSQL first converts each Float
+to round-trip-safe text, then accumulates those values with `SUM(numeric)` and
+checks the final conversion back to Float. This requires
+`extra_float_digits > 0`; PostgreSQL's default satisfies it, and HFF does not
+set or inspect the session value. Numeric intermediate accumulation can differ
+from Local's list-order Float addition. A non-finite final Float result returns
+null. Mixed Int|Float, `Any`, and otherwise unresolved dynamic contributions
+are rejected by `Build` because their runtime numeric subtype is not statically
+fixed. For example, with `scores` declared as `List<Float|null>`:
+
+```hff
+scores:sum=4.0
+scores:sum(score=>score!)=4.0
+```
+
+The callback form skips null and guarded no-value contributions just like the
+direct form. This PostgreSQL subset follows the backend-native Float model;
+see the [native Float design](../../design/021-backend-native-float-semantics.md).
 
 ### Containment for simple JSONB filters
 

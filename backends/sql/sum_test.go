@@ -23,8 +23,9 @@ func TestSumChecksProjectionAndBackendSupport(t *testing.T) {
 	}{
 		{"integer list", schema.ListOf(schema.IntType), `items:sum>0`, true},
 		{"integer projection", schema.ListOf(schema.Struct(schema.Int("price"))), `items:sum(x=>x.price)>0`, true},
-		{"float list", schema.ListOf(schema.FloatType), `items:sum>0`, false},
-		{"float projection", schema.ListOf(schema.Struct(schema.Float("price"))), `items:sum(x=>x.price)>0`, false},
+		{"float list", schema.ListOf(schema.FloatType), `items:sum>0`, true},
+		{"float projection", schema.ListOf(schema.Struct(schema.Float("price"))), `items:sum(x=>x.price)>0`, true},
+		{"mixed list", schema.ListOf(schema.Union(schema.IntType, schema.FloatType)), `items:sum>0`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("items", tc.typ))), engine.WithCapabilities(capabilities.Standard()))

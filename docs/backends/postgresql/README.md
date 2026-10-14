@@ -452,9 +452,17 @@ guards and typed indexing. Dynamic operations require schema candidates and
 stored representations that preserve the distinctions their semantics observe;
 operations outside that supported subset remain unsupported. JSON list/object
 structural equality, list `contains()`, `unique()`, `sort()`, `concat(list)`,
-and `any()`/`all()` are available for schema-known values when their required
-capabilities are enabled. `sort()` also supports recoverable dynamic `Any` and
-list-union values; see the JSON guide for its conditions.
+`count()`, `filter(predicate)`, `sum()`, and `any()`/`all()` are available for
+schema-known values when their required capabilities are enabled. JSON/JSONB
+`sum()` supports statically Int or Float contributions, including nullable
+values; mixed Int/Float and unresolved dynamic contributions remain unsupported.
+For JSON/JSONB Float sums, each contribution uses PostgreSQL's round-trip-safe
+Float text before `SUM(numeric)` and a checked final Float conversion. This
+requires `extra_float_digits > 0`; HFF does not change the database setting.
+Numeric intermediate accumulation can differ from Local's list-order Float
+addition. `sort()` also supports
+recoverable dynamic `Any` and list-union values; see the JSON guide for its
+conditions.
 `map()` and `flatmap()` are supported when callback result types are known.
 Folds are supported for known accumulator types; see the JSON guide for their
 type and null rules. Schema-known Bytes values can be materialized inside

@@ -44,6 +44,7 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 			{Name: "float.parsing", Value: "PostgreSQL 16+ pg_input_is_valid and double-precision input; rejected overflow or underflow becomes null"},
 			{Name: "float.arithmetic", Value: "native Float arithmetic for safe ordinary magnitudes, cancellation and zero; extreme magnitudes use PostgreSQL numeric arithmetic from native Float text with validated Float output; fallback rounding and zero sign may differ"},
 			{Name: "float.rounding", Value: "native PostgreSQL round, ceil and floor; Float round uses the backend midpoint rule"},
+			{Name: "float.aggregation", Value: "schema-known Float sum converts each finite value through round-trip Float text to numeric (requires extra_float_digits>0), accumulates with PostgreSQL SUM(numeric), then validates and converts the final result to double precision; intermediate overflow, result rounding, and zero sign can differ from local list-order addition"},
 			{Name: "float.format", Value: "native PostgreSQL shortest-precise Float text with extra_float_digits>0; JSON retains a decimal/exponent Float marker and signed zero is preserved"},
 			{Name: "execution", Value: "caller owns database execution, input/schema validity, and database timeout configuration"},
 			{Name: "limits", Value: "translation cannot enforce HFF step, generated-value, or JSON-depth budgets in the database"},

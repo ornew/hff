@@ -39,6 +39,25 @@ result is Float and follows the backend's declared Float model; a non-finite
 result is null. The zero-argument form requires `method:list.sum`; the callback
 form requires that method capability and `Callbacks`.
 
+The PostgreSQL JSON/JSONB backend supports statically homogeneous Int or Float
+contributions (including nullable elements). For example, with `scores` bound
+as `List<Float|null>`, both queries build and sum to `4.0` for `[1.25, 2.75]`:
+
+```hff
+scores:sum=4.0
+scores:sum(score=>score!)=4.0
+```
+
+An empty or all-skipped Float list still returns Int zero. PostgreSQL rejects
+mixed Int/Float and unresolved `Any` contributions at Build because the
+contributing subtype is not statically known. See the
+[PostgreSQL JSON guide](../backends/postgresql/json.md#schema-known-collection-access)
+for the backend boundary. PostgreSQL obtains round-trip-safe Float text for
+each contribution, accumulates those decimal values with `SUM(numeric)`, and
+checks the final Float conversion. This requires `extra_float_digits > 0`; HFF
+does not set the database session value. Numeric accumulation can differ from
+Local's list-order Float additions.
+
 ```hff
 tags:size>=2
 tags:has(-1)

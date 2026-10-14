@@ -129,13 +129,19 @@ See [list rules](../../spec/methods.md#lists) and the
 [callback guide](../guides/callbacks.md).
 
 For PostgreSQL, schema-known JSON/JSONB lists support `sum()` and
-`sum(callback)` when contributions are statically Int or null. Float or
-unresolved dynamic contributions are rejected by `Build`. Schema-known JSON/JSONB
-lists support `count()` and `filter(predicate)` when the callback and retained
-values can be represented.
+`sum(callback)` when contributions are statically Int, optionally null, or
+Float, optionally null. Mixed Int/Float and unresolved dynamic contributions
+are rejected by `Build`. Float sums use the backend's native Float model.
+For PostgreSQL JSON/JSONB Float sums, each input is converted using
+round-trip-safe Float text and accumulated with `SUM(numeric)` before a checked
+Float conversion. This requires `extra_float_digits > 0`; HFF does not set the
+database session value. The numeric intermediate can differ from Local's
+list-order Float addition.
+Schema-known JSON/JSONB lists support `count()` and `filter(predicate)` when
+the callback and retained values can be represented.
 Bound relations support both count forms and statically Int sum projections
-without a unique order; relation
-`filter(predicate)` requires a unique order because it returns a list.
+without a unique order; Float and dynamic relation sums remain unsupported.
+Relation `filter(predicate)` requires a unique order because it returns a list.
 Schema-known JSON/JSONB lists also support `contains()`, `unique()`, `sort()`,
 `concat(list)`, `any()`, and `all()`, plus `map()` and `flatmap()` when callback
 result types are known; scalar `in()` is also supported inside callbacks.

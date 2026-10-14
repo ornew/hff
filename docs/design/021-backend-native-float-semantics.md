@@ -142,8 +142,13 @@ models. Float aggregate tests are required when those methods are implemented.
 
 ## Limitations and open questions
 
-Float aggregate methods and profile details for them remain future work. The
-PostgreSQL implementation's exact supported fallback boundaries and any
-database-setting dependencies are documented in its profile and backend guide.
+Float `sum()` is implemented by Local and for statically Float JSON/JSONB list
+contributions in PostgreSQL; broader PostgreSQL aggregate coverage and Float
+`avg()` remain future work. PostgreSQL JSON/JSONB Float `sum()` converts each
+contribution through round-trip-safe Float text, accumulates with `SUM(numeric)`,
+and checks the final Float conversion. It requires `extra_float_digits > 0`;
+HFF neither sets nor inspects the session setting. The numeric intermediate
+can differ from Local's list-order Float addition. Other supported boundaries
+and database-setting dependencies are documented in the backend guide.
 Backend-native Float behavior is not a promise of identical results across
 PostgreSQL versions or other SQL engines.
