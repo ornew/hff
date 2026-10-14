@@ -111,16 +111,13 @@ func (b *builder) jsonMembership(n hff.Node, name string, values []expression, f
 		return expression{}, b.failure(n, "contains and unique require a list receiver")
 	}
 	r, _ := n.Child(0)
-	// Nullable has one concrete list member; the container kind was resolved
-	// before this call. Reuse that member to obtain the precise element type.
-	members, err := b.jsonEqualityMembers(n, r.Type())
-	if err != nil || len(members) != 1 {
-		if err == nil {
-			err = b.failure(n, "membership requires an unambiguous list schema")
-		}
-		return expression{}, err
+	// The runtime array branch may come from a finite union. Retain its
+	// declared element schema; equality validates any nested ambiguity.
+	list := sortListType(b.jsonStoredType(r))
+	if list.Kind() != hff.ListType {
+		return expression{}, b.failure(n, "membership requires a recoverable list schema")
 	}
-	element := members[0].Element()
+	element := list.Element()
 	var code string
 	if name == "unique" {
 		la, ra := b.nextAlias(), b.nextAlias()

@@ -34,7 +34,7 @@ func (b *builder) schemaJSONValue(code string, format JSONFormat, stored, allowe
 // This path consumes already-validated stored schemas. Each recursion keeps
 // its projections in the element/key scope that owns the input expressions.
 // Any remains a complete boundary to the existing generic equality path.
-func (b *builder) schemaJSONEqual(n hff.Node, left string, lf JSONFormat, ls, lc hff.Type, right string, rf JSONFormat, rs, rc hff.Type, rootPresence string, op hff.Operator) (string, error) {
+func (b *builder) schemaJSONCompare(n hff.Node, left string, lf JSONFormat, ls, lc hff.Type, right string, rf JSONFormat, rs, rc hff.Type, rootPresence string, op hff.Operator) (string, error) {
 	if err := checkContext(b.ctx); err != nil {
 		return "", err
 	}
@@ -55,24 +55,50 @@ func (b *builder) schemaJSONEqual(n hff.Node, left string, lf JSONFormat, ls, lc
 		}
 		return equal
 	}
+	comparisonOp := hff.Equal
+	if rootPresence != "" && op != hff.Equal && op != hff.NotEqual {
+		comparisonOp = op
+	}
 	for _, kind := range []hff.TypeKind{hff.StringType, hff.BoolType} {
-		if !acceptsKind(lc, kind) || !acceptsKind(rc, kind) {
+		if !acceptsKind(lc, kind) || !acceptsKind(rc, kind) || kind == hff.BoolType && comparisonOp != hff.Equal {
 			continue
 		}
-		comparison := b.scalarComparison(expression{jsonScalarCast(l.text, kind), "TRUE", kind}, expression{jsonScalarCast(r.text, kind), "TRUE", kind}, hff.Equal)
+		comparison := b.scalarComparison(expression{jsonScalarCast(l.text, kind), "TRUE", kind}, expression{jsonScalarCast(r.text, kind), "TRUE", kind}, comparisonOp)
 		code += " WHEN " + both(l.category+"='"+jsonCategory(kind)+"'", r.category+"='"+jsonCategory(kind)+"'") + " THEN " + wrap(comparison.code)
+	}
+	for _, kind := range []hff.TypeKind{hff.BytesType, hff.DurationType, hff.TimestampType} {
+		if !acceptsKind(lc, kind) || !acceptsKind(rc, kind) || kind == hff.BytesType && comparisonOp != hff.Equal {
+			continue
+		}
+		decode := func(text string) string {
+			switch kind {
+			case hff.DurationType:
+				return b.parseDurationInline(text)
+			case hff.TimestampType:
+				return jsonTimestampNanoseconds(text)
+			default:
+				return postgresDecodeBase64(text)
+			}
+		}
+		// Stored tagged strings and constructed carriers are canonical. Equal
+		// spellings identify equal values; only ordering needs scalar decoding.
+		comparison := "(" + l.text + " COLLATE \"C\"=" + r.text + " COLLATE \"C\")"
+		if comparisonOp != hff.Equal {
+			comparison = b.scalarComparison(expression{decode(l.text), "TRUE", kind}, expression{decode(r.text), "TRUE", kind}, comparisonOp).code
+		}
+		code += " WHEN " + both(l.category+"='string'", r.category+"='string'") + " THEN " + wrap(comparison)
 	}
 	li, lfloat := jsonNumericCandidates(lc)
 	ri, rfloat := jsonNumericCandidates(rc)
 	lSide := jsonNumericSide{l.stored.integer && li, l.stored.floating && lfloat, l.stored.integer && l.stored.floating}
 	rSide := jsonNumericSide{r.stored.integer && ri, r.stored.floating && rfloat, r.stored.integer && r.stored.floating}
 	if (lSide.integer || lSide.floating) && (rSide.integer || rSide.floating) {
-		equal := b.decodedJSONNumericPair(l.text, r.text, hff.Equal, lSide, rSide, l.floating, r.floating)
+		equal := b.decodedJSONNumericPair(l.text, r.text, comparisonOp, lSide, rSide, l.floating, r.floating)
 		code += " WHEN " + both(l.category+"='number'", r.category+"='number'") + " THEN " + wrap(equal)
 	}
-	if l.stored.list && r.stored.list && acceptsKind(lc, hff.ListType) && acceptsKind(rc, hff.ListType) {
+	if comparisonOp == hff.Equal && l.stored.list && r.stored.list && acceptsKind(lc, hff.ListType) && acceptsKind(rc, hff.ListType) {
 		a, c := b.nextAlias(), b.nextAlias()
-		equal, err := b.schemaJSONEqual(n, a+".value", lf, l.stored.element, schemaArrayElement(l.allowed), c+".value", rf, r.stored.element, schemaArrayElement(r.allowed), "", hff.Equal)
+		equal, err := b.schemaJSONCompare(n, a+".value", lf, l.stored.element, schemaArrayElement(l.allowed), c+".value", rf, r.stored.element, schemaArrayElement(r.allowed), "", hff.Equal)
 		if err != nil {
 			return "", err
 		}
@@ -81,7 +107,7 @@ func (b *builder) schemaJSONEqual(n hff.Node, left string, lf JSONFormat, ls, lc
 		code += " WHEN " + both(l.category+"='array'", r.category+"='array'") + " THEN " + wrap(equal)
 	}
 	object := func(t hff.Type) bool { return acceptsKind(t, hff.MapType) || acceptsKind(t, hff.StructType) }
-	if l.stored.object && r.stored.object && object(lc) && object(rc) {
+	if comparisonOp == hff.Equal && l.stored.object && r.stored.object && object(lc) && object(rc) {
 		equal, err := b.schemaJSONObjectEqual(n, l, r)
 		if err != nil {
 			return "", err
@@ -150,7 +176,7 @@ func (b *builder) schemaJSONObjectEqual(n hff.Node, l, r schemaJSONValue) (strin
 		if err != nil {
 			return "", err
 		}
-		equal, err := b.schemaJSONEqual(n, a+".value", l.format, ls, schemaObjectValue(l.allowed, key), c+".value", r.format, rs, schemaObjectValue(r.allowed, key), "", hff.Equal)
+		equal, err := b.schemaJSONCompare(n, a+".value", l.format, ls, schemaObjectValue(l.allowed, key), c+".value", r.format, rs, schemaObjectValue(r.allowed, key), "", hff.Equal)
 		if err != nil {
 			return "", err
 		}
@@ -159,7 +185,7 @@ func (b *builder) schemaJSONObjectEqual(n hff.Node, l, r schemaJSONValue) (strin
 	fallback := "FALSE"
 	if l.stored.fallback.Kind() != hff.NeverType && r.stored.fallback.Kind() != hff.NeverType {
 		var err error
-		fallback, err = b.schemaJSONEqual(n, a+".value", l.format, l.stored.fallback, schemaObjectFallback(l.allowed), c+".value", r.format, r.stored.fallback, schemaObjectFallback(r.allowed), "", hff.Equal)
+		fallback, err = b.schemaJSONCompare(n, a+".value", l.format, l.stored.fallback, schemaObjectFallback(l.allowed), c+".value", r.format, r.stored.fallback, schemaObjectFallback(r.allowed), "", hff.Equal)
 		if err != nil {
 			return "", err
 		}

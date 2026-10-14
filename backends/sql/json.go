@@ -273,6 +273,9 @@ func (b *builder) jsonIndex(n hff.Node) (expression, error) {
 		return expression{}, err
 	}
 	present := ordinaryPresence([]expression{value, index})
+	if index.kind == hff.AnyType {
+		return b.jsonDynamicIndex(n, value, index, format, present)
+	}
 	var code string
 	switch value.kind {
 	case hff.ListType:
@@ -330,6 +333,12 @@ func (b *builder) jsonCall(n hff.Node, name string, values []expression, format 
 	}
 	if r.kind == hff.AnyType && (name == "not" || name == "and" || name == "or") {
 		return b.dynamicJSONBooleanCall(n, name, values)
+	}
+	if r.kind == hff.AnyType && name == "unique" {
+		class := string(format) + "_typeof(" + r.code + ")"
+		values = append([]expression(nil), values...)
+		values[0] = expression{"(CASE WHEN " + class + "='array' THEN " + r.code + " ELSE NULL::" + string(format) + " END)", r.present, hff.ListType}
+		return b.jsonMembership(n, name, values, format)
 	}
 	if r.kind == hff.AnyType && name != "type" && name != "exists" {
 		return expression{}, b.failure(n, "dynamic JSON method requires an explicit supported type guard")

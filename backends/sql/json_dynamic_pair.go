@@ -176,6 +176,19 @@ func (b *builder) dynamicJSONPair(n hff.Node, left, right expression, op hff.Ope
 	if leftJSON && rightJSON && jsonTaggedScalarComparable(leftType, leftFormat, rightType, rightFormat) {
 		return b.dynamicJSONTaggedScalarPair(n, left, leftFormat, right, rightFormat, op, leftType, rightType)
 	}
+	if leftJSON && rightJSON && (jsonHasTaggedString(leftType) || jsonHasTaggedString(rightType)) &&
+		!makeComparisonShape(leftType).any && !makeComparisonShape(rightType).any {
+		// Finite stored schemas identify tagged scalars by position/category.
+		// Keep their declared identities instead of using a generic tree walk.
+		if err := b.checkComparisonDocumentSchema(n, leftFormat, leftType); err != nil {
+			return expression{}, err
+		}
+		if err := b.checkComparisonDocumentSchema(n, rightFormat, rightType); err != nil {
+			return expression{}, err
+		}
+		code, err := b.schemaJSONCompare(n, left.code, leftFormat, leftType, leftNode.Type(), right.code, rightFormat, rightType, rightNode.Type(), both(left.present, right.present), op)
+		return expression{code, "TRUE", hff.BoolType}, err
+	}
 	for i := 0; i < 2; i++ {
 		child, _ := n.Child(i)
 		if jsonHasTaggedString(b.jsonStoredType(child)) {
@@ -197,7 +210,7 @@ func (b *builder) dynamicJSONPair(n hff.Node, left, right expression, op hff.Ope
 		return b.scalarJSONPair(n, left, leftFormat, leftType, right, rightFormat, rightType, op)
 	}
 	if !makeComparisonShape(leftType).any && !makeComparisonShape(rightType).any {
-		code, err := b.schemaJSONEqual(n, left.code, leftFormat, leftType, leftNode.Type(), right.code, rightFormat, rightType, rightNode.Type(), both(left.present, right.present), op)
+		code, err := b.schemaJSONCompare(n, left.code, leftFormat, leftType, leftNode.Type(), right.code, rightFormat, rightType, rightNode.Type(), both(left.present, right.present), op)
 		return expression{code, "TRUE", hff.BoolType}, err
 	}
 	for i := range values {

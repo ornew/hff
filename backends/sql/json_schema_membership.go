@@ -18,7 +18,7 @@ func (b *builder) boundedJSONMembershipEqual(n hff.Node, left string, lf JSONFor
 	}
 	// The old JSONB/non-numeric path leaves numeric data intact rather than
 	// turning a rejected Float decode into nested null. It must not acquire
-	// schemaJSONEqual's normalization semantics as a side effect of pruning.
+	// schemaJSONCompare's normalization semantics as a side effect of pruning.
 	if keepRawJSONComparisonNumbers(lf, lt, rt) || keepRawJSONComparisonNumbers(rf, rt, lt) {
 		return "", false, nil
 	}
@@ -37,6 +37,6 @@ func (b *builder) boundedJSONMembershipEqual(n hff.Node, left string, lf JSONFor
 			return "", false, err
 		}
 	}
-	code, err := b.schemaJSONEqual(n, left, lf, lt, lt, right, rf, rt, rt, "", hff.Equal)
+	code, err := b.schemaJSONCompare(n, left, lf, lt, lt, right, rf, rt, rt, "", hff.Equal)
 	return code, true, err
 }

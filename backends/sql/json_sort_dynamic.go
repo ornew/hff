@@ -52,8 +52,8 @@ func (b *builder) jsonSort(n hff.Node, value expression) (expression, error) {
 	}
 	temporal := hff.InvalidType
 	bytes := false
-	if jsonHasTaggedString(stored.Element()) {
-		if !jsonRecoverableTaggedScalarUnion(stored.Element(), format) {
+	if jsonRootHasTaggedString(stored.Element()) {
+		if !jsonRecoverableTaggedUnion(stored.Element(), format) {
 			return expression{}, b.failure(n, "dynamic JSON sort cannot recover Bytes, Duration, or Timestamp type identity")
 		}
 		if jsonRootHasKind(stored.Element(), hff.BytesType) {

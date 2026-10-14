@@ -190,8 +190,9 @@ func (b *builder) dynamicJSONStringCall(n hff.Node, name string, values []expres
 		if !ok || value.kind != hff.AnyType {
 			return expression{}, b.failure(n, "dynamic string methods require recoverable string candidates")
 		}
-		class := string(format) + "_typeof(" + value.code + ")"
-		code := "(CASE WHEN " + class + "='string' THEN " + value.code + " #>> '{}'::text[] ELSE NULL::text END)"
+		child, _ := n.Child(i)
+		matches := b.jsonStringMatch(child, value.code, format)
+		code := "(CASE WHEN " + matches + " THEN " + value.code + " #>> '{}'::text[] ELSE NULL::text END)"
 		converted[i] = expression{code, value.present, hff.StringType}
 	}
 	return b.stringCall(n, name, converted)

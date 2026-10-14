@@ -71,8 +71,13 @@ func (b *builder) dynamicJSONShape(n hff.Node, name string, values []expression)
 						isFloat = "(" + argument + " #>> '{}'::text[]) ~ '[.eE]'"
 					}
 				}
+				matches := string(physical) + "_typeof(" + argument + ")='" + category + "'"
+				if family == "object" {
+					argumentNode, _ := n.Child(1)
+					matches = b.jsonStringMatch(argumentNode, argument, physical)
+				}
 				cast := jsonScalarCast("("+argument+" #>> '{}'::text[])", converted.kind)
-				converted.code = "(CASE WHEN " + string(physical) + "_typeof(" + argument + ")='" + category + "' THEN " + cast + " ELSE NULL::" + scalar + " END)"
+				converted.code = "(CASE WHEN " + matches + " THEN " + cast + " ELSE NULL::" + scalar + " END)"
 			}
 			branchPresence = ordinaryPresence([]expression{r, converted})
 			if converted.kind == hff.NullType {

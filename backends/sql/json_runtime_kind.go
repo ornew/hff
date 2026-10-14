@@ -62,3 +62,16 @@ func jsonUnionStringMatch(code string, format JSONFormat, source, target hff.Typ
 	}
 	return "(" + string(format) + "_typeof(" + code + ")='string')", true
 }
+
+// A JSON string may encode a declared Bytes, Duration or Timestamp. String
+// arguments and object keys must check that identity, not coerce its spelling.
+func (b *builder) jsonStringMatch(n hff.Node, code string, format JSONFormat) string {
+	source := b.jsonStoredType(n)
+	if match, handled := jsonUnionStringMatch(code, format, source, hff.PrimitiveType(hff.StringType)); handled {
+		return match
+	}
+	if jsonRootHasTaggedString(source) {
+		return "FALSE"
+	}
+	return string(format) + "_typeof(" + code + ")='string'"
+}

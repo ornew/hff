@@ -44,7 +44,8 @@ func (b *builder) jsonObjectAccess(n hff.Node, name string, values []expression)
 			if err != nil {
 				return expression{}, err
 			}
-			key = "(CASE WHEN " + string(physical) + "_typeof(" + argument + ")='string' THEN " + argument + " #>> '{}'::text[] ELSE NULL::text END)"
+			keyNode, _ := n.Child(1)
+			key = "(CASE WHEN " + b.jsonStringMatch(keyNode, argument, physical) + " THEN " + argument + " #>> '{}'::text[] ELSE NULL::text END)"
 		} else if arg.kind != hff.StringType && arg.kind != hff.NullType {
 			return expression{}, b.failure(n, "object get requires a recoverable string key")
 		}

@@ -197,20 +197,69 @@ Float's signed zero for `string()` and `json()` serialization. Build rejects
 those serialization operations for JSONB when signed-zero provenance may have
 been erased.
 
-The [JSON union example](https://github.com/ornew/hff/tree/main/examples/sql-json-unions)
+The [scalar-union example](https://github.com/ornew/hff/tree/main/examples/sql-json-unions)
 shows schema-known Timestamp/Duration unions with Int, Float, and null
-alternatives, JSONB metadata bindings, and scalar/list predicates. It builds
-parameterized SQL without connecting to a database.
+alternatives, JSONB metadata bindings, and scalar/list predicates. The
+[tagged-container example](https://github.com/ornew/hff/tree/main/examples/sql-json-container-unions)
+separately builds a Duration-or-list predicate and prints its parameterized
+SQL without connecting to a database.
 
 This is a limited supported subset, not general tagged-union support. Other
 unions and operations may be rejected by `Build`, especially when the
 translator cannot recover the active HFF type. For example,
-`String|Duration` and `Bytes|Duration` share the JSON string representation
-and must be rejected when an operation needs their identity.
+`String|Duration`, `String|Bytes`, and `Bytes|Duration` share the JSON string
+representation and must be rejected when an operation needs their identity.
 JSONB metadata version 1 restores numeric types only; it does not add tags for
-these string-backed alternatives. Ambiguous non-null tagged unions,
-overlapping structural alternatives such as `List<Duration>|List<Any>`, and
-operations outside the supported subset remain Build errors.
+these string-backed alternatives. A string under `Any` remains a String; its
+encoding does not reveal a tagged HFF type. Same-category or overlapping
+alternatives remain Build errors when an operation needs an active HFF type
+that cannot be recovered. Some shape-only operations can still be supported
+when they do not need to identify the ambiguous nested member.
+
+### Tagged scalar alternatives with containers
+
+The supported category-disjoint subset permits one schema-known Bytes,
+Duration, or Timestamp alternative at a union position alongside a List, Map,
+or Struct alternative and native scalar alternatives, when the declared schema
+and stored JSON category uniquely identify the active HFF type. The same rule
+applies recursively to schema-known values inside lists, maps, and structs.
+For example, the root alternatives in
+`Duration|List<Timestamp|Int|Null>|Struct|Int|Bool|Null` have distinct JSON
+categories, while the declared element schema distinguishes Timestamp strings
+from numeric values in the list.
+
+These category-disjoint alternatives do not make every operation on every
+union available. Operations that only inspect a recoverable container shape
+may work without identifying a nested member; operations that need that
+member's HFF type require the schema and stored category to identify it. If
+identity cannot be recovered, `Build` rejects the operation. Same-category
+alternatives such as `String|Duration`, `String|Bytes`, and `Bytes|Duration`
+remain ambiguous when an operation needs their identity. JSONB `Int|Float`
+alternatives need version-1 numeric metadata when storage has erased a subtype
+or Float representation observed by the operation. Metadata v1 remains
+numeric-only, and an `Any` string remains a String.
+
+Dynamic access continues to use the HFF type recovered for the selected
+branch, not merely the JSON primitive category. A string stored for Bytes,
+Duration, or Timestamp does not acquire String method behavior or become an
+object key. A runtime type mismatch returns ordinary null. Nullable invalid
+arguments retain left-to-right evaluation: later guarded arguments are not
+evaluated after an earlier argument propagates null. Missing object keys,
+stored JSON null, and guard-produced no-value retain their distinct HFF
+behavior; `has()` still distinguishes a missing key from a present key whose
+value is null. If `key` has schema `Bytes|Int|Null`, a Bytes JSON string passed
+to `tokens:has(key)` is not interpreted as a String key; likewise,
+`"api":contains(key)` returns ordinary null for that Bytes value. Dynamic
+numeric list indexes, string object-key access, and collection methods dispatch
+according to schema identity as well as JSON category; an incompatible runtime
+receiver returns null. For example,
+`unique()` selects a list branch and returns null for an incompatible runtime
+receiver.
+
+The [tagged JSON union recipe](../../cookbook/postgresql-tagged-json-unions.md)
+shows the table, predicate, expected matching rows, and command for running the
+Duration/list example. Its sample demonstrates that bounded case; it does not
+exercise every union shape described above.
 
 ```sql
 CREATE TABLE job_events (
@@ -1951,14 +2000,15 @@ the service remains responsible for database timeouts and cancellation.
 ## Verification
 
 The repository's tagged integration suite compares JSON and JSONB bindings
-against local evaluation on PostgreSQL 18.6. The verified matrix covers 5,556
-JSON/JSONB and 5,680 scalar query-record pairs, plus 152 extension cases. It
-covers scalar and nested access, null and missing-key cases, list indexing,
-object/list inspection and equality, callbacks, canonical serialization,
-type guards, and type/truthiness predicates. Float serialization tests include
-1,024 deterministic IEEE samples and run with `extra_float_digits=-3`.
-To run it against a PostgreSQL
-container with `psql` installed:
+against local evaluation on PostgreSQL. The bounded tagged-container union
+matrix covers 28,122 query-record comparisons across 42 JSON/JSONB
+configurations, including nested collections, null and missing values,
+callbacks, indexes, and serialization. A separate 90-case matrix checks
+tagged String-method and object-key type mismatches. Float JSON transport
+follows the
+[PostgreSQL Float profile](README.md#inspect-the-postgresql-profile), including its
+`extra_float_digits > 0` requirement. To run the integration suite against a
+PostgreSQL container with `psql` installed:
 
 ```sh
 HFF_POSTGRES_CONTAINER=<container-name-or-id> go test -tags=integration ./backends/sql

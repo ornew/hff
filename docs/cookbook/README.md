@@ -17,6 +17,9 @@ step-by-step [tutorials](../tutorials/README.md) and semantic
   line items and their adjustments without losing which rows belong together.
 - [Filter JSONB numeric thresholds](postgresql-jsonb-numeric-thresholds.md):
   compare dynamically typed numeric fields with caller-maintained type metadata.
+- [Use tagged JSON union values](postgresql-tagged-json-unions.md): run a
+  Duration/list JSONB example and learn when tagged scalar branches can be
+  recovered alongside containers and scalar alternatives.
 - [Filter many-to-many memberships](postgresql-many-to-many-view.md): expose
   a join through one PostgreSQL view and bind the view rows as an HFF list.
 

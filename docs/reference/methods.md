@@ -243,6 +243,10 @@ Years range from 0000 through 9999; timestamp precision is nanoseconds.
 Formatting does not silently change instants that cannot be represented in
 RFC 3339. See [timestamp rules](../../spec/methods.md#timestamps) and the
 [time zone profile guide](../guides/temporal.md#supply-versioned-time-zone-data).
+PostgreSQL JSON/JSONB bindings can also recover schema-known Timestamp
+alternatives when the JSON category and declared schema identify the active
+type; see the
+[tagged scalar guide](../backends/postgresql/json.md#tagged-scalar-alternatives-with-containers).
 
 ## Duration
 
@@ -259,21 +263,22 @@ Duration strings accept signed, compound decimal units `h`, `m`, `s`, `ms`,
 `us`, and `ns`; values must sum to an exact integral nanosecond within int64
 range. Days and weeks are not supported. See
 [duration rules](../../spec/methods.md#durations).
-The PostgreSQL backend can bind a schema-known Duration scalar to a `bigint`
-of signed nanoseconds; JSON/JSONB and composite Duration storage are not
-supported. See the [temporal guide](../guides/temporal.md#store-native-postgresql-durations).
+The native PostgreSQL scalar binding maps a schema-known Duration to a
+`bigint` of signed nanoseconds. Separately, `BindJSON` supports schema-known
+Duration strings in JSON/JSONB and selected category-disjoint unions; see the
+[PostgreSQL JSON guide](../backends/postgresql/json.md#duration-values-in-json-documents).
 
 The PostgreSQL backend can also decode schema-known Duration values stored as
 canonical strings in JSON or JSONB with `BindJSON`. A JSON string under `Any`
-remains a String, and ambiguous same-position `String|Duration` unions cannot
-be recovered. Alongside schema-known Duration and nullable Duration shapes,
-the binding supports a limited operation subset for the schema-known unions
-`Duration|Int|Null`, `Duration|Bool|Null`, and `Duration|Int|Bool|Null`. Other
-union shapes or operations may be rejected when the active type cannot be
-recovered or the requested operation cannot be lowered. These JSON
-representations are separate from the native scalar Duration binding and do
-not add Duration tags to JSONB numeric metadata. See the
-[PostgreSQL JSON guide](../backends/postgresql/json.md#duration-values-in-json-documents).
+remains a String. A single schema-known Bytes, Duration, or Timestamp
+alternative can also be combined with schema-known collection and native
+scalar alternatives when the declared schema and JSON category recover the
+active type; nested collections can contain such tagged values. Same-category
+string alternatives, including `String|Duration`, remain ambiguous without an
+additional representation contract. JSONB version-1 metadata restores numeric
+distinctions only; it does not tag string-backed values. `Build` rejects an
+operation if the active HFF type cannot be recovered. See the
+[PostgreSQL JSON guide](../backends/postgresql/json.md#tagged-scalar-alternatives-with-containers).
 
 ## Related references
 

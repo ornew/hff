@@ -167,6 +167,18 @@ func (b *builder) jsonEqualValue(n hff.Node, left string, lf JSONFormat, lt hff.
 		rnull := "(" + right + " IS NULL OR " + string(rf) + "_typeof(" + right + ")='null')"
 		return "(CASE WHEN " + lnull + " THEN " + rnull + " WHEN " + rnull + " THEN FALSE ELSE COALESCE(" + comparison.code + ",FALSE) END)", nil
 	}
+	if (jsonHasTaggedString(lt) || jsonHasTaggedString(rt)) && !makeComparisonShape(lt).any && !makeComparisonShape(rt).any {
+		// Finite per-position schemas also recover tagged families inside
+		// heterogeneous containers. Membership consumes nested equality, where
+		// nulls compare equal and incompatible families compare false.
+		if err := b.checkComparisonDocumentSchema(n, lf, lt); err != nil {
+			return "", err
+		}
+		if err := b.checkComparisonDocumentSchema(n, rf, rt); err != nil {
+			return "", err
+		}
+		return b.schemaJSONCompare(n, left, lf, lt, lt, right, rf, rt, rt, "", hff.Equal)
+	}
 	if (needsDynamicJSONEquality(lt) || needsDynamicJSONEquality(rt)) && !definiteJSONContainerPair(lt, rt) {
 		if jsonHasTaggedString(lt) || jsonHasTaggedString(rt) {
 			return "", b.failure(n, "dynamic JSON comparison cannot preserve Bytes, Duration, or Timestamp type identity")

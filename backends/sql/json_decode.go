@@ -6,7 +6,7 @@ import "github.com/ornew/hff"
 // Keeping the projection outside this helper permits reuse of validated parses.
 func (b *builder) jsonDecodeProjected(n hff.Node, code string, format JSONFormat, typ hff.Type, present string) (expression, error) {
 	kind, ok := jsonKind(typ)
-	if !ok && jsonRootHasTaggedString(typ) && !jsonRecoverableTaggedScalarUnion(typ, format) {
+	if !ok && jsonRootHasTaggedString(typ) && !jsonRecoverableTaggedUnion(typ, format) {
 		return expression{}, b.failure(n, "JSON decoding cannot preserve dynamic Bytes, Duration, or Timestamp type identity")
 	}
 	if !ok {
@@ -59,11 +59,12 @@ func jsonRootHasKind(typ hff.Type, kind hff.TypeKind) bool {
 	return false
 }
 
-// One tagged string scalar, numeric values, and Bool occupy disjoint JSON
-// categories.
+// One tagged string scalar, containers, numeric values and Bool occupy
+// recoverable JSON categories. Nested member schemas are checked separately;
+// a container does not make its scalar sibling's identity ambiguous.
 // Int|Float within the numeric category additionally needs preserved spelling
 // or metadata that restores that spelling before decoding.
-func jsonRecoverableTaggedScalarUnion(typ hff.Type, format JSONFormat) bool {
+func jsonRecoverableTaggedUnion(typ hff.Type, format JSONFormat) bool {
 	if typ.Kind() != hff.UnionType {
 		return false
 	}
@@ -80,6 +81,8 @@ func jsonRecoverableTaggedScalarUnion(typ hff.Type, format JSONFormat) bool {
 		case hff.FloatType:
 			floating, other = true, true
 		case hff.BoolType:
+			other = true
+		case hff.ListType, hff.MapType, hff.StructType:
 			other = true
 		case hff.NullType:
 		default:
