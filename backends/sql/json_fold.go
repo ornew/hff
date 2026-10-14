@@ -26,7 +26,8 @@ func (b *builder) jsonFold(n hff.Node, name string) (expression, error) {
 	if err != nil {
 		return expression{}, err
 	}
-	rawSeed, err := b.computedJSONDocument(seed, initial, b.jsonStoredType(seed))
+	seedType := b.jsonStoredType(seed)
+	rawSeed, err := b.computedJSONDocument(seed, initial, seedType)
 	if err != nil {
 		return expression{}, err
 	}
@@ -44,7 +45,7 @@ func (b *builder) jsonFold(n hff.Node, name string) (expression, error) {
 	if err != nil {
 		return expression{}, err
 	}
-	result, steps, storedType, err := b.jsonFoldBody(callback, parameters, accumulatorIndex, previous, item, accumulatorType, receiver, seed, format)
+	result, steps, storedType, err := b.jsonFoldBody(callback, parameters, accumulatorIndex, previous, item, accumulatorType, seedType, receiver, seed, format)
 	if err != nil {
 		return expression{}, err
 	}
@@ -71,6 +72,26 @@ func (b *builder) jsonFold(n hff.Node, name string) (expression, error) {
 	if err != nil {
 		return expression{}, err
 	}
+	seedStable, err := b.normalizationPreservesJSON(seedType, resultType)
+	if err != nil {
+		return expression{}, err
+	}
+	resultStable, err := b.normalizationPreservesJSON(storedType, resultType)
+	if err != nil {
+		return expression{}, err
+	}
+	if seedStable && resultStable {
+		allowed, err := b.normalizationProofSchema(n, resultType)
+		if err != nil {
+			return expression{}, err
+		}
+		if allowed {
+			// The terminal seed or callback value was normalized separately;
+			// the receiver-null mask preserves the established state contract.
+			b.rememberNormalizedJSON(code, JSON, resultType)
+		}
+	}
+
 	return b.jsonDecode(n, code, JSON, resultType, present)
 }
 
@@ -114,7 +135,7 @@ func (b *builder) jsonFoldType(n hff.Node, typ hff.Type) (hff.Type, error) {
 	return hff.Type{}, b.failure(n, "JSON fold tagged-string storage type does not reach a finite fixed point")
 }
 
-func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accumulatorIndex int, previous, item string, accumulatorType hff.Type, receiver, seed hff.Node, format JSONFormat) (expression, []string, hff.Type, error) {
+func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accumulatorIndex int, previous, item string, accumulatorType, seedType hff.Type, receiver, seed hff.Node, format JSONFormat) (expression, []string, hff.Type, error) {
 	outer := b.steps
 	outerPaths := b.sharedPaths
 	b.steps = nil
@@ -177,8 +198,45 @@ func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accu
 			}
 		}
 	}()
+	// The seed already passed normalization before this callback scope. A
+	// stable successor schema proves the recursive-state invariant by
+	// induction, so body consumers can reuse the predecessor's carrier.
+	inferredType := b.jsonStoredType(body)
+	seedStable, err := b.normalizationPreservesJSON(seedType, accumulatorType)
+	if err != nil {
+		return expression{}, nil, hff.Type{}, err
+	}
+	bodyStable, err := b.normalizationPreservesJSON(inferredType, accumulatorType)
+	if err != nil {
+		return expression{}, nil, hff.Type{}, err
+	}
+	induction := seedStable && bodyStable
+	if induction {
+		allowed, err := b.normalizationProofSchema(body, accumulatorType)
+		if err != nil {
+			return expression{}, nil, hff.Type{}, err
+		}
+		induction = allowed
+	}
+	if induction {
+		code := previous + ".acc"
+		oldProof, existed := b.normalizedJSONValues[code]
+		b.rememberNormalizedJSON(code, JSON, accumulatorType)
+		defer func() {
+			if existed {
+				b.normalizedJSONValues[code] = oldProof
+			} else {
+				delete(b.normalizedJSONValues, code)
+			}
+		}()
+	}
+
 	result, err := b.expression(body)
-	return result, b.steps, b.jsonStoredType(body), err
+	storedType := b.jsonStoredType(body)
+	if err == nil && induction && storedType.Key() != inferredType.Key() {
+		return expression{}, nil, hff.Type{}, b.failure(body, "fold callback storage type changed during lowering")
+	}
+	return result, b.steps, storedType, err
 }
 
 // Compare positions before forming a union: Any can erase an explicit Bytes

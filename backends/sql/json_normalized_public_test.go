@@ -20,14 +20,13 @@ func TestNormalizedMapOutputAvoidsRepeatedTraversal(t *testing.T) {
 		traversals int
 	}{
 		{"dynamic serialization", schema.Union(schema.IntType, schema.FloatType), `items:map(x=>x):json="[]"`, 2},
-		{"nested maps", schema.FloatType, `[items:map(x=>items:map(y=>y))]:size>0`, 3},
+		{"nested maps", schema.FloatType, `[items:map(x=>items:map(y=>y))]:size>0`, 2},
 		{"container callback", schema.ListOf(schema.FloatType), `[items:map(x=>x)]:size>0`, 2},
 		{"bytes callback", schema.BytesType, `[items:map(x=>x)]:size>0`, 1},
 		{"struct callback", schema.Struct(schema.Int("i"), schema.Float("f")), `[items:map(x=>x)]:size>0`, 1},
 		// Controls retain their existing normalization without a map-output proof.
 		{"guard control", schema.Union(schema.IntType, schema.FloatType), `(items:map(x=>x))!:json="[]"`, 3},
 		{"flatmap control", schema.FloatType, `[items:flatmap(x=>[x])]:size>0`, 4},
-		{"fold control", schema.FloatType, `[items:foldl([], (a,x)=>a:concat([x]))]:size>0`, 8},
 		{"literal control", schema.FloatType, `[items]:size>0`, 1},
 		{"size control", schema.FloatType, `items:map(x=>x):size>0`, 1},
 	} {

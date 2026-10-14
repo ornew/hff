@@ -75,11 +75,13 @@ func (b *builder) jsonSequence(n hff.Node, name string, values []expression, for
 
 func (b *builder) jsonConcat(n hff.Node, values []expression, format JSONFormat) (expression, error) {
 	converted := append([]expression(nil), values...)
+	schemas := make([]hff.Type, len(values))
 	for i, value := range values {
 		if value.kind == hff.NullType {
 			continue
 		}
 		child, _ := n.Child(i)
+		schemas[i] = child.Type()
 		physical, ok := b.jsonValues[value.code]
 		if !ok || value.kind != hff.ListType {
 			return expression{}, b.failure(n, "list concat requires JSON list operands")
@@ -92,11 +94,11 @@ func (b *builder) jsonConcat(n hff.Node, values []expression, format JSONFormat)
 		b.jsonValues[code] = JSON
 		converted[i] = expression{code, value.present, hff.ListType}
 	}
-	return b.concatJSONLists(n, converted, JSON)
+	return b.concatJSONLists(n, converted, JSON, schemas)
 }
 
 // Operands have already been normalized to preserve their declared subtypes.
-func (b *builder) concatJSONLists(n hff.Node, values []expression, format JSONFormat) (expression, error) {
+func (b *builder) concatJSONLists(n hff.Node, values []expression, format JSONFormat, schemas []hff.Type) (expression, error) {
 	leftNode, _ := n.Child(0)
 	rightNode, _ := n.Child(1)
 	for _, left := range jsonPossibleListElements(b.jsonStoredType(leftNode)) {
@@ -125,6 +127,29 @@ func (b *builder) concatJSONLists(n hff.Node, values []expression, format JSONFo
 		aggregateOrder = ""
 	}
 	code := "(CASE WHEN " + r.code + " IS NULL OR " + arg.code + " IS NULL THEN NULL ELSE (SELECT COALESCE(json_agg(" + result + ".value" + aggregateOrder + "),'[]'::json) FROM (" + rows + ") AS " + result + ") END)"
+	stored := b.jsonStoredType(n)
+	stable := true
+	for _, schema := range schemas {
+		preserves, err := b.normalizationPreservesJSON(schema, stored)
+		if err != nil {
+			return expression{}, err
+		}
+		stable = stable && preserves
+	}
+	if stable {
+		allowed, err := b.normalizationProofSchema(n, stored)
+		if err != nil {
+			return expression{}, err
+		}
+		stable = allowed
+	}
+	if stable {
+		// Splicing normalized operands preserves every represented element.
+		// Their own normalization contracts must remain stable under the
+		// combined schema; the result is not canonical serialized text.
+		b.rememberNormalizedJSON(code, JSON, stored)
+	}
+
 	b.jsonValues[code] = JSON
 	return expression{code, ordinaryPresence(values), hff.ListType}, nil
 }

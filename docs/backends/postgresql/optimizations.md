@@ -228,11 +228,27 @@ normalization preserve that proof; guards, type guards, extraction, and casts
 do not. Presence and Float-loss handling remain separate, and canonical
 serialization is unchanged. This reduces selected `json_array_elements`
 expansion sites and corresponding Function Scan nodes. Projection barriers
-and sampled Result/Nested Loop counts remain unchanged. It does not cover
-`flatmap()`, merged fold state, or arbitrary derived containers. See the
+and sampled Result/Nested Loop counts remain unchanged. See the
 [normalized map JSON reuse](../../optimizations/034-postgresql-reuse-normalized-map-json.md)
 record for the 11,648-case baseline/candidate parity matrix and limits; no
 execution timing or memory measurement was made.
+
+### Reuse normalized JSON across compatible fold states
+
+When the fold seed and callback results normalize compatibly to the inferred
+accumulator representation, the translator can reuse the predecessor's
+normalized JSON proof through the recursive callback scope. The proof retains
+the exact value, native JSON format, and original stored type; reuse against a
+target schema requires a separate value-stability and full-schema check. Per-key
+Map/Struct widening is reused only where covered by the proof. Incompatible
+shapes keep ordinary normalization. This reduces selected
+`json_array_elements` and `json_each` expansion sites; the measured
+projection-barrier counts remain unchanged. No execution timing or memory
+measurement was made. See the
+[fold normalization proof](../../optimizations/035-postgresql-reuse-normalized-fold-json.md)
+for source workloads, parity coverage, and limits. The fold matrix contains
+17,216 PostgreSQL/local results on both baseline and candidate; it includes
+Map-to-Struct widening and Float-format controls.
 
 ### Lower homogeneous scalar membership directly
 

@@ -1110,6 +1110,18 @@ constructor, `get()`, field, or index preserve recovered types. JSON
 constructors inside a callback also normalize their represented children
 before the result is retained, so a list or object literal does not hide a lost
 JSONB subtype.
+
+When a fold's seed and callback result normalize compatibly to its inferred
+accumulator schema, PostgreSQL can reuse the normalized predecessor inside
+the recursive callback. This changes the generated SQL only: full schema
+checks, fold result types, SQL NULL and JSON null, and no-value propagation
+remain in force. Guards, extraction, casts, and incompatible merged shapes
+use ordinary normalization. Reuse is permitted only after a separate
+value-stability check against the target schema; a proof retains the original
+stored type and does not imply canonical serialization. See the
+[fold normalization reuse record](../../optimizations/035-postgresql-reuse-normalized-fold-json.md)
+for the compatibility conditions and measured SQL-shape scope.
+
 PostgreSQL does not provide local `MaxSteps` or `MaxGeneratedValues` enforcement
 or a guarantee about physical callback evaluation order. JSONB metadata and
 these dynamic folds do not infer Duration inside `Any`; schema-known Duration

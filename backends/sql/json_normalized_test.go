@@ -7,7 +7,7 @@ import (
 	"github.com/ornew/hff"
 )
 
-func TestNormalizedJSONProofRequiresExactRepresentation(t *testing.T) {
+func TestNormalizedJSONProofRequiresCompatibleRepresentation(t *testing.T) {
 	integer := hff.PrimitiveType(hff.IntType)
 	floating := hff.PrimitiveType(hff.FloatType)
 	typ := hff.NewListType(integer)
@@ -21,7 +21,7 @@ func TestNormalizedJSONProofRequiresExactRepresentation(t *testing.T) {
 		{"different value", "other.v", JSON, typ, false},
 		{"physical cast", "mapped.v", JSONB, typ, false},
 		{"different subtype", "mapped.v", JSON, hff.NewListType(floating), false},
-		{"widened subtype", "mapped.v", JSON, hff.NewListType(hff.NewUnionType(integer, floating)), false},
+		{"widened subtype", "mapped.v", JSON, hff.NewListType(hff.NewUnionType(integer, floating)), true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			b := &builder{ctx: context.Background()}
@@ -102,5 +102,19 @@ func TestNormalizedJSONProofDoesNotBypassSchemaOrCancellation(t *testing.T) {
 	b.rememberNormalizedJSON("mapped.v", JSON, typ)
 	if _, err := b.comparisonDocument(hff.Node{}, "mapped.v", JSON, typ); err == nil {
 		t.Fatal("proof bypassed cancellation")
+	}
+}
+
+func TestNormalizationOutputProofDeclinesUnsupportedSchema(t *testing.T) {
+	b := &builder{ctx: context.Background()}
+	typ := hff.NewUnionType(hff.PrimitiveType(hff.StringType), hff.PrimitiveType(hff.BytesType))
+	if allowed, err := b.normalizationProofSchema(hff.Node{}, typ); err != nil || allowed {
+		t.Fatalf("optional unsupported proof: %t %v", allowed, err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	b.ctx = ctx
+	if _, err := b.normalizationProofSchema(hff.Node{}, hff.PrimitiveType(hff.IntType)); err == nil {
+		t.Fatal("optional proof swallowed cancellation")
 	}
 }
