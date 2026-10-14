@@ -93,7 +93,8 @@ func (b *builder) jsonDistinct(n hff.Node) (expression, error) {
 	} else {
 		cte = "WITH " + rows + " AS MATERIALIZED (SELECT " + item + " AS value," + ordinal + " AS ord FROM " + from + ")"
 		left, right := b.nextAlias(), b.nextAlias()
-		equal, err := b.jsonEqual(n, left+".value", JSON, stored.Element(), right+".value", JSON, stored.Element())
+		receiver, _ := n.Child(0)
+		equal, err := b.jsonItemEquality(n, left+".value", JSON, stored.Element(), b.jsonItemsRoles(receiver), right+".value", JSON, stored.Element(), b.jsonItemsRoles(receiver))
 		if err != nil {
 			return expression{}, err
 		}

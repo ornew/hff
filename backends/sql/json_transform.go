@@ -27,7 +27,10 @@ func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONForm
 	loss := b.losesFloat(receiver, nil)
 	restoreProvenance := b.callbackProvenance(id, receiver)
 	defer restoreProvenance()
-	b.parameters[id] = jsonParameter{code: alias + ".value", format: format, typ: itemType, lossy: loss}
+	if itemType.Kind() == hff.InvalidType {
+		itemType = jsonStoredMemberType(sortListType(b.jsonStoredType(receiver)), "", false, true)
+	}
+	b.parameters[id] = jsonParameter{code: alias + ".value", format: format, typ: itemType, lossy: loss, itemRoles: b.jsonItemsRoles(receiver)}
 	defer func() {
 		b.steps = outer
 		b.sharedPaths = outerPaths

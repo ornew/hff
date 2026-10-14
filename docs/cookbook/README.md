@@ -20,6 +20,8 @@ step-by-step [tutorials](../tutorials/README.md) and semantic
 - [Use tagged JSON union values](postgresql-tagged-json-unions.md): run a
   Duration/list JSONB example and learn when tagged scalar branches can be
   recovered alongside containers and scalar alternatives.
+- [Select tagged values from JSON object entries](postgresql-json-items.md):
+  preserve key and value types while filtering `items()` pairs from a JSONB map.
 - [Filter many-to-many memberships](postgresql-many-to-many-view.md): expose
   a join through one PostgreSQL view and bind the view rows as an HFF list.
 

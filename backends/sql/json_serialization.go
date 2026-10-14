@@ -15,7 +15,7 @@ func (b *builder) serialize(n hff.Node, value expression, name string) (expressi
 		}
 		var err error
 		stored := b.jsonStoredType(receiver)
-		if needsDynamicJSONEquality(stored) {
+		if needsDynamicJSONEquality(stored) || b.jsonItemsRoles(receiver) != nil || b.jsonItemRoles(receiver) != nil {
 			var normalized string
 			normalized, err = b.comparisonDocument(receiver, value.code, format, stored)
 			if err == nil {

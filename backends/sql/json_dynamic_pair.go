@@ -72,6 +72,12 @@ func jsonMayContainNumbers(typ hff.Type) bool {
 // tree walk. Any and ambiguous numbers require preserved JSON spelling; plain
 // JSONB cannot recover those distinctions from value magnitude.
 func (b *builder) comparisonDocument(n hff.Node, raw string, format JSONFormat, typ hff.Type) (string, error) {
+	// items() already normalizes the object before constructing its pairs.
+	// Retaining operations preserve that representation and fixed roles even
+	// though a homogeneous public list type cannot express those positions.
+	if format == JSON && (b.jsonItemsRoles(n) != nil || b.jsonItemRoles(n) != nil) {
+		return "COALESCE(" + raw + ",'null'::json)", checkContext(b.ctx)
+	}
 	if err := b.checkComparisonDocumentSchema(n, format, typ); err != nil {
 		return "", err
 	}

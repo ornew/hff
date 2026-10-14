@@ -103,18 +103,19 @@ func TestBytesExtensionParametersStayImmutable(t *testing.T) {
 	}
 }
 
-func TestJSONBytesRejectsUnrecoverableIdentity(t *testing.T) {
+func TestJSONBytesRecoveryBoundaries(t *testing.T) {
 	ctx := context.Background()
 	for _, test := range []struct {
-		typ     hff.Type
-		sources []string
+		typ         hff.Type
+		sources     []string
+		recoverable bool
 	}{
-		{schema.ListOf(schema.BytesType), []string{`data=other`, `other=data`, `other:contains(data)`, `data:in(other)`, `[data[0],"AA=="]:size>0`}},
-		{schema.ListOf(schema.Union(schema.Struct(schema.Bytes("v")), schema.Struct(schema.String("v")))), []string{`data:[list[map[string]]]:exists`, `data:[list[map[bytes]]]:exists`}},
-		{schema.ListOf(schema.Union(schema.BytesType, schema.StringType)), []string{`data:json`, `data:sort:json`, `data:unique`}},
-		{schema.MapOf(schema.BytesType), []string{`data:items:json`}},
-		{schema.MapOf(schema.Union(schema.BytesType, schema.StringType)), []string{`data:json`, `data:values:unique`}},
-		{schema.Union(schema.BytesType, schema.StringType), []string{`data:json`, `data:[bytes]:exists`}},
+		{schema.ListOf(schema.BytesType), []string{`data=other`, `other=data`, `other:contains(data)`, `data:in(other)`, `[data[0],"AA=="]:size>0`}, false},
+		{schema.ListOf(schema.Union(schema.Struct(schema.Bytes("v")), schema.Struct(schema.String("v")))), []string{`data:[list[map[string]]]:exists`, `data:[list[map[bytes]]]:exists`}, false},
+		{schema.ListOf(schema.Union(schema.BytesType, schema.StringType)), []string{`data:json`, `data:sort:json`, `data:unique`}, false},
+		{schema.MapOf(schema.BytesType), []string{`data:items:json`}, true},
+		{schema.MapOf(schema.Union(schema.BytesType, schema.StringType)), []string{`data:json`, `data:values:unique`}, false},
+		{schema.Union(schema.BytesType, schema.StringType), []string{`data:json`, `data:[bytes]:exists`}, false},
 	} {
 		e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("data", test.typ), schema.Any("other"))), engine.WithCapabilities(capabilities.Standard()))
 		if err != nil {
@@ -126,6 +127,12 @@ func TestJSONBytesRejectsUnrecoverableIdentity(t *testing.T) {
 				t.Fatal(source, err)
 			}
 			_, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindJSON(hff.Path{"data"}, hffsql.Column("data"), hffsql.JSON), hffsql.BindJSON(hff.Path{"other"}, hffsql.Column("other"), hffsql.JSON)))
+			if test.recoverable {
+				if err != nil {
+					t.Fatal(source, err)
+				}
+				continue
+			}
 			var detail *hff.Error
 			if !errors.As(err, &detail) || detail.Code != hff.BackendError {
 				t.Fatalf("%s accepted unrecoverable Bytes identity: %v", source, err)

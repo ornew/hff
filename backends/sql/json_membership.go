@@ -121,7 +121,7 @@ func (b *builder) jsonMembership(n hff.Node, name string, values []expression, f
 	var code string
 	if name == "unique" {
 		la, ra := b.nextAlias(), b.nextAlias()
-		equal, err := b.jsonEqual(n, la+".value", format, element, ra+".value", format, element)
+		equal, err := b.jsonItemEquality(n, la+".value", format, element, b.jsonItemsRoles(r), ra+".value", format, element, b.jsonItemsRoles(r))
 		if err != nil {
 			return expression{}, err
 		}
@@ -136,7 +136,7 @@ func (b *builder) jsonMembership(n hff.Node, name string, values []expression, f
 				return expression{}, err
 			}
 			alias := b.nextAlias()
-			equal, err := b.jsonEqual(n, alias+".value", format, element, raw, rf, child.Type())
+			equal, err := b.jsonItemEquality(n, alias+".value", format, element, b.jsonItemsRoles(r), raw, rf, b.jsonStoredType(child), b.jsonItemRoles(child))
 			if err != nil {
 				return expression{}, err
 			}

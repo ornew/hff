@@ -589,13 +589,36 @@ fields in the same fold.
 
 Typed map operations including `size()`, `has()`, `get()`, `keys()`, and
 `values()` work with Bytes values, and callbacks can process those values as
-Bytes. `items()` has a narrower limitation: it forms positional `[key, value]`
-pairs whose element types are String and Bytes, but the current representation
-cannot retain those position-specific types. Serialization or downstream
-operations that need to recover the Bytes identity may therefore be rejected
-at `Build` time. This does not make Bytes values inside an `Any` representation
-supported; `Any` remains JSON-native. Mixing Bytes positions with `Any` or
-String positions in the same `items()` result is also unsupported.
+Bytes. For schema-known Map and Struct `items()`, PostgreSQL retains the fixed
+roles of each produced pair: the key position is String, and the value position
+uses the declared value schema. This supports constant tuple slots (`0`/`-2`
+for the key, `1`/`-1` for a value whose type is unambiguous), callback
+extraction, serialization, structural equality, and derived list operations
+when the schema and stored JSON category recover the value identity, including
+schema-known tagged values nested in collections. Mixed Int/Float positions
+require native JSON or preserved JSONB numeric metadata. Out-of-range or
+invalid literal slots return null. A dynamic tuple slot that needs to
+distinguish tagged alternatives is not supported. `Any` remains JSON-native;
+this does not add Bytes identity to an `Any` string. Same-category alternatives
+that cannot be recovered from the declared schema and JSON representation
+remain unsupported. Missing keys, stored nulls, and guard-produced no-value
+remain distinct.
+
+When a Struct has different field value types, the key at slot `[0]` remains
+String, and the backend can use each actual key for per-field equality and
+serialization. Extracting slot `[1]` from the combined pairs loses that
+key-dependent dispatch: if its possible values include both String and tagged
+types such as Bytes, Duration, or Timestamp, value-slot extraction may be
+rejected. A type guard on the whole pair or list also uses the generic inferred
+list shape and may be rejected for tagged element unions. The ordinary null
+guard `!` remains supported.
+
+The [runnable items example](https://github.com/ornew/hff/tree/main/examples/sql-json-items)
+uses a `Map<Bytes|null>` to select a named nonempty attachment. Its key and
+value roles remain typed through an `any()` callback. Pair-returning `map()`,
+`flatmap()`, or `fold()` transformations and arrays that combine proven pairs
+with unrelated values retain the general representation path; operations that
+need unrecoverable tagged identity may be rejected.
 
 The schema-known `Bytes|Int|Float|Null` and
 `Bytes|Bool|Int|Float|Null` unions are supported for native JSON and for JSONB
@@ -1202,10 +1225,15 @@ Known Map/Struct carriers also avoid a redundant receiver-category check under
 the declared storage contract. Existing JSON-null normalization preserves
 nullable and guarded-key behavior.
 
-Dynamic `get(key)` on heterogeneous Struct alternatives and `values()` or
-`items()` still normalize the complete object for per-key dispatch or because
-they observe multiple values. Native JSON retains JSON-native runtime types for
-`Any`; JSONB `Any` requires metadata when a selected or enumerated numeric
+Dynamic `get(key)` on heterogeneous Struct alternatives, `values()`, and
+`items()` still normalize the complete source object for per-key dispatch or
+because they observe multiple values. While constructing schema-known `items()`
+pairs, PostgreSQL retains the String key and each value's declared role in the
+produced native JSON. That provenance supports per-key equality and
+serialization; after pairs are combined, value-slot extraction from a mixed
+Struct can still be ambiguous as described above. Native JSON retains
+JSON-native runtime types for `Any`; JSONB `Any` requires metadata when a
+selected or enumerated numeric
 subtype must be restored. Metadata restores numeric representations only; it
 does not add support for bytes, timestamps, or durations inside dynamic JSON
 values. If the selected result cannot be determined from the schema and

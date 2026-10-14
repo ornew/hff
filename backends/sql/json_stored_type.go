@@ -14,6 +14,9 @@ func (b *builder) jsonStoredType(n hff.Node) hff.Type {
 	if n.Kind() == hff.IndexNode {
 		parent, _ := n.Child(0)
 		index, _ := n.Child(1)
+		if typ, known := b.jsonItemSlotType(parent, index); known {
+			return typ
+		}
 		literal, constant := index.Literal()
 		key, stringKey := literal.AsString()
 		source := jsonIndexedReceiverType(b.jsonStoredType(parent), b.jsonStoredType(index))
@@ -57,8 +60,8 @@ func (b *builder) jsonStoredType(n hff.Node) hff.Type {
 		case "map", "flatmap":
 			receiver, _ := n.Child(0)
 			callback, _ := n.Child(1)
-			item := jsonStoredMemberType(b.jsonStoredType(receiver), "", false, true)
-			result := b.jsonCallbackStoredType(callback, []hff.Type{item})
+			item := jsonStoredMemberType(sortListType(b.jsonStoredType(receiver)), "", false, true)
+			result := b.jsonCallbackStoredType(callback, []hff.Type{item}, b.jsonItemsRoles(receiver))
 			if method.Name() == "flatmap" {
 				list := nonnullJSONType(containsListType(result))
 				if list.Kind() == hff.ListType {
@@ -208,7 +211,7 @@ func jsonNativeCarrierType(typ, stored hff.Type) hff.Type {
 
 // Recover a callback value's storage type in its lexical parameter scope.
 // No SQL is built here; existing code/provenance fields remain unchanged.
-func (b *builder) jsonCallbackStoredType(callback hff.Node, types []hff.Type) hff.Type {
+func (b *builder) jsonCallbackStoredType(callback hff.Node, types []hff.Type, roles ...*jsonItemRoles) hff.Type {
 	parameters, _ := callback.Parameters()
 	if b.parameters == nil {
 		b.parameters = make(map[hff.BindingID]jsonParameter)
@@ -219,6 +222,10 @@ func (b *builder) jsonCallbackStoredType(callback hff.Node, types []hff.Type) hf
 		old[i], existed[i] = b.parameters[p.ID()]
 		value := old[i]
 		value.typ = types[i]
+		value.itemRoles = nil
+		if i < len(roles) {
+			value.itemRoles = roles[i]
+		}
 		b.parameters[p.ID()] = value
 	}
 	defer func() {

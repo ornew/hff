@@ -7,10 +7,11 @@ import (
 )
 
 type jsonParameter struct {
-	code   string
-	format JSONFormat
-	typ    hff.Type
-	lossy  bool
+	code      string
+	format    JSONFormat
+	typ       hff.Type
+	lossy     bool
+	itemRoles *jsonItemRoles
 }
 
 // Callback projections belong to their element subquery. Captures retain the
@@ -48,7 +49,7 @@ func (b *builder) jsonPredicate(n hff.Node, name string) (expression, error) {
 	receiverLoss := b.losesFloat(receiver, nil)
 	restoreProvenance := b.callbackProvenance(id, receiver)
 	defer restoreProvenance()
-	b.parameters[id] = jsonParameter{code: alias + ".value", format: format, lossy: receiverLoss}
+	b.parameters[id] = jsonParameter{code: alias + ".value", format: format, typ: jsonStoredMemberType(sortListType(b.jsonStoredType(receiver)), "", false, true), lossy: receiverLoss, itemRoles: b.jsonItemsRoles(receiver)}
 	defer func() { b.steps = outerSteps; b.sharedPaths = outerPaths; delete(b.parameters, id) }()
 	body, _ := callback.Child(0)
 	result, err := b.expression(body)

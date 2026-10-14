@@ -217,7 +217,7 @@ supported profile and restrictions.
 | `object:get(string) -> any` | Value for a key; a missing key returns null. |
 | `object:keys() -> list` | Keys in Unicode code-point order. |
 | `object:values() -> list` | Values in the same order as `keys()`. |
-| `object:items() -> list` | `[key, value]` pairs in key order. |
+| `object:items() -> list` | Pairs in key order; key is String, value keeps its declared type. |
 
 See [object rules](../../spec/methods.md#objects) to distinguish missing keys
 from stored nulls.
