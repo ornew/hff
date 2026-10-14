@@ -27,6 +27,9 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 		}
 		return true
 	case hff.BinaryNode:
+		if b.directCollectionWhereEligible(n) {
+			return true
+		}
 		op, _ := n.Operator()
 		switch op {
 		case hff.Match, hff.NotMatch:
@@ -72,6 +75,9 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 		return ok
 	case hff.BoolNode:
 		child, _ := n.Child(0)
+		if b.directCollectionWhereEligible(n) {
+			return true
+		}
 		if b.directTimestampComparisonEligible(child) {
 			return true
 		}
@@ -264,6 +270,9 @@ func fixedPredicate(predicate SQLPredicate, value bool) bool {
 func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 	if err := checkContext(b.ctx); err != nil {
 		return "", err
+	}
+	if b.directCollectionWhereEligible(n) {
+		return b.directCollectionWhere(n)
 	}
 	if b.directScalarExistsEligible(n) {
 		return b.directScalarExistsWhere(n), nil

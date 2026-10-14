@@ -51,6 +51,34 @@ between a missing key and a stored null matters. `keys()`, `values()`, and
 two-element `[key, value]` list, and the values and items use the same order as
 the keys.
 
+## PostgreSQL collection filters
+
+The PostgreSQL backend can answer some root collection filters without
+decoding or aggregating the complete value:
+
+```hff
+tags=[]
+tags:size=0
+tags:size>0
+labels={}
+items=[]
+items
+items:size=0
+```
+
+For an unguarded, statically typed root JSONB binding without type metadata,
+empty list/object comparisons and bare collection truth use the physical
+JSONB value. Nonzero literal `size()` comparisons use a guarded
+`jsonb_array_length` for a List. SQL NULL and JSON null remain false as filter
+receivers; nonzero Map/Struct sizes retain general lowering. A plain relation
+can use a correlated existence check or a state/constant test for empty list
+comparisons, truthiness, and zero-cardinality comparisons; higher cardinality
+thresholds retain the count-based lowering. Nested JSON paths,
+metadata-backed bindings, guards, computed receivers, and dynamic values use
+general lowering. See the [PostgreSQL backend guide](../backends/postgresql/README.md)
+for binding details and the [translation optimization notes](../backends/postgresql/optimizations.md#lower-direct-collection-emptiness-and-cardinality-filters)
+for the exact scope.
+
 ## Dynamic values and capabilities
 
 The compiler checks capabilities for every method family that can apply to a

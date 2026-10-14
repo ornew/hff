@@ -137,29 +137,16 @@ type relationCardinality struct {
 
 func (b *builder) relationCardinalitySource(n hff.Node) (relationCardinality, bool, error) {
 	receiver, _ := n.Child(0)
-	root := receiver
-	for root.Kind() == hff.FieldNode {
-		root, _ = root.Child(0)
-	}
-	if root.Kind() != hff.VariableNode && root.Kind() != hff.ParameterNode {
-		return relationCardinality{}, false, nil
-	}
-	mapping, ok := b.relationMapping(receiver, b.physicalParameters)
-	if !ok || mapping.relation == nil {
+	return b.relationCardinalityReceiver(receiver)
+}
+
+func (b *builder) relationCardinalityReceiver(receiver hff.Node) (relationCardinality, bool, error) {
+	mapping, ok := b.relationCardinalityBinding(receiver)
+	if !ok {
 		return relationCardinality{}, false, nil
 	}
 	c := mapping.relation.config
-	if b.activeRelationAliases[c.alias] > 0 || b.shadowsOuterBinding(c.alias) {
-		return relationCardinality{}, false, nil
-	}
-	absent := []string{"(" + b.predicateCode(c.present) + ") IS NOT TRUE", "(" + b.predicateCode(c.null) + ") IS TRUE"}
-	parent := receiver
-	for parent.Kind() == hff.FieldNode {
-		parent, _ = parent.Child(0)
-		if ancestor, ok := b.relationMapping(parent, b.physicalParameters); ok && ancestor.structure != nil {
-			absent = append(absent, "("+b.predicateCode(ancestor.structure.present)+") IS NOT TRUE", "("+b.predicateCode(ancestor.structure.null)+") IS TRUE")
-		}
-	}
+	absent := b.relationAbsence(receiver, c)
 	table, err := quoteColumn(c.table)
 	if err != nil {
 		return relationCardinality{}, true, err
@@ -168,7 +155,48 @@ func (b *builder) relationCardinalitySource(n hff.Node) (relationCardinality, bo
 	if err != nil {
 		return relationCardinality{}, true, err
 	}
-	return relationCardinality{absent: strings.Join(absent, " OR "), from: table + " AS " + alias, correlation: b.predicateCode(c.correlation)}, true, nil
+	return relationCardinality{absent: absent, from: table + " AS " + alias, correlation: b.predicateCode(c.correlation)}, true, nil
+}
+
+// Cardinality eligibility must not bind SQL parameters. Rendering happens
+// only after the filter shape is selected, in source order.
+func (b *builder) relationCardinalityBinding(receiver hff.Node) (Binding, bool) {
+	root := receiver
+	for root.Kind() == hff.FieldNode {
+		root, _ = root.Child(0)
+	}
+	if root.Kind() != hff.VariableNode && root.Kind() != hff.ParameterNode {
+		return Binding{}, false
+	}
+	mapping, ok := b.relationMapping(receiver, b.physicalParameters)
+	if !ok || mapping.relation == nil {
+		return Binding{}, false
+	}
+	c := mapping.relation.config
+	if b.activeRelationAliases[c.alias] > 0 || b.shadowsOuterBinding(c.alias) {
+		return Binding{}, false
+	}
+	return mapping, true
+}
+
+func (b *builder) relationCardinalityAbsent(receiver hff.Node) (string, bool, error) {
+	mapping, ok := b.relationCardinalityBinding(receiver)
+	if !ok {
+		return "", false, nil
+	}
+	return b.relationAbsence(receiver, mapping.relation.config), true, nil
+}
+
+func (b *builder) relationAbsence(receiver hff.Node, c relationConfig) string {
+	absent := []string{"(" + b.predicateCode(c.present) + ") IS NOT TRUE", "(" + b.predicateCode(c.null) + ") IS TRUE"}
+	parent := receiver
+	for parent.Kind() == hff.FieldNode {
+		parent, _ = parent.Child(0)
+		if ancestor, ok := b.relationMapping(parent, b.physicalParameters); ok && ancestor.structure != nil {
+			absent = append(absent, "("+b.predicateCode(ancestor.structure.present)+") IS NOT TRUE", "("+b.predicateCode(ancestor.structure.null)+") IS TRUE")
+		}
+	}
+	return strings.Join(absent, " OR ")
 }
 
 // A relation's valid list indices depend only on its cardinality. This also

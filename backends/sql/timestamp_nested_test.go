@@ -259,7 +259,10 @@ func TestTimestampRelationSizeKeepsParentAndListState(t *testing.T) {
 				t.Errorf("%s counted rows for existence: %s", source, query.Where())
 			}
 		} else {
-			expected = append(expected, "count(*)")
+			expected = append(expected, "NOT EXISTS (SELECT 1")
+			if strings.Contains(query.Where(), "count(*)") {
+				t.Errorf("%s counted rows for emptiness: %s", source, query.Where())
+			}
 		}
 		for _, name := range expected {
 			if !strings.Contains(query.Where(), name) {

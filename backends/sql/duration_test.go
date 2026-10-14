@@ -153,7 +153,16 @@ func TestNativeDurationRelationSizeAndHasKeepNullState(t *testing.T) {
 		if err != nil {
 			t.Fatal(source, err)
 		}
-		for _, token := range []string{"profile_present", "profile_null", "items_present", "items_null", "count(*)"} {
+		expected := []string{"profile_present", "profile_null", "items_present", "items_null"}
+		if source == `profile.items:size=0` {
+			expected = append(expected, "NOT EXISTS (SELECT 1")
+			if strings.Contains(query.Where(), "count(*)") {
+				t.Errorf("%s counted rows for emptiness: %s", source, query.Where())
+			}
+		} else {
+			expected = append(expected, "count(*)")
+		}
+		for _, token := range expected {
 			if !strings.Contains(query.Where(), token) {
 				t.Errorf("%s lost %s: %s", source, token, query.Where())
 			}

@@ -219,6 +219,23 @@ cases retain their general lowering. See the
 [native-column filter notes](optimizations.md#remove-projections-from-eligible-native-column-filters)
 for tested SQL shapes and limits; they do not establish runtime speed.
 
+Direct collection filters can also avoid building a complete value. For an
+unguarded, statically typed root JSONB binding without type metadata, empty
+list/object equality or inequality, bare collection truthiness, and zero-size
+comparisons use the physical JSONB value. Nonzero literal `size()` comparisons
+are supported directly for Lists through a shape-guarded
+`jsonb_array_length`; nonzero Map/Struct sizes retain general lowering. SQL
+NULL and JSON null remain false in filter position.
+For a plain `BindRelation`, empty-list comparisons, bare truthiness, and
+zero-cardinality comparisons use correlated existence checks or reduce to
+state and constant tests; higher cardinality thresholds retain the count-based
+path. Guards, computed or
+dynamic receivers, nested JSON paths, and metadata-backed JSONB bindings keep
+their general lowering. See [list and object methods](../../guides/collections.md#postgresql-collection-filters),
+[relation bindings](relations.md), and the
+[collection predicate notes](optimizations.md#lower-direct-collection-emptiness-and-cardinality-filters)
+for examples and limits.
+
 ### Literal conversions during Build
 
 PostgreSQL `Build` can resolve a closed chain of exact built-in conversions

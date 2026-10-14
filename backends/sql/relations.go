@@ -289,6 +289,13 @@ func (b *builder) checkRelationConsumer(n hff.Node, parent hff.Node, index int, 
 	if err := checkContext(b.ctx); err != nil {
 		return err
 	}
+	// Equality with an empty list observes only cardinality. The direct
+	// filter path can answer it without choosing an order for relation rows.
+	if index == 0 && parent.Kind() == hff.BinaryNode {
+		if plan, direct := b.directCollectionPlan(parent); direct && plan.mode == "empty" && plan.relation {
+			blind = true
+		}
+	}
 	binding, mapped := b.relationMapping(n, environment)
 	if orderRelevantNode(n, binding, mapped) {
 		provenBlind := blind || orderBlindConsumer(parent, index)

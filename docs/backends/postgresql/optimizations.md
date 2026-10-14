@@ -618,6 +618,21 @@ termination or runtime speed. See the
 [relation endpoint existence record](../../optimizations/043-postgresql-relation-has-existence.md)
 for the reproduction and limits.
 
+### Lower direct collection emptiness and cardinality filters
+
+An unguarded, statically typed root JSONB binding without type metadata can
+answer empty List/Map/Struct equality or inequality, bare collection truth, and
+zero-size comparisons from its physical JSONB value. Nonzero literal
+`size()` comparisons use guarded `jsonb_array_length` for a List root. The
+shape check keeps SQL NULL and JSON null from matching at the filter boundary.
+For a plain relation, empty-list comparison, truthiness, and zero-cardinality
+comparison use correlated `EXISTS` or `NOT EXISTS`, a state test, or a constant
+result as appropriate. They do not need an order or a full list aggregate.
+Nonzero relation thresholds retain the count-based path. Nested JSON paths,
+metadata-backed JSONB, and guarded, computed, or dynamic receivers retain
+general lowering. See [direct collection predicate checks](../../optimizations/046-postgresql-collection-predicate-checks.md)
+for parity scope and supported forms.
+
 ### Drop ordering only when the proof reaches the consumer
 
 Relation and transformation order is preserved whenever the consumer can

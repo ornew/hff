@@ -130,11 +130,12 @@ func jsonQueries() []string {
 		`scores:any(x=>scores:any(x=>x=20))`, `groups:any(xs=>xs:any(x=>x>10))`, `groups:all(xs=>xs:all(x=>x!:exists))`,
 		`groups:any(xs=>xs:all(x=>x>0)|xs:size=0)`, `!groups:any(xs=>xs!:exists)`,
 		`scores[0]=10`, `scores[-1]=null`, `scores[1.0]=20`, `scores[0.5]=null`, `scores[2147483648]=null`,
-		`scores:size=3`, `scores:has(-1)`, `scores:has(99)`, `scores:has(0.5)=null`, `scores`,
+		`scores:size=3`, `scores:size=0`, `scores:size>0`, `scores:size>=0`, `scores:size<0`,
+		`!scores:size=0`, `scores:has(-1)`, `scores:has(99)`, `scores:has(0.5)=null`, `scores`,
 		`scores:[list[int|null]]:size=3`, `scores:[list[string]]:exists`, `!scores:[list[string]]:exists`,
 		`labels.app="auth"`, `labels["app"]="auth"`, `labels:get("absent")=null`, `labels:has("team")`,
 		`labels:keys[0]="app"`, `labels:values[-1]=null`, `labels:items[0]:size=2`, `labels:keys:size=2`, `labels:values:size=2`, `labels:items:size=2`,
-		`labels:size=2`, `labels:type="object"`, `labels`, `labels:[map[string|null]]:exists`,
+		`labels:size=2`, `labels:size=0`, `labels:size>0`, `labels:type="object"`, `labels`, `labels:[map[string|null]]:exists`,
 		`factors[0]>0`, `factors[0]:[int]:exists`, `factors[0]:[float]:exists`, `factors[0]=1.0`, `factors[0]:type="number"`, `factors:[list[float]]:exists`,
 	}
 }
