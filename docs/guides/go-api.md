@@ -220,6 +220,10 @@ if version, known := profile.Version("tz"); known {
 }
 ```
 
+The [aggregate Profile example](https://github.com/ornew/hff/tree/main/examples/aggregate-profiles)
+finds and prints the `float.aggregation` detail from Local and PostgreSQL
+profiles. Run it with `go run ./examples/aggregate-profiles`.
+
 `Profile` exposes `Backend`, `Features`, `Feature`, `Capabilities`,
 `CompileLimits`, `InputLimits`, `RuntimeLimits`, `Versions`, `Version`,
 `Guarantees`, `HasGuarantee`, `Details`, and `Methods`. Slice accessors return

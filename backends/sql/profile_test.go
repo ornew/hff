@@ -19,14 +19,38 @@ func TestBackendProfilesDiscloseFloatModels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, profile := range []hff.Profile{local.Profile(), postgres} {
+	ctx := context.Background()
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.List("items", schema.FloatType))),
+		engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := e.Compile(ctx, `items:sum>0 | items:avg>0`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	filter, err := local.Build(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL),
+		hffsql.WithBindings(hffsql.BindJSON(hff.Path{"items"}, hffsql.Column("items"), hffsql.JSON)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, profile := range []hff.Profile{local.Profile(), filter.Profile(), postgres, query.Profile()} {
 		details := make(map[string]string)
 		for _, detail := range profile.Details() {
 			details[detail.Name] = detail.Value
 		}
-		for _, name := range []string{"float.model", "float.parsing", "float.arithmetic", "float.rounding", "float.format"} {
+		for _, name := range []string{"float.model", "float.parsing", "float.arithmetic", "float.rounding", "float.aggregation", "float.format"} {
 			if details[name] == "" {
 				t.Errorf("%s omitted %s", profile.Backend(), name)
+			}
+		}
+		for _, method := range []string{"list.sum", "list.avg"} {
+			if support, known := profile.Feature(capabilities.Method(method)); !known || support.Level == hff.UnknownSupport || support.Level == hff.Unsupported {
+				t.Errorf("%s omitted applicable support for %s", profile.Backend(), method)
 			}
 		}
 	}

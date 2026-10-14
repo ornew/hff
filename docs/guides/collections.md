@@ -211,18 +211,47 @@ items:avg(item=>item.price!)=1.75
 
 These return Float for contributions `[1, 2.5, null]`. JSONB needs version-1
 numeric type metadata when storage does not preserve the Int/Float distinction.
-PostgreSQL relation bindings also support numeric callback projections when
-the bound values preserve their numeric subtypes. Relation aggregation does
-not require a unique order unless a nested operation observes order. For
-example, an unordered relation with a recoverable numeric `price` can use:
+PostgreSQL relation bindings support no-argument `avg()` when each item has a
+numeric Int or Float binding. For structured items, use a callback projection
+when the selected field has a recoverable numeric type. Neither form requires
+a unique relation order unless a nested operation observes order. For example,
+an unordered scalar relation and an unordered relation with a numeric `price`
+field can use:
 
 ```hff
+measurements:avg=12.5
 items:avg(item=>item.price)=12.5
 ```
 
-Native scalar-column `avg()` is not currently supported. PostgreSQL's numeric
-intermediate can differ from Local's list-order accumulation through
-intermediate overflow, cancellation, rounding, and zero-sign behavior.
+## Float aggregate profiles
+
+Float aggregates follow each backend's declared Float model, so the same
+Float list can produce different predicate results. With `items` declared as
+`List<Float>` and bound to JSON or JSONB in PostgreSQL, compare these queries
+across Local and PostgreSQL:
+
+```hff
+items:sum>0
+items:avg:exists
+```
+
+For `[1e16, 1.0, -1e16]`, Local evaluates `items:sum>0` as false because
+list-order Float addition loses the middle `1.0`; PostgreSQL evaluates it as
+true because its numeric intermediate retains the contribution. For
+`[1e308, 1e308]`, Local's average becomes null after the Float sum overflows,
+so `items:avg:exists` is false. PostgreSQL's numeric average produces a finite
+Float, so the same query is true. PostgreSQL Float aggregates require
+PostgreSQL 16 or later and `extra_float_digits > 0`; HFF does not change the
+database session setting. See the
+[PostgreSQL JSON collection details](../backends/postgresql/json.md#schema-known-collection-access)
+for binding limits. The [compatibility Profile guide](go-api.md#inspect-a-compatibility-profile)
+shows how to retrieve the `float.aggregation` detail from a built filter or
+SQL query. The runnable [aggregate Profile example](https://github.com/ornew/hff/tree/main/examples/aggregate-profiles)
+prints the Local and PostgreSQL details; run it with
+`go run ./examples/aggregate-profiles`.
+
+The Profile describes backend behavior; it does not make Float arithmetic
+identical across backends.
 
 ## Object queries
 
