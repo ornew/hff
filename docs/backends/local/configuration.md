@@ -137,6 +137,11 @@ DefaultLimits returns a value copy. Limits returns the engine's resolved
 configuration; zero ceilings in an explicitly unlimited engine indicate that
 opt-out.
 
+For `list:unique()`, fingerprint traversal and any collision-confirming equality
+checks charge `MaxSteps`; cancellation is checked during both. Since `unique()`
+returns only a boolean, it adds no `MaxGeneratedValues` charge. A budget or
+cancellation error aborts the match without a partial result.
+
 For local object lookups, `MaxSteps` also charges the UTF-8 byte length of each
 evaluated key immediately before lookup. This includes root variable names,
 field access, string-key indexing, and the key argument to object `has()` and

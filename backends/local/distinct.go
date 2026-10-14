@@ -20,16 +20,9 @@ func (e *evaluation) distinctList(receiver core.Value) (result, error) {
 		if err != nil {
 			return result{}, err
 		}
-		duplicate := false
-		for _, index := range seen[key] {
-			equal, err := e.equal(value, output[index])
-			if err != nil {
-				return result{}, err
-			}
-			if equal {
-				duplicate = true
-				break
-			}
+		duplicate, err := e.equalCandidate(value, output, seen[key])
+		if err != nil {
+			return result{}, err
 		}
 		if duplicate {
 			continue
@@ -41,6 +34,18 @@ func (e *evaluation) distinctList(receiver core.Value) (result, error) {
 		output = append(output, value)
 	}
 	return ordinary(core.OwnedList(output)), nil
+}
+
+// A fingerprint is only a candidate selector. Verify every bucket collision
+// with HFF equality, including the work and cancellation checks it performs.
+func (e *evaluation) equalCandidate(value core.Value, values []core.Value, candidates []int) (bool, error) {
+	for _, index := range candidates {
+		equal, err := e.equal(value, values[index])
+		if err != nil || equal {
+			return equal, err
+		}
+	}
+	return false, nil
 }
 
 const fingerprintOffset uint64 = 14695981039346656037

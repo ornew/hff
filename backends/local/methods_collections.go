@@ -66,18 +66,7 @@ func (e *evaluation) collectionMethod(id string, receiver core.Value, args []cor
 		return ordinary(core.Bool(true)), nil
 	case "list.unique":
 		xs, _ := receiver.ListView()
-		for i, value := range xs {
-			for j := 0; j < i; j++ {
-				yes, err := e.equal(value, xs[j])
-				if err != nil {
-					return result{}, err
-				}
-				if yes {
-					return ordinary(core.Bool(false)), nil
-				}
-			}
-		}
-		return ordinary(core.Bool(true)), nil
+		return e.uniqueList(xs)
 	case "list.distinct":
 		return e.distinctList(receiver)
 	case "list.concat":

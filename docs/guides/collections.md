@@ -110,6 +110,13 @@ the first value's subtype and signed-zero representation are retained. The
 method requires `method:list.distinct` and any structural equality capabilities
 required by the possible element types.
 
+Local `unique()` streams through the list and returns false at the first
+duplicate, so later elements are not examined by `unique()`. Fingerprint
+traversal and collision-confirming equality checks count against the per-match
+`MaxSteps` limit and observe cancellation; the boolean result does not consume
+`MaxGeneratedValues`. If either aborts, evaluation returns an error rather than
+a partial result. See the [Local limits guide](../backends/local/configuration.md#limits).
+
 `find(predicate)` returns the original first matching element, which makes it
 convenient to select a record before reading one of its fields:
 

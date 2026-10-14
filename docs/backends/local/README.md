@@ -146,10 +146,18 @@ build. For ordinary limits, zero selects the documented finite default and a
 negative value is invalid. Unlimited mode must be selected explicitly.
 
 `MaxSteps` counts evaluated nodes, values traversed during equality and type
-guards, and string/byte operation lengths. `MaxGeneratedValues` counts generated
-collection containers and entries. Exhausting either budget returns a limit
-error; HFF does not return a partial match. Context cancellation is checked
-during evaluation. These budgets apply to each match call independently.
+guards, structural `unique()` fingerprints, and string/byte operation lengths.
+`MaxGeneratedValues` counts generated collection containers and entries.
+Exhausting either budget returns a limit error; HFF does not return a partial
+match. Context cancellation is checked during evaluation. These budgets apply
+to each match call independently.
+
+Local `unique()` processes values in order and stops when it finds the first
+duplicate. Its fingerprints narrow candidate comparisons; structural HFF
+equality confirms each candidate. Fingerprint traversal and equality checks
+are charged to `MaxSteps`, and the boolean result does not charge generated
+values. See [Local structural uniqueness](../../optimizations/050-local-unique-fingerprints.md)
+for deterministic work-count evidence and collision limits.
 
 Object lookup also charges the UTF-8 byte length of each evaluated key before
 checking it, whether the key is present or missing. Null/no-value propagation
