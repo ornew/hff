@@ -525,6 +525,21 @@ claim. See the
 [structural distinct grouping record](../../optimizations/049-postgresql-structural-distinct.md)
 for fallback boundaries and parity details.
 
+### Skip pairwise checks for proven unique object items
+
+For a recovered object `items()` list, each source pair has a distinct String
+key under the required unique-object-key storage contract. `unique()` can omit
+the pairwise comparison with either a source-key proof or a pair-equality
+proof. Direct items, guards, filtering, an identity map, and singleton identity
+flatmap can retain the source-key proof. Separately, `distinct()` proves its
+output has no equal pairs, even if different pairs share a key. Receiver
+evaluation and null/no-value handling remain; other transformations retain
+the general comparison unless they establish one of these proofs.
+This is SQL-shape evidence only: the tested JSON and JSONB filters removed the
+pairwise array cross-product, while receiver normalization remained. See
+[unique object item keys](../../optimizations/051-postgresql-unique-object-items.md)
+for the storage contract, measured query shapes, and limits.
+
 ### Prune scalar leaves during canonical JSON serialization
 
 The recursive token CTE keeps scalar and null rows as token sources but does

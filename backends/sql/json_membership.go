@@ -120,13 +120,17 @@ func (b *builder) jsonMembership(n hff.Node, name string, values []expression, f
 	element := list.Element()
 	var code string
 	if name == "unique" {
-		la, ra := b.nextAlias(), b.nextAlias()
-		equal, err := b.jsonItemEquality(n, la+".value", format, element, b.jsonItemsRoles(r), ra+".value", format, element, b.jsonItemsRoles(r))
-		if err != nil {
-			return expression{}, err
+		if b.jsonItemsUnique(r) {
+			code = "TRUE"
+		} else {
+			la, ra := b.nextAlias(), b.nextAlias()
+			equal, err := b.jsonItemEquality(n, la+".value", format, element, b.jsonItemsRoles(r), ra+".value", format, element, b.jsonItemsRoles(r))
+			if err != nil {
+				return expression{}, err
+			}
+			from := string(format) + "_array_elements(" + receiver.code + ") WITH ORDINALITY AS " + la + "(value,ord) CROSS JOIN " + string(format) + "_array_elements(" + receiver.code + ") WITH ORDINALITY AS " + ra + "(value,ord)"
+			code = "(NOT EXISTS(SELECT 1 FROM " + from + " WHERE " + la + ".ord<" + ra + ".ord AND " + equal + "))"
 		}
-		from := string(format) + "_array_elements(" + receiver.code + ") WITH ORDINALITY AS " + la + "(value,ord) CROSS JOIN " + string(format) + "_array_elements(" + receiver.code + ") WITH ORDINALITY AS " + ra + "(value,ord)"
-		code = "(NOT EXISTS(SELECT 1 FROM " + from + " WHERE " + la + ".ord<" + ra + ".ord AND " + equal + "))"
 	} else {
 		var matches []string
 		for i, arg := range values[1:] {

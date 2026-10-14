@@ -68,6 +68,10 @@ func TestPostgreSQLJSONItemFoldsMatchLocal(t *testing.T) {
 	runPostgreSQLJSONItemRoleSources(t, itemFoldSources)
 }
 
+func TestPostgreSQLJSONItemUniquenessMatchLocal(t *testing.T) {
+	runPostgreSQLJSONItemRoleSources(t, itemUniqueSources)
+}
+
 func runPostgreSQLJSONItemRoleSources(t *testing.T, sources func(itemRoleFixture) []string) {
 	t.Helper()
 	container := os.Getenv("HFF_POSTGRES_CONTAINER")
