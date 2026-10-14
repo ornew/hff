@@ -201,6 +201,15 @@ below, `lower()`, `upper()`, `contains()`, `startswith()`, `endswith()`,
 `concat()`, `frombase64()`, and `frombase64r()`; boolean `not()`, `and()`, and
 `or()` are supported.
 
+Eligible outer filters can compare same-kind native columns directly, check
+native scalar `exists()`, test native `bytea` length against an Int literal,
+compare Duration nanoseconds with an Int column, and use Int `round()`,
+`ceil()`, or `floor()` as identity operations. Nullable columns keep their
+non-null checks. Guarded, structured-parent, JSON, mixed-kind, and callback
+cases retain their general lowering. See the
+[native-column filter notes](optimizations.md#remove-projections-from-eligible-native-column-filters)
+for tested SQL shapes and limits; they do not establish runtime speed.
+
 ### Literal conversions during Build
 
 PostgreSQL `Build` can resolve a closed chain of exact built-in conversions

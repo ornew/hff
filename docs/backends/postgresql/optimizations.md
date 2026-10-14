@@ -51,6 +51,16 @@ fixture-specific plan observation, with no timing measurement. See [direct
 native Float predicates](../../optimizations/018-postgresql-float-predicate-shape.md)
 for the measured filters and evidence limits.
 
+### Remove projections from eligible native-column filters
+
+For eligible root filters, native `exists()`, same-kind bound-column
+comparisons, `bytea` `len()` against an Int literal, Duration nanosecond
+comparisons, and Int rounding identities can avoid nullable value projections.
+Required `exists()` can become `TRUE`; nullable values retain non-null tests.
+Guarded, structured-parent, JSON, mixed-kind, and callback paths retain their
+general lowering. The [native-column filter record](../../optimizations/038-postgresql-native-column-filters.md)
+reports SQL shape and parity evidence without claiming execution speed.
+
 ### Specialize exact mixed-numeric literal thresholds
 
 For pure filter comparisons between a directly bound Int or Float column and

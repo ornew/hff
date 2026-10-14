@@ -37,6 +37,9 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 		}
 		left, _ := n.Child(0)
 		right, _ := n.Child(1)
+		if b.directScalarColumnComparisonEligible(n) {
+			return true
+		}
 		value, constant, err := b.constantValue(right)
 		if err != nil || !constant {
 			return false
@@ -63,7 +66,7 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 		return ok
 	case hff.BoolNode:
 		child, _ := n.Child(0)
-		if b.directScalarRegexEligible(child) {
+		if b.directScalarRegexEligible(child) || b.directScalarExistsEligible(child) {
 			return true
 		}
 		if child.Kind() == hff.CallNode {
@@ -73,21 +76,17 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 		_, _, ok := b.directScalarColumn(child)
 		return ok
 	default:
-		return false
+		return b.directScalarExistsEligible(n)
 	}
 }
 
 func (b *builder) directScalarLengthEligible(call, right hff.Node) bool {
-	if call.Kind() != hff.CallNode || call.ChildCount() != 1 {
-		return false
-	}
-	method, ok := call.Method()
-	if !ok || method.Name() != "len" {
+	if !builtinUnaryScalarMethod(call, "len") {
 		return false
 	}
 	receiver, _ := call.Child(0)
 	_, kind, ok := b.directScalarColumn(receiver)
-	if !ok || kind != hff.StringType {
+	if !ok || (kind != hff.StringType && kind != hff.BytesType) {
 		return false
 	}
 	value, constant, err := b.constantValue(right)
@@ -161,6 +160,9 @@ func (b *builder) directScalarInEligible(n hff.Node) bool {
 }
 
 func (b *builder) directScalarColumn(n hff.Node) (string, hff.TypeKind, bool) {
+	if column, kind, view := b.directScalarView(n); view {
+		return column, kind, true
+	}
 	if identity, ok := b.identityPlan(n); ok {
 		column, kind, direct := b.directScalarColumn(identity.operand)
 		if !direct {
@@ -203,6 +205,9 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 	if err := checkContext(b.ctx); err != nil {
 		return "", err
 	}
+	if b.directScalarExistsEligible(n) {
+		return b.directScalarExistsWhere(n), nil
+	}
 	if n.Kind() == hff.NotNode {
 		child, _ := n.Child(0)
 		code, err := b.directScalarWhere(child)
@@ -244,6 +249,9 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 	}
 	if n.Kind() == hff.BoolNode {
 		child, _ := n.Child(0)
+		if b.directScalarExistsEligible(child) {
+			return b.directScalarExistsWhere(child), nil
+		}
 		if b.directScalarRegexEligible(child) {
 			return b.directScalarRegexWhere(child)
 		}
@@ -278,6 +286,9 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 	}
 	left, _ := n.Child(0)
 	right, _ := n.Child(1)
+	if b.directScalarColumnComparisonEligible(n) {
+		return b.directScalarColumnComparison(n), nil
+	}
 	if b.directScalarRegexEligible(n) {
 		return b.directScalarRegexWhere(n)
 	}
@@ -316,7 +327,7 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 
 func (b *builder) directScalarLengthComparison(n, call, right hff.Node) (string, error) {
 	receiver, _ := call.Child(0)
-	column, _, _ := b.directScalarColumn(receiver)
+	column, kind, _ := b.directScalarColumn(receiver)
 	value, err := b.literal(right)
 	if err != nil {
 		return "", err
@@ -326,7 +337,11 @@ func (b *builder) directScalarLengthComparison(n, call, right hff.Node) (string,
 	if op == hff.NotEqual {
 		operator = "<>"
 	}
-	test := "char_length(" + column + ")::bigint " + operator + " " + value.code
+	function := "char_length"
+	if kind == hff.BytesType {
+		function = "octet_length"
+	}
+	test := function + "(" + column + ")::bigint " + operator + " " + value.code
 	if acceptsKind(receiver.Type(), hff.NullType) {
 		test = column + " IS NOT NULL AND " + test
 	}
