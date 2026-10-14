@@ -8,10 +8,10 @@ import (
 
 // Lower a lexical callback into a row source, isolating its projections from
 // the enclosing expression. Each row retains its source ordinal and no-value.
-func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONFormat, callback hff.Node) (from, ordinal string, result expression, err error) {
+func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONFormat, callback hff.Node) (from, ordinal string, result expression, stored hff.Type, err error) {
 	parameters, ok := callback.Parameters()
 	if !ok || len(parameters) != 1 {
-		return "", "", expression{}, b.failure(n, "list transformation requires one callback parameter")
+		return "", "", expression{}, hff.Type{}, b.failure(n, "list transformation requires one callback parameter")
 	}
 	alias := b.nextAlias()
 	outer := b.steps
@@ -40,13 +40,15 @@ func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONForm
 	body, _ := callback.Child(0)
 	result, err = b.expression(body)
 	if err != nil {
-		return "", "", expression{}, err
+		return "", "", expression{}, hff.Type{}, err
 	}
 	from = string(format) + "_array_elements(" + value.code + ") WITH ORDINALITY AS " + alias + "(value,ord)"
 	if len(b.steps) > 0 {
 		from += " CROSS JOIN LATERAL " + strings.Join(b.steps, " CROSS JOIN LATERAL ")
 	}
-	return from, alias + ".ord", result, nil
+	// Capture recovered storage types while parameter bindings and enclosing
+	// fold state are still available. Deferred restoration ends this scope.
+	return from, alias + ".ord", result, b.jsonStoredType(body), nil
 }
 
 func (b *builder) jsonTransform(n hff.Node, name string) (expression, error) {
@@ -63,29 +65,30 @@ func (b *builder) jsonTransform(n hff.Node, name string) (expression, error) {
 		return expression{}, err
 	}
 	callback, _ := n.Child(1)
-	from, ordinal, result, err := b.jsonCallbackRows(n, value, format, callback)
-	if err != nil {
-		return expression{}, err
-	}
-	raw, resultFormat, err := b.jsonRepresentation(n, result)
+	from, ordinal, result, resultType, err := b.jsonCallbackRows(n, value, format, callback)
 	if err != nil {
 		return expression{}, err
 	}
 	body, _ := callback.Child(0)
-	resultType := b.jsonStoredType(body)
+	var raw string
 	if name == "flatmap" {
+		rawResult, resultFormat, err := b.jsonRepresentation(n, result)
+		if err != nil {
+			return expression{}, err
+		}
 		resultType = containsListType(resultType)
-	}
-	normalized, err := b.comparisonDocument(body, raw, resultFormat, resultType)
-	if err != nil {
-		return expression{}, err
-	}
-	if name == "flatmap" {
+		normalized, err := b.comparisonDocument(body, rawResult, resultFormat, resultType)
+		if err != nil {
+			return expression{}, err
+		}
 		// Scalar alternatives fail the operation instead of becoming output
 		// elements. Their numeric subtypes do not need to be restored.
-		raw = "(CASE WHEN " + string(resultFormat) + "_typeof(" + raw + ")='array' THEN " + normalized + " ELSE NULL::json END)"
+		raw = "(CASE WHEN " + string(resultFormat) + "_typeof(" + rawResult + ")='array' THEN " + normalized + " ELSE NULL::json END)"
 	} else {
-		raw = normalized
+		raw, err = b.computedJSONDocument(body, result, resultType)
+		if err != nil {
+			return expression{}, err
+		}
 	}
 	rows, output := b.nextAlias(), b.nextAlias()
 	// MATERIALIZED avoids duplicating callback SQL when collecting both its

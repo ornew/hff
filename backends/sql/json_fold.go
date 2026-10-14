@@ -26,11 +26,7 @@ func (b *builder) jsonFold(n hff.Node, name string) (expression, error) {
 	if err != nil {
 		return expression{}, err
 	}
-	rawSeed, seedFormat, err := b.jsonRepresentation(seed, initial)
-	if err != nil {
-		return expression{}, err
-	}
-	rawSeed, err = b.comparisonDocument(seed, rawSeed, seedFormat, b.jsonStoredType(seed))
+	rawSeed, err := b.computedJSONDocument(seed, initial, b.jsonStoredType(seed))
 	if err != nil {
 		return expression{}, err
 	}
@@ -52,12 +48,8 @@ func (b *builder) jsonFold(n hff.Node, name string) (expression, error) {
 	if err != nil {
 		return expression{}, err
 	}
-	rawResult, resultFormat, err := b.jsonRepresentation(n, result)
-	if err != nil {
-		return expression{}, err
-	}
 	body, _ := callback.Child(0)
-	rawResult, err = b.comparisonDocument(body, rawResult, resultFormat, storedType)
+	rawResult, err := b.computedJSONDocument(body, result, storedType)
 	if err != nil {
 		return expression{}, err
 	}

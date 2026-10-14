@@ -382,6 +382,20 @@ validation still runs before the value is exposed. See the
 [measured parsing and validation comparison](../../optimizations/004-postgresql-json-validation-reuse.md)
 for the workload, generated-SQL tradeoffs, and sample limits.
 
+### Reuse constructed primitive JSON in callbacks
+
+For `map()` and `foldl()`/`foldr()`, a newly computed native SQL value can be
+encoded directly into callback JSON state when its complete stored schema is
+one primitive family, optionally nullable, matching the SQL carrier.
+SQL `NULL` becomes JSON `null`; presence and no-value remain separate. This
+avoids parsing and normalizing the just-constructed scalar again. JSON
+carriers, `Any`, wider unions, containers, and `flatmap()` results retain
+schema-guided normalization.
+The measured Float map and fold SQL shrank while their callback and recursive
+query structure remained. No runtime timing was collected. See the
+[constructed callback JSON record](../../optimizations/031-postgresql-constructed-callback-json.md)
+for controls and limits.
+
 ### Read duration fraction digits as bytes
 
 The duration parser validates its input grammar before processing fractional

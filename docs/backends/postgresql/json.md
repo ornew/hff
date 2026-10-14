@@ -1067,15 +1067,27 @@ determines a whole-method failure controls its result. These are HFF result
 semantics; PostgreSQL's physical callback evaluation order and local
 `MaxSteps`/`MaxGeneratedValues` budgets are not guaranteed.
 
-Callback outputs are normalized against their inferred schema types before
-being retained or aggregated. A constant string result such as `map(x=>"fixed")`
-does not need numeric metadata. An operation that observes a numeric
-distinction JSONB has erased, such as an integer-versus-float type guard, or
-retains an ambiguous numeric value, requires native JSON or sufficient JSONB
-metadata. Truthiness and `exists()` do not inherently need numeric subtype
-metadata. `flatmap()` restores the callback's list candidates; an irrelevant
-scalar integer/float alternative does not by itself require metadata. As
-elsewhere, unsupported execution-budget requirements are rejected by `Build`.
+Callback outputs are checked against their inferred schema types before being
+retained or aggregated. For `map()` and fold seeds/results, a newly computed
+native SQL scalar can be serialized directly into JSON state without parsing
+and normalizing that scalar again when its complete stored schema is one
+primitive family, optionally nullable, matching its SQL carrier. This
+applies to Bool, Int, Float, String, Bytes, Duration, and Timestamp. SQL `NULL`
+becomes JSON `null`, while presence and no-value remain separate. Float-loss
+handling and schema representability checks are unchanged. JSON carriers, `Any`, wider
+unions, containers, and `flatmap()` results keep their ordinary normalization
+path. See the
+[constructed callback JSON record](../../optimizations/031-postgresql-constructed-callback-json.md)
+for its scope and SQL-shape evidence.
+
+A constant string result such as `map(x=>"fixed")` does not need numeric
+metadata. An operation that observes a numeric distinction JSONB has erased,
+such as an integer-versus-float type guard, or retains an ambiguous numeric
+value, requires native JSON or sufficient JSONB metadata. Truthiness and
+`exists()` do not inherently need numeric subtype metadata. `flatmap()` restores
+the callback's list candidates; an irrelevant scalar integer/float alternative
+does not by itself require metadata. As elsewhere, unsupported execution-budget
+requirements are rejected by `Build`.
 
 `foldl()` calls its callback as `(accumulator, item)` in list ordinal order;
 `foldr()` calls it as `(item, accumulator)` in reverse ordinal order. The
