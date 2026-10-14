@@ -835,12 +835,13 @@ arithmetic results can be serialized through `json()` or `string()` when their
 numeric representation is available; see the
 [canonical serialization design](../../design/016-postgresql-json-serialization.md).
 
-Float decoding checks the decimal spelling before the double-precision cast. A
-finite spelling below the binary64 range, such as
-`1e-400` or `-1e-9999`, becomes positive or negative zero rather than a decode
-error; dynamic truth checks treat that decoded zero as false. JSONB can discard
-the sign of zero, so use metadata when a later operation must observe that
-sign.
+PostgreSQL Float decoding follows the backend Float Profile: a spelling the
+database rejects as underflow, such as `-1e-400`, is not converted to signed
+zero. For `fromjson()` this makes the entire parse result null; in dynamic JSON
+sorting it makes the entire sort result null. The local backend instead accepts
+underflow to signed zero, as reported by its profile. JSONB can discard the
+sign of a zero that it does store, so use metadata when a later operation must
+observe that sign.
 
 ### Parse computed durations
 
@@ -1164,7 +1165,10 @@ type with no orderable member is rejected during compilation. A
 dynamic `Any` or list union can also be sorted when its stored list and
 element representations are recoverable. Dynamic lists may contain all
 numbers (including mixed int64 and float64) or all strings; mixed families,
-null elements, and other non-orderable elements produce null. For JSONB, supply
+null elements, unrepresentable Float spellings such as `-1e-400`, and other
+non-orderable elements make the whole sort result null. This applies
+consistently to dynamic `Any` JSON and typed JSON lists under PostgreSQL's
+Float Profile; Local may accept raw underflow as signed zero. For JSONB, supply
 numeric type metadata when normalization has erased the int64/float64
 distinction. Sorting is stable for equal numeric values, so original order and
 numeric representations such as signed zero are retained:
@@ -1188,6 +1192,18 @@ normalization; include the Float text metadata if that sign must remain
 observable. See the [storage requirements](#storage-requirements-and-limits)
 for the sidecar format. The scoped Build and database measurements are in the
 [dynamic sorting record](../../optimizations/011-postgresql-dynamic-json-sort.md).
+
+Dynamic numeric sorting compares each Float with the same compact exact key
+used by PostgreSQL numeric extrema and structural `distinct()`. The key maps
+large integral Floats within the int64 range to exact numeric integers, handles
+positive 2^63 as its exact numeric endpoint, and uses PostgreSQL's
+shortest-precise Float output for other values. Together with the source
+ordinal tie-breaker, this preserves exact mixed Int/Float order and stable ties
+without decomposing Float bits. Float processing requires PostgreSQL 16 or
+later and `extra_float_digits > 0`; HFF does not set or inspect that session
+setting.
+The [sort-key record](../../optimizations/048-postgresql-dynamic-sort-order-key.md)
+documents the SQL-shape fixtures and limits.
 
 Schema-known list element unions such as
 `Timestamp|Int|Float|Null` and `Duration|Int|Float|Null` can also use

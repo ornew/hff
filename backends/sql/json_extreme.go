@@ -95,8 +95,11 @@ func (b *builder) jsonDynamicExtreme(n hff.Node, value expression, from, item, o
 // A round-trip decimal preserves Float order, but large integer-valued Floats
 // need their exact integer value to compare with adjacent Ints. Below 2^52,
 // every integer is exactly representable, so a Float's round-trip interval
-// cannot cross an integer. Outside int64, all Ints are on the same side.
+// cannot cross an integer. PostgreSQL's shortest Float text also preserves
+// integral values there exactly. At positive 2^63, use the exact endpoint:
+// its round-trip interval can overlap MaxInt64. More distant out-of-int64
+// Floats have intervals wholly outside the Int range.
 // This ordering key avoids binary decomposition without rounding an Int.
 func numericOrderKey(value string) string {
-	return "(CASE WHEN " + value + ">='-9223372036854775808'::double precision AND " + value + "<'9223372036854775808'::double precision AND abs(" + value + ")>=4503599627370496::double precision THEN " + value + "::bigint::numeric ELSE " + value + "::text::numeric END)"
+	return "(CASE WHEN " + value + ">='-9223372036854775808'::double precision AND " + value + "<'9223372036854775808'::double precision AND abs(" + value + ")>=4503599627370496::double precision THEN " + value + "::bigint::numeric WHEN " + value + "='9223372036854775808'::double precision THEN '9223372036854775808'::numeric ELSE " + value + "::text::numeric END)"
 }

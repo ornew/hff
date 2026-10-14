@@ -89,9 +89,9 @@ func (b *builder) jsonSort(n hff.Node, value expression) (expression, error) {
 	f := "(CASE WHEN " + floating + " THEN " + jsonScalarCast(text, hff.FloatType) + " END)"
 	floatAlias := b.nextAlias()
 	floatValue := floatAlias + ".v"
-	// Zero needs no binary64 decomposition. Keep this projection inside the
-	// item query: its expression refers to the array expansion's local alias.
-	floatKey := "(SELECT CASE WHEN " + floatValue + "=0 THEN 0::numeric ELSE " + b.floatNumeric(floatValue) + " END FROM LATERAL (SELECT " + f + " AS v OFFSET 0) AS " + floatAlias + ")"
+	// Share the same exact Int/Float ordering key as min/max. Keep the decoded
+	// Float local to the item query instead of decomposing its binary payload.
+	floatKey := "(SELECT " + numericOrderKey(floatValue) + " FROM LATERAL (SELECT " + f + " AS v OFFSET 0) AS " + floatAlias + ")"
 	number := "(CASE WHEN " + integer + " THEN " + i + " WHEN " + floating + " THEN " + floatKey + " END)"
 	stringKey := "(CASE WHEN " + category + "='string' THEN " + text + " END) COLLATE \"C\""
 	if temporal != hff.InvalidType {
@@ -102,9 +102,13 @@ func (b *builder) jsonSort(n hff.Node, value expression) (expression, error) {
 		stringKey = "(CASE WHEN " + category + "='string' THEN " + key + " END)"
 	}
 	from := "json_array_elements(" + raw + ") WITH ORDINALITY AS " + alias + "(value,ord)"
-	invalid := "EXISTS(SELECT 1 FROM " + from + " WHERE " + category + " NOT IN ('number','string'))"
+	// PostgreSQL Float decoding can reject a syntactically valid extreme
+	// value. Treat that decoded null as an invalid sort element even when
+	// native Any JSON bypasses normalization and retains its original text.
+	invalidFloat := "(" + floating + " AND NOT pg_input_is_valid(" + text + ",'double precision'))"
+	invalid := "EXISTS(SELECT 1 FROM " + from + " WHERE " + category + " NOT IN ('number','string') OR " + invalidFloat + ")"
 	if bytes {
-		invalid = "EXISTS(SELECT 1 FROM " + from + " WHERE " + category + "!='number')"
+		invalid = "EXISTS(SELECT 1 FROM " + from + " WHERE " + category + "!='number' OR " + invalidFloat + ")"
 	}
 	mixed := "(SELECT count(DISTINCT " + category + ")>1 FROM " + from + ")"
 	// Int/Float and signed-zero ties keep their normalized original spelling,

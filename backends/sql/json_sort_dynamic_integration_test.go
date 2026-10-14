@@ -28,7 +28,13 @@ func TestPostgreSQLDynamicSortParity(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	numbers := schema.Union(schema.IntType, schema.FloatType, schema.NullType)
-	types := []hff.Type{schema.AnyType, schema.Union(schema.ListOf(schema.AnyType), schema.NullType), schema.Union(schema.ListOf(numbers), schema.NullType), schema.Union(schema.ListOf(numbers), schema.StringType, schema.MapOf(schema.BytesType), schema.NullType)}
+	types := []hff.Type{
+		schema.AnyType,
+		schema.Union(schema.ListOf(schema.AnyType), schema.NullType),
+		schema.Union(schema.ListOf(numbers), schema.NullType),
+		schema.Union(schema.ListOf(numbers), schema.StringType, schema.MapOf(schema.BytesType), schema.NullType),
+		schema.ListOf(schema.Union(numbers, schema.BytesType)),
+	}
 	values := []hff.Value{hff.Null(), hff.String(""), hff.Int(1), hff.Bool(true), hff.Object(nil), hff.List(), hff.List(hff.Null()), hff.List(hff.Bool(true)), hff.List(hff.Object(nil)), hff.List(hff.Int(1), hff.String("1")), hff.List(hff.String("日"), hff.String("é"), hff.String("a")), hff.List(hff.Int(3), hff.Float(1), hff.Int(2)), hff.List(hff.Float(1), hff.Float(math.Copysign(0, -1))), hff.List(hff.Float(1), hff.Int(1)), hff.List(hff.Int(1), hff.Float(1)), hff.List(hff.Float(math.Copysign(0, -1)), hff.Int(0), hff.Float(0)), hff.List(hff.Int(9007199254740993), hff.Float(9007199254740992)), hff.List(hff.Float(float64(math.MaxInt64)), hff.Int(math.MaxInt64)), hff.List(hff.Int(math.MinInt64), hff.Float(float64(math.MinInt64))), hff.List(hff.Float(math.SmallestNonzeroFloat64), hff.Int(0), hff.Float(-math.SmallestNonzeroFloat64))}
 	// Exercise native JSON spellings that a typed host serializer canonicalizes.
 	rawStart := len(values)
@@ -83,6 +89,17 @@ func TestPostgreSQLDynamicSortParity(t *testing.T) {
 					jsonText := metadataJSONFixture(t, value)
 					if format == hffsql.JSON && i >= rawStart {
 						jsonText = rawJSON[i-rawStart]
+						if i == rawStart {
+							// Go decodes raw -1e-400 as signed zero; PostgreSQL's
+							// native Float input model yields null. Its sort oracle
+							// therefore uses a decoded null element. The JSONB
+							// fixture retains its valid canonical negative zero.
+							decoded := hff.Object(map[string]hff.Value{"data": hff.List(hff.Null(), hff.Int(0), hff.Float(0), hff.Float(1), hff.Int(1))})
+							want, err = f.Match(ctx, decoded)
+							if err != nil {
+								t.Fatal(err)
+							}
+						}
 					}
 					rows = append(rows, "("+sqlFixtureString(jsonText)+"::"+string(format)+","+sqlFixtureString(pairTypeMetadata(t, value))+"::jsonb)")
 					wants = append(wants, want)
@@ -109,7 +126,7 @@ func TestPostgreSQLDynamicSortParity(t *testing.T) {
 	}
 	for i, result := range results {
 		if (result == "t") != wants[i] {
-			t.Errorf("%s: SQL=%s local=%v", labels[i], result, wants[i])
+			t.Errorf("%s: SQL=%s oracle=%v", labels[i], result, wants[i])
 		}
 	}
 	t.Logf("compared %d dynamic sort results", len(results))

@@ -136,9 +136,9 @@ again. The supported PostgreSQL Float model also removes the older exact
 arithmetic templates and their repeated decomposition. In the measured
 `String|Float` self-pair, generated `WHERE` text shortened from 6,570 to 1,308
 bytes, with 16 to 4 projection barriers; plain plan inspection showed a
-smaller plan tree. These are SQL-shape observations, not speed claims. Exact
-Float decomposition remains in some structural sort keys. See the [native
-Float lowering record](../../optimizations/023-postgresql-native-float-lowering.md)
+smaller plan tree. These are SQL-shape observations, not speed claims. Dynamic
+JSON sorting now shares its compact exact numeric key with extrema and
+`distinct()`. See the [native Float lowering record](../../optimizations/023-postgresql-native-float-lowering.md)
 and [Float model design](../../design/021-backend-native-float-semantics.md).
 
 ### Fold closed built-in conversions during Build
@@ -244,8 +244,10 @@ documented checked fallback. Int remains exact and mixed Int/Float comparisons
 remain exact over represented values. In the measured JSONB pair shapes,
 `String|Float` self-comparison fell from 6,570 to 1,308 `WHERE` bytes and from
 16 to 4 projection barriers; this is SQL-shape evidence only. Plain plan
-inspection also showed fewer nested-loop nodes, without execution timing. Some
-structural sort keys still use exact Float decomposition. See the
+inspection also showed fewer nested-loop nodes, without execution timing.
+Dynamic JSON sorting now uses the shared compact numeric ordering key instead
+of binary Float decomposition; see the [dynamic sort ordering-key
+record](../../optimizations/048-postgresql-dynamic-sort-order-key.md). See the
 [native Float lowering record](../../optimizations/023-postgresql-native-float-lowering.md)
 and [backend-native Float design](../../design/021-backend-native-float-semantics.md).
 
@@ -487,24 +489,24 @@ mechanism is no longer active. The record retains the historical measurements:
 ### Reuse repeated Float arithmetic operands
 
 This was a SQL-scope cache for the earlier exact Float arithmetic
-decomposition. The native Float model replaced that arithmetic path; exact
-decomposition remains in some structural sort keys. The record retains the
-historical measurements: [Float operand reuse](../../optimizations/008-postgresql-float-decomposition-reuse.md).
+decomposition. The native Float model replaced that arithmetic path, and
+dynamic sorting now uses the compact key shared with extrema and structural
+`distinct()`. The record retains the historical measurements: [Float operand reuse](../../optimizations/008-postgresql-float-decomposition-reuse.md).
 
 ### Sort recoverable dynamic JSON lists
 
 For native JSON `Any` lists, dynamic sorting can consume the original array
 after checking that the receiver is an array, instead of rebuilding a
 comparison document. JSONB keeps comparison-document normalization when
-numeric subtype restoration requires it. The dynamic Float key is projected
-inside the item query; zero uses an exact numeric zero key without the shared
-Float decomposition. The homogeneous schema-resolved fast path and global
-Float arithmetic lowering are unchanged. Stable ordering, invalid-family
-checks, and representation recovery remain in place. The combined candidate
-was measured on fixed JSON/JSONB fixtures; its result is workload-specific and
-does not promise lower execution time for every shape. See the
-[dynamic JSON sort measurements](../../optimizations/011-postgresql-dynamic-json-sort.md)
-for controls, ranges, and limits.
+numeric subtype restoration requires it. Dynamic Float keys now use the same
+compact exact numeric ordering key as extrema and structural `distinct()`;
+the old binary Float decomposition is not used by this sorting path. The
+homogeneous schema-resolved fast path and Float arithmetic lowering are
+unchanged. Stable ordering, invalid-family checks, and representation recovery
+remain in place. SQL-shape evidence for the shared key is in the
+[dynamic sort ordering-key record](../../optimizations/048-postgresql-dynamic-sort-order-key.md);
+the earlier [dynamic JSON sort measurements](../../optimizations/011-postgresql-dynamic-json-sort.md)
+cover the separate array-gating and comparison-document changes.
 
 ### Prune scalar leaves during canonical JSON serialization
 

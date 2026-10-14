@@ -107,7 +107,7 @@ func TestPostgreSQLDirectRelationAverageMatchesLocal(t *testing.T) {
 					labels = append(labels, fmt.Sprintf("%s row%d", source, id))
 				}
 			}
-			runAverageScript(t, ctx, container, script.String(), expected, labels)
+			runSQLBooleanParityScript(t, ctx, container, script.String(), expected, labels)
 		})
 	}
 }
@@ -171,7 +171,7 @@ func TestPostgreSQLNestedRelationAverageKeepsCaptureScope(t *testing.T) {
 		expected = append(expected, got)
 		labels = append(labels, source)
 	}
-	runAverageScript(t, ctx, container, script.String(), expected, labels)
+	runSQLBooleanParityScript(t, ctx, container, script.String(), expected, labels)
 }
 
 func TestPostgreSQLRelationAverageKeepsAncestorState(t *testing.T) {
@@ -249,16 +249,16 @@ func TestPostgreSQLRelationAverageKeepsAncestorState(t *testing.T) {
 			labels = append(labels, fmt.Sprintf("%s row%d", source, id))
 		}
 	}
-	runAverageScript(t, ctx, container, script.String(), expected, labels)
+	runSQLBooleanParityScript(t, ctx, container, script.String(), expected, labels)
 }
 
-func runAverageScript(t *testing.T, ctx context.Context, container, script string, expected []bool, labels []string) {
+func runSQLBooleanParityScript(t *testing.T, ctx context.Context, container, script string, expected []bool, labels []string) {
 	t.Helper()
 	command := exec.CommandContext(ctx, "docker", "exec", "-i", container, "psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-U", "postgres")
 	command.Stdin = strings.NewReader(script)
 	output, err := command.CombinedOutput()
 	if err != nil {
-		t.Fatalf("relation average failed: %v\n%s", err, output)
+		t.Fatalf("SQL parity fixture failed: %v\n%s", err, output)
 	}
 	results := strings.Fields(string(output))
 	if len(results) != len(expected) {

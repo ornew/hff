@@ -1,33 +1,6 @@
 package sql
 
-import (
-	"strconv"
-
-	"github.com/ornew/hff"
-)
-
-// binaryNumeric evaluates significand*2^power without decimal rounding. Integer
-// powers of five and decimal placement also cover the smallest subnormal.
-func (b *builder) binaryNumeric(significand, power string) string {
-	parts, integer := b.nextAlias(), b.nextAlias()
-	p, digits := parts+".power", integer+".digits"
-	decimal := "CASE WHEN " + p + ">=0 THEN " + digits + " ELSE CASE WHEN length(" + digits + ")<=-" + p + " THEN '0.'||repeat('0',-" + p + "-length(" + digits + "))||" + digits + " ELSE left(" + digits + ",length(" + digits + ")+" + p + ")||'.'||substr(" + digits + ",length(" + digits + ")+" + p + "+1) END END"
-	return "(SELECT (" + decimal + ")::numeric FROM LATERAL (SELECT " + power + " AS power," + significand + " AS significand OFFSET 0) AS " + parts + " CROSS JOIN LATERAL (SELECT trunc(CASE WHEN " + p + ">=0 THEN " + parts + ".significand*power(2::numeric," + p + ") ELSE " + parts + ".significand*power(5::numeric,-" + p + ") END)::text AS digits OFFSET 0) AS " + integer + ")"
-}
-
-func (b *builder) floatNumeric(value string) string {
-	bits := b.nextAlias()
-	bytes := bits + ".bytes"
-	e := "(get_byte(" + bytes + ",0)%128*16+get_byte(" + bytes + ",1)/16)"
-	m := "(get_byte(" + bytes + ",1)%16)::numeric*281474976710656"
-	for i, weight := range []string{"1099511627776", "4294967296", "16777216", "65536", "256", "1"} {
-		m += "+get_byte(" + bytes + "," + strconv.Itoa(2+i) + ")::numeric*" + weight
-	}
-	power := "(CASE WHEN " + e + "=0 THEN -1074 ELSE " + e + "-1075 END)"
-	significand := "(" + m + "+CASE WHEN " + e + "=0 THEN 0 ELSE 4503599627370496 END)"
-	exact := b.binaryNumeric(significand, power)
-	return "(SELECT (CASE WHEN get_byte(" + bytes + ",0)>=128 THEN -1 ELSE 1 END)*" + exact + " FROM LATERAL (SELECT float8send(" + value + ") AS bytes OFFSET 0) AS " + bits + ")"
-}
+import "github.com/ornew/hff"
 
 // floatOperands shares native Float operands within the current projection
 // scope. Presence remains owned by each operation; no exact decomposition is
