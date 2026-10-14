@@ -904,8 +904,9 @@ and propagates through the ordinary HFF evaluation rules.
 For schema-known JSON objects, the backend supports `size()`, `has(key)`,
 `get(key)`, `keys()`, `values()`, and `items()`. Enumeration orders keys with
 PostgreSQL's `C` collation. For schema-known JSON lists, it supports `size()`,
-`count()`, `sum()`, `avg()`, `filter(predicate)`, `has(index)`, `contains()`, `unique()`,
-`sort()`, `concat(list)`, `any()`, `all()`, `map()`, and `flatmap()` when the
+`count()`, `sum()`, `avg()`, `min()`, `max()`, `filter(predicate)`,
+`has(index)`, `contains()`, `unique()`, `sort()`, `concat(list)`, `any()`,
+`all()`, `map()`, and `flatmap()` when the
 callback and resulting values can be represented by the binding. `filter()`
 preserves JSON list order and does not need a separate order mapping.
 `contains()` requires every supplied needle to be present; a null
@@ -972,9 +973,46 @@ Intermediate overflow, cancellation, rounding, and zero sign can differ from
 Local's list-order Float addition. Relation `avg()` supports numeric callback
 projections when bound values preserve their numeric subtypes; it does not
 require unique relation ordering unless a nested operation observes order.
-Native scalar-column `avg()` is unsupported. `Build` rejects list `min()` and
-`max()`; those methods are implemented by Local. See
+Native scalar-column `avg()` is unsupported. See
 the [collection guide](../../guides/collections.md#averaging-numeric-values).
+
+### Numeric list extrema
+
+Schema-known JSON/JSONB lists support `min()` and `max()` over Int, Float, and
+mixed Int/Float values, with or without a numeric callback projection. `Any`
+elements and dynamic callback results are supported when each runtime numeric
+subtype can be recovered. JSONB needs version-1 numeric type metadata when
+storage loses the Int/Float distinction; `Build` rejects bindings that cannot
+preserve the required numeric type. At runtime, a nonnumeric value in an `Any`
+list or callback result makes the result null. Null and guarded no-value
+results are skipped, and empty or all-skipped lists return null. PostgreSQL
+orders typed numeric values with the source ordinal as a tie-breaker and
+selects the first row instead of applying a plain `MIN`/`MAX` aggregate. This
+returns the selected original value and subtype and keeps the first value on
+an equal comparison. Dynamic mixed-number ordering compares the represented
+values exactly, including integer-valued Floats, rather than rounding an Int
+through Float first.
+
+For example, with `scores` bound as `List<Int|Float|null>`, `values` as
+`List<Any>`, and `items` as `List<Struct{price:Int|Float|null}>`:
+
+```hff
+scores:min=5
+scores:max=7.5
+values:min=1
+items:min(item=>item.price!)=1
+items:max(item=>item.price!)=7.5
+```
+
+Relation bindings also support `min()` and `max()` through numeric callback
+projections. A statically Int-only or null-only projection does not require a
+unique relation order. Float and mixed Int/Float projections require unique
+ordering because equal values can retain distinct representations such as
+signed zero or different numeric subtypes. Float extrema follow the existing
+PostgreSQL Float profile: PostgreSQL 16 or later and `extra_float_digits > 0`
+are required for Float processing through JSON, and HFF does not change these
+settings. This adds no representation metadata beyond JSONB's existing
+numeric type metadata.
 
 ### Containment for simple JSONB filters
 

@@ -257,6 +257,17 @@ operation observes order. For example, an unordered relation can use
 `items:avg(item=>item.price)`. Native scalar-column `avg()` remains
 unsupported.
 
+`min()` and `max()` also support numeric relation callback projections. They
+skip null and guarded no-value results, return null for empty or all-skipped
+relations or a runtime nonnumeric result, and preserve the selected original
+value and subtype. Equal values select the first item. An Int-only or
+null-only projection can be evaluated without `WithUniqueOrder`, since ties
+have the same observable numeric value and subtype. Float or mixed Int/Float
+projections require `WithUniqueOrder` so signed-zero and subtype ties have a
+defined first item. In the earlier `order_items` example,
+`items:min(item=>item.price)` is valid without relation ordering because
+`price` is Int.
+
 When the callback is composed of direct native scalar fields, literals, and
 Boolean `AND`/`OR`/`NOT`, eligible scalar predicates can be lowered directly
 inside the correlated subquery. For the earlier filter

@@ -452,8 +452,9 @@ guards and typed indexing. Dynamic operations require schema candidates and
 stored representations that preserve the distinctions their semantics observe;
 operations outside that supported subset remain unsupported. JSON list/object
 structural equality, list `contains()`, `unique()`, `sort()`, `concat(list)`,
-`count()`, `filter(predicate)`, `sum()`, `avg()`, and `any()`/`all()` are available for
-schema-known values when their required capabilities are enabled. JSON/JSONB
+`count()`, `filter(predicate)`, `sum()`, `avg()`, `min()`, `max()`, and
+`any()`/`all()` are available for schema-known values when their required
+capabilities are enabled. JSON/JSONB
 no-argument and callback `sum()` support recoverable Int, Float, and mixed
 Int/Float contributions, including `Any` lists and callback results when
 runtime numeric subtypes can be recovered. JSONB needs version-1 numeric type
@@ -470,7 +471,22 @@ rounding, and zero sign can differ from Local's list-order Float accumulation.
 Relation `avg()` supports numeric callback projections when bound values
 preserve their numeric subtypes. It does not require unique relation ordering
 unless a nested operation observes order. Native scalar-column `avg()` is
-unsupported. PostgreSQL `Build` currently rejects list `min()` and `max()`.
+unsupported. JSON/JSONB lists also support `min()` and `max()` when numeric
+subtypes can be recovered, including dynamic `Any` values and callback
+projections. JSONB needs version-1 numeric type metadata when storage loses the
+Int/Float distinction. Null and guarded no-value contributions are skipped;
+runtime nonnumeric values, empty lists, and all-skipped lists return null.
+PostgreSQL orders typed numeric values with the input ordinal as a tie-breaker
+and selects the original value, preserving subtype and keeping the first value
+on ties. Mixed numeric ordering compares represented values exactly, including
+integer-valued Floats. Relation bindings support numeric callback projections.
+An Int-only or null-only projection does not need unique relation ordering;
+Float or mixed Int/Float projections do, because equal values can retain
+different representations. The query Profile reports Float requirements;
+PostgreSQL 16 or later and
+`extra_float_digits > 0` are required when processing Float values through
+JSON. HFF does not set these session settings. JSON Float decoding and JSONB
+metadata rules remain unchanged.
 The query Profile's `float.aggregation` detail describes the aggregate model
 and its session requirement.
 `sort()` supports recoverable dynamic `Any` and list-union values; see the JSON

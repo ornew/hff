@@ -46,6 +46,7 @@ func sqlProfileConfig(dialect Dialect) (hff.ProfileConfig, error) {
 			{Name: "float.rounding", Value: "native PostgreSQL round, ceil and floor; Float round uses the backend midpoint rule"},
 			{Name: "float.aggregation", Value: "Float sum and average convert each finite contribution through round-trip Float text to numeric (requires extra_float_digits>0), aggregate with PostgreSQL SUM/AVG(numeric), then validate and convert the final result to double precision; intermediate overflow, cancellation, result rounding, and zero sign can differ from local list-order addition"},
 			{Name: "float.format", Value: "native PostgreSQL shortest-precise Float text with extra_float_digits>0; JSON retains a decimal/exponent Float marker and signed zero is preserved"},
+			{Name: "number.extrema", Value: "numeric min/max select the original value and subtype with the first source value winning ties; mixed Int/Float ordering does not round Ints; relation Float or mixed projections require unique ordering"},
 			{Name: "execution", Value: "caller owns database execution, input/schema validity, and database timeout configuration"},
 			{Name: "limits", Value: "translation cannot enforce HFF step, generated-value, or JSON-depth budgets in the database"},
 			{Name: "evaluation.order", Value: "SQL preserves supported expression results; database planning may reorder work and does not guarantee HFF evaluation steps"},
@@ -86,7 +87,7 @@ func profileSQLMethod(id string) bool {
 	switch id {
 	case "string.duration", "duration.hours", "duration.minutes", "duration.seconds", "duration.milliseconds", "duration.microseconds", "duration.nanoseconds", "string.timestamp", "timestamp.year", "timestamp.month", "timestamp.dayofmonth", "timestamp.dayofyear", "timestamp.hours", "timestamp.minutes", "timestamp.seconds", "timestamp.milliseconds", "timestamp.before", "timestamp.after", "timestamp.add", "any.type", "any.json", "any.string", "any.in", "any.exists",
 		"bytes.len", "bytes.base64", "bytes.base64r", "string.frombase64", "string.frombase64r", "number.round", "number.ceil", "number.floor", "bool.and", "bool.or", "bool.not", "string.bool", "string.number", "string.fromjson", "string.matches", "string.lower", "string.upper", "string.len", "string.contains", "string.startswith", "string.endswith", "string.concat",
-		"list.size", "list.count", "list.filter", "list.sum", "list.avg", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr",
+		"list.size", "list.count", "list.filter", "list.sum", "list.avg", "list.min", "list.max", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "list.any", "list.all", "list.map", "list.flatmap", "list.foldl", "list.foldr",
 		"object.size", "object.has", "object.get", "object.keys", "object.values", "object.items":
 		return true
 	}

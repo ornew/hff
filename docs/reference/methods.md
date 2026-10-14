@@ -156,8 +156,14 @@ Float values are compared exactly; the selected original value and subtype are
 returned (the callback result in projected forms), with the first value winning
 ties. A null receiver yields null. Their zero-argument forms require
 `method:list.min` and `method:list.max` respectively; callback forms also
-require `Callbacks`. PostgreSQL `Build` currently rejects `min()` and `max()`;
-the Local backend implements them.
+require `Callbacks`. Local supports both methods. PostgreSQL supports JSON/JSONB
+lists when numeric subtypes are recoverable, including `Any` values whose
+numeric subtype can be recovered at runtime. JSONB requires version-1 numeric
+type metadata when storage loses the Int/Float distinction. PostgreSQL relation
+bindings support numeric callback projections: Int-only or null-only results
+do not require unique relation order, while Float or mixed results do.
+PostgreSQL `Build` can reject a JSON or relation binding when the required
+representation or ordering is unavailable.
 See [list rules](../../spec/methods.md#lists) and the
 [callback guide](../guides/callbacks.md).
 

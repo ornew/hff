@@ -198,6 +198,13 @@ returned with its original numeric subtype (the numeric callback result when a
 projection callback is used), and the first value wins a tie. A null receiver
 yields null. The zero-argument forms require `method:list.min`
 and `method:list.max` respectively; callback forms also require `Callbacks`.
+PostgreSQL JSON/JSONB lists support these methods when stored values and
+callback results retain recoverable numeric subtypes, including dynamic values
+whose subtype can be recovered. JSONB requires version-1 numeric type metadata
+when storage loses the Int/Float distinction. Bound relations support numeric
+callback projections; Int-only or null-only projections do not require a
+unique relation order, while Float or mixed projections do because ties can
+retain distinct representations.
 `has()` supports the same negative indices as element access. `unique()` returns
 whether every element is distinct using structural equality. `has()` returns
 false for an out-of-range integer-valued index, and null for a non-integer index. `sort()` is stable

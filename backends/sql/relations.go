@@ -329,6 +329,10 @@ func (b *builder) checkRelationConsumer(n hff.Node, parent hff.Node, index int, 
 				if !canonicalScalarSort(consumer) {
 					return b.failure(n, "stable sort requires relation ordering when equal values can retain distinct representations")
 				}
+			case "min", "max":
+				if !canonicalScalarExtreme(consumer) {
+					return b.failure(n, "numeric extreme requires relation ordering when equal values can retain distinct representations")
+				}
 			default:
 				return b.failure(n, "relation requires an explicitly unique order for this operation")
 			}
@@ -424,6 +428,8 @@ func observesRelationContents(parent hff.Node, index int) bool {
 			return false
 		case "sort":
 			return !canonicalScalarSort(parent)
+		case "min", "max":
+			return !canonicalScalarExtreme(parent)
 		}
 	}
 	return true
@@ -443,6 +449,17 @@ func canonicalScalarSort(n hff.Node) bool {
 	kind, ok := jsonKind(element)
 	return ok && (kind == hff.IntType || kind == hff.StringType)
 }
+
+// Int extrema have no observable representation difference on numeric ties.
+// Float signed zeros and mixed Int/Float ties retain the first source value.
+func canonicalScalarExtreme(n hff.Node) bool {
+	method, ok := n.Method()
+	if !ok || method.Name() != "min" && method.Name() != "max" {
+		return false
+	}
+	kind, ok := jsonKind(n.Type())
+	return ok && (kind == hff.IntType || kind == hff.NullType)
+}
 func orderBlindConsumer(parent hff.Node, index int) bool {
 	switch parent.Kind() {
 	case hff.BoolNode, hff.NotNode, hff.AndNode, hff.OrNode, hff.NullTestNode:
@@ -457,6 +474,8 @@ func orderBlindConsumer(parent hff.Node, index int) bool {
 		return true
 	case "sort":
 		return canonicalScalarSort(parent)
+	case "min", "max":
+		return canonicalScalarExtreme(parent)
 	}
 	return false
 }

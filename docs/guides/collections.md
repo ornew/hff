@@ -97,7 +97,7 @@ argument.
 
 ## Selecting a numeric extreme
 
-Local `min()` and `max()` select a numeric value directly or use a callback to
+`min()` and `max()` select a numeric value directly or use a callback to
 project each element to a number:
 
 ```hff
@@ -113,8 +113,35 @@ subtype. A nonnumeric callback result makes the whole operation null. Empty or
 all-skipped lists also return null. Mixed Int and Float values are compared
 without pre-rounding. The first value wins a tie. A null receiver returns null.
 
-PostgreSQL `Build` currently rejects `min()` and `max()`; these examples are
-for the Local backend.
+PostgreSQL supports these methods for JSON/JSONB lists when stored values and
+callback results retain recoverable numeric subtypes. For example, with
+`scores` bound as `List<Int|Float|null>` and `items` as
+`List<Struct{reading:Int|Float|null}>`:
+
+```hff
+scores:min=5
+scores:max=7.5
+items:min(item=>item.reading!)=5
+items:max(item=>item.reading!)=7.5
+```
+
+JSONB needs version-1 numeric type metadata when storage loses the Int/Float
+distinction. `Any` lists and dynamic callback results are supported when their
+runtime numeric subtype can be recovered. A nonnumeric runtime element or
+projection returns null; null and guarded no-value results are skipped. The
+first value wins an equal comparison, so ties retain both the original value
+and its numeric subtype.
+
+Bound relations also support numeric extrema through callbacks. For example,
+`events` can be a relation whose items expose an integer `priority`:
+
+```hff
+events:min(event=>event.priority)=2
+```
+
+An Int-only or null-only relation projection does not need a unique order.
+Float or mixed Int/Float projections require a unique order because equal
+values can retain different signed-zero or subtype representations.
 
 ## Averaging numeric values
 
