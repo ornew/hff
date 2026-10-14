@@ -28,10 +28,30 @@ func TestPostgreSQLStrictJSONParsing(t *testing.T) {
 	defer cancel()
 	stringsIn := []string{`null`, `true`, `false`, `1`, `1.0`, `-0`, `-0.0`, `1e0`, `-1e-9999999999999999999`, `1e999999`, `9223372036854775807`, `9223372036854775808`, `-9223372036854775809`, `1e-400`, `2.4703282292062327e-324`, `2.4703282292062328e-324`, `"a"`, `"1e-foo"`, `"e-"`, `{"text":"1e-foo"}`, `["1e-foo",true,null]`, `"\ud800\udc00"`, `"\ud800"`, `"\udc00"`, `"\ud800a"`, `"\x41"`, `"bad`, `[1,1.0]`, `[1,9223372036854775808]`, `{"a":1,"a":2}`, `{"a":1,"\u0061":2}`, `{"x":{"a":1,"a":2}}`, `{"a":1}`, `{"a":1e999999}`, `{"a":-1e-999999}`, `{"a":[1,1.0,null]}`, `[]`, `{}`, `1 2`, `01`, `NaN`, `Infinity`, ``, " \n true \t", `[1,]`, `{"a":}`, `{"a":null}`, `["1","bad","null"]`, `["{\"x\":1}","{\"x\":9223372036854775808}"]`, `{"a":1,"bad":{"n":9223372036854775808}}`}
 	values := []hff.Value{hff.Null(), hff.Int(1), hff.Bool(true), hff.List(), hff.Object(nil)}
+	stringsIn = append(stringsIn,
+		`{"a":{"b":1}}`, `{"a":{"b":null}}`, `{"a":{"b":1.0}}`,
+		`["{\"a\":1}","{\"a\":2}"]`, `{"a":9223372036854775807}`,
+		`{"a":-0.0}`, `{"a":5e-324}`, `{"a":1,"invalid":1e400}`,
+	)
 	for _, s := range stringsIn {
 		values = append(values, hff.String(s))
 	}
 	sources := []string{`data:fromjson=null`, `data:fromjson:type="number"`, `data:fromjson:[int]=1`, `data:fromjson:[float]=1`, `data:fromjson:json="null"`, `data:fromjson:json=data`, `data:fromjson:[float]:string="-0.0"`, `data!:fromjson:exists`, `data:fromjson:[object]:has("a")`, `data:fromjson:[list]:map(x=>x):json="[1,1.0]"`, `data:fromjson:[object].a`, `!data:fromjson`, `data:fromjson=("bad":fromjson)`, `data:fromjson=("1e999999":fromjson)`, `data:fromjson=(null:fromjson).a`, `data:fromjson=(null:fromjson)[0]`, `data:fromjson=null.a`, `data:fromjson=null[0]`, `data:fromjson=(null!).a`, `data:fromjson:type=(null:fromjson).a:type`, `data:fromjson:type=(null!).a:type`, `({"a":data}).a=data`, `[{"a":data}][0].a=data`, `data:fromjson:exists | data:fromjson=null`, `data:fromjson!:exists | data:fromjson=null`, `data!:fromjson:exists | data:fromjson=null`, `data:fromjson:type=data:fromjson:type`, `data:fromjson:type=data!:fromjson:type`, `data:fromjson:[list[string]]:any(data=>data:fromjson:type=data:fromjson:type)`}
+	sources = append(sources,
+		`data:fromjson.a=1 data:fromjson.a<2`,
+		`data:fromjson.a=1 | data:fromjson.a=2`,
+		`data:fromjson.a:type=data:fromjson.a:type`,
+		`data:fromjson.a:json=data:fromjson.a:json`,
+		`data:fromjson.a.b=1 data:fromjson.a.b<2`,
+		`data!:fromjson.a=1 | data:fromjson.a=null`,
+		`data:fromjson!.a=1 | data:fromjson.a=null`,
+		`data:fromjson.a:[int]=1 data:fromjson.a:[float]=1.0`,
+		`data:fromjson.a=(null!).a | data:fromjson.a:exists`,
+		`data:fromjson:[list[string]]:any(data=>data:fromjson.a=1 data:fromjson.a<2)`,
+		`data:fromjson:[list[string]]:all(x=>x:fromjson.a=1 | x:fromjson.a=2)`,
+		`data:fromjson:[list[string]]:any(x=>x:fromjson.a=1 data:fromjson:[list[string]]:any(x=>x:fromjson.a=2))`,
+		`data:fromjson:[list[string]]:any(x=>x:fromjson.a=1 x:fromjson.a:exists) data:fromjson.a=null`,
+	)
 	var script strings.Builder
 	var expected []bool
 	var labels []string

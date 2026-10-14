@@ -106,6 +106,15 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 	if err != nil {
 		return expression{}, err
 	}
+	// Parsed JSON has a stable validated alias even when separate AST nodes
+	// describe the same call. Share its decoded carrier and literal fields
+	// only after lowering establishes their type, format, and presence.
+	if parsedKey, parsed := b.shareableParsedValue(n, value); parsed {
+		key, share = parsedKey, true
+		if cached, exists := b.sharedPaths[key]; exists {
+			return cached, nil
+		}
+	}
 	// A typed parameter reference is already an immutable SQL value. Keep it
 	// bound directly; projecting it adds a relation without preventing any
 	// duplicated computation. Identity aliases reuse their surviving operand's

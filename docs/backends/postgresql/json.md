@@ -644,6 +644,20 @@ unused nested fields. See the
 [measured parsing and validation comparison](../../optimizations/004-postgresql-json-validation-reuse.md)
 for the workload, generated-SQL tradeoffs, and sample limits.
 
+Repeated unguarded literal-field chains from the same parsed document can also
+share field extraction and decoding within that scope. For example, the two
+uses of `data:fromjson.a` here can share the parsed carrier and selected field:
+
+```hff
+data:fromjson.a=1 data:fromjson.a<2
+```
+
+The full source document is still validated. Guarded or type-guarded roots,
+indexing, extensions, arbitrary computed expressions, and separate callback
+scopes do not inherit this reuse. See
+[parsed JSON field reuse](../../optimizations/036-postgresql-reuse-parsed-json-fields.md) for the cache
+boundaries and SQL-shape evidence.
+
 ### Convert strings with `bool()` and `number()`
 
 `bool()` accepts exactly lowercase `true` or `false`; it is case-sensitive and

@@ -153,11 +153,24 @@ func (b *builder) jsonPath(n hff.Node) (expression, bool, error) {
 		return expression{}, true, b.failure(n, "JSON field access requires a JSON object")
 	}
 	name, _ := n.Field()
+	stored := b.jsonStoredType(n)
+	cacheKey := ""
+	if parsedJSONRoot(n) {
+		// The validated parent's alias identifies its source binding and SQL
+		// scope. Preserve presence and recovered storage type independently.
+		cacheKey = "parsed-json-field:" + pathKey([]string{value.code, value.present, string(format), name, n.Type().Key(), stored.Key(), b.pathOrderClass(n)})
+		if cached, exists := b.sharedPaths[cacheKey]; exists {
+			return cached, true, nil
+		}
+	}
 	key, err := b.parameter(n, hff.String(name))
 	if err != nil {
 		return expression{}, true, err
 	}
-	result, err := b.jsonDecode(n, "("+value.code+" -> "+key.code+")", format, b.jsonStoredType(n), value.present)
+	result, err := b.jsonDecode(n, "("+value.code+" -> "+key.code+")", format, stored, value.present)
+	if err == nil && cacheKey != "" {
+		b.rememberPath(cacheKey, result)
+	}
 	return result, true, err
 }
 

@@ -441,6 +441,16 @@ validation still runs before the value is exposed. See the
 [measured parsing and validation comparison](../../optimizations/004-postgresql-json-validation-reuse.md)
 for the workload, generated-SQL tradeoffs, and sample limits.
 
+Within a projection scope, repeated unguarded literal-field chains rooted at
+the same built-in `fromjson()` result can also share selected extraction and
+decode work. Reuse is keyed by the parsed expression, presence, format, types,
+ordering class, and field path. Full-document validation still occurs.
+Guarded, indexed, extension, computed-root, and cross-callback paths retain
+their ordinary lowering. See the
+[parsed JSON field reuse comparison](../../optimizations/036-postgresql-reuse-parsed-json-fields.md); the
+measured `Function Scan` counts did not change, and no execution timing was
+collected.
+
 ### Reuse constructed primitive JSON in callbacks
 
 For `map()` and `foldl()`/`foldr()`, a newly computed native SQL value can be
