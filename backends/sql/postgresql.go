@@ -39,6 +39,7 @@ type builder struct {
 	orderBlind            map[hff.Node]bool
 	literalConversions    map[hff.Node]literalConversion
 	identityAliases       map[hff.Node]bool
+	operationKeys         map[hff.Node]string
 }
 
 // present tracks HFF's internal no-value separately from SQL NULL.
@@ -103,9 +104,14 @@ func (b *builder) expression(n hff.Node) (expression, error) {
 			return value, nil
 		}
 	}
+	delete(b.operationKeys, n)
+	delete(b.identityAliases, n)
 	value, err := b.lower(n)
 	if err != nil {
 		return expression{}, err
+	}
+	if operationKey, reusable := b.operationKeys[n]; reusable {
+		key, share = operationKey, true
 	}
 	// Parsed JSON has a stable validated alias even when separate AST nodes
 	// describe the same call. Share its decoded carrier and literal fields
@@ -384,6 +390,7 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		return value, nil
 	case hff.NegateNode:
 		child, _ := n.Child(0)
+		argumentsStart := len(b.args)
 		value, err := b.expression(child)
 		if err != nil {
 			return expression{}, err
@@ -394,6 +401,10 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		case hff.NullType:
 			return value, nil
 		case hff.IntType:
+			if cached, reused := b.reuseNativeOperation(n, "int-negate", argumentsStart,
+				operationOperand{child, value, len(b.args) - argumentsStart}); reused {
+				return cached, nil
+			}
 			value.code = "(CASE WHEN " + value.code + " = '-9223372036854775808'::bigint THEN NULL ELSE -(" + value.code + ") END)"
 		case hff.FloatType:
 			value.code = "(-(" + value.code + "))"
@@ -600,10 +611,12 @@ func (b *builder) binary(n hff.Node) (expression, error) {
 	}
 	l, _ := n.Child(0)
 	r, _ := n.Child(1)
+	argumentsStart := len(b.args)
 	left, err := b.expression(l)
 	if err != nil {
 		return expression{}, err
 	}
+	rightStart := len(b.args)
 	right, err := b.expression(r)
 	if err != nil {
 		return expression{}, err
@@ -612,6 +625,13 @@ func (b *builder) binary(n hff.Node) (expression, error) {
 		return b.regexCall(n, op, left, right)
 	}
 	if op == hff.Add || op == hff.Subtract || op == hff.Multiply || op == hff.Divide || op == hff.Remainder {
+		if left.kind == hff.IntType && right.kind == hff.IntType {
+			if cached, reused := b.reuseNativeOperation(n, "int-"+string(op), argumentsStart,
+				operationOperand{l, left, rightStart - argumentsStart},
+				operationOperand{r, right, len(b.args) - rightStart}); reused {
+				return cached, nil
+			}
+		}
 		return b.arithmetic(n, left, right, op)
 	}
 	if left.kind == hff.NullType || right.kind == hff.NullType {
@@ -774,6 +794,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 			}
 		}
 	}
+	argumentsStart := len(b.args)
 	values := make([]expression, n.ChildCount())
 	for i := range values {
 		child, _ := n.Child(i)
@@ -784,6 +805,13 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		values[i] = value
 	}
 	receiver := values[0]
+	if receiver.kind == hff.StringType && (name == "lower" || name == "upper") && n.ChildCount() == 1 {
+		receiverNode, _ := n.Child(0)
+		if cached, reused := b.reuseNativeOperation(n, "string-"+name, argumentsStart,
+			operationOperand{receiverNode, receiver, len(b.args) - argumentsStart}); reused {
+			return cached, nil
+		}
+	}
 	if receiver.kind == hff.TimestampType {
 		return b.timestampCall(n, name, values)
 	}

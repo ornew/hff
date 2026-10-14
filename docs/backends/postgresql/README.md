@@ -475,6 +475,15 @@ lowering, as do guard results, JSON, Timestamp, and structured values. See
 [qualified native-column reuse](../../optimizations/039-postgresql-qualified-column-projection-reuse.md)
 for the scope and measured SQL shapes.
 
+Within one existing projection scope, repeated native Int arithmetic and
+built-in String `lower()`/`upper()` operations can reuse a completed result
+when their operation, typed operands, presence, and result type match. Each
+occurrence is still lowered and validated in source order; callback scopes
+remain separate, and custom method translators are never used as constant
+evaluators. See [native operation result
+reuse](../../optimizations/040-postgresql-native-operation-reuse.md) for
+eligibility and SQL-shape evidence.
+
 For explicitly bound scalar-column paths and schema-backed JSON, JSONB, and
 composite values, each projection scope has its own path cache. Repeated
 unguarded schema-known accesses can share projections within that scope,

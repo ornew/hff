@@ -74,6 +74,20 @@ callback parameters or shadowed bindings. The [qualified native-column
 projection record](../../optimizations/039-postgresql-qualified-column-projection-reuse.md)
 reports SQL-shape and plan observations, not execution timings.
 
+### Reuse repeated native operation results
+
+Within one projection scope, repeated native Int arithmetic or negation and
+built-in String `lower()`/`upper()` can reuse a completed result when the
+operation, typed operands, presence, and result type match. Operands are still
+translated and validated in source order. Literal cache hits remove only
+freshly added literal parameters; nonliteral operands must add no new parameters
+for a hit to be reused.
+Callback scopes remain isolated, and custom method implementations are never
+evaluated to form cache keys. See the [native operation
+reuse](../../optimizations/040-postgresql-native-operation-reuse.md) record
+for filters, parity coverage, and SQL-shape measurements; no speed claim
+follows from those measurements.
+
 ### Specialize exact mixed-numeric literal thresholds
 
 For pure filter comparisons between a directly bound Int or Float column and
