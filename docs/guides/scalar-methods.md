@@ -66,6 +66,12 @@ into true. Null or no-value operator operands produce false, while
 boolean semantics on the method result. See the
 [PostgreSQL regex subset](../backends/postgresql/README.md#regular-expressions).
 
+The PostgreSQL backend lowers supported literal regex filters on native
+String columns directly. Callback bodies and nullable value contexts retain
+their usual semantics. See the
+[PostgreSQL SQL-shape notes](../backends/postgresql/optimizations.md#emit-eligible-native-string-method-predicates-directly)
+for exact examples and limits.
+
 ## Base64 and byte values
 
 `string:frombase64()` decodes standard padded base64 into an immutable bytes

@@ -543,8 +543,8 @@ func (b *builder) parameter(n hff.Node, value hff.Value) (expression, error) {
 		kind = hff.FloatType
 	case hff.StringKind:
 		s, _ := value.AsString()
-		if !utf8.ValidString(s) || strings.ContainsRune(s, 0) {
-			return expression{}, b.failure(n, "PostgreSQL text cannot encode invalid UTF-8 or NUL")
+		if err := b.checkTextParameter(n, s); err != nil {
+			return expression{}, err
 		}
 		arg = s
 		typ = "text"
@@ -565,6 +565,15 @@ func (b *builder) parameter(n hff.Node, value hff.Value) (expression, error) {
 	}
 	b.args = append(b.args, arg)
 	return expression{fmt.Sprintf("($%d::%s)", len(b.args), typ), "TRUE", kind}, nil
+}
+
+// Validate text even when a lowering path replaces it with a translated
+// parameter or constant result, so unused source values keep their contract.
+func (b *builder) checkTextParameter(n hff.Node, text string) error {
+	if !utf8.ValidString(text) || strings.ContainsRune(text, 0) {
+		return b.failure(n, "PostgreSQL text cannot encode invalid UTF-8 or NUL")
+	}
+	return nil
 }
 
 func (b *builder) binary(n hff.Node) (expression, error) {

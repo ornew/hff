@@ -50,6 +50,11 @@ func TestPostgreSQLMixedPredicatesMatchLocal(t *testing.T) {
 		`age>18 tags:any(tag=>name:contains(tag))`,
 		`name="Alice" tags:any(tag=>raw:fromjson.active)`,
 		`age>18 !(factor+1.0>2.0|raw:fromjson.active)`,
+		`age>18 name:matches("^A") raw:fromjson.active`,
+		`(name~"A" raw:fromjson.price>10)|(name!~"B" raw:fromjson.active)`,
+		`name!~"[" | raw:fromjson.active`,
+		`tags:any(tag=>name:matches("^A"))`,
+		`tags:any(tag=>!name!:matches("^A"))`,
 	}
 	var script strings.Builder
 	var expected []bool

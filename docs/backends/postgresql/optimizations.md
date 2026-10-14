@@ -283,6 +283,19 @@ shorter and had no `OFFSET 0` barriers, but no plan or execution timing was
 collected. The [native String predicate shape](../../optimizations/015-postgresql-string-predicate-shape.md)
 record gives the exact filters and limits.
 
+For `~`, `!~`, and built-in `matches()` in filter context, a directly bound
+native String column with a literal pattern can use the translated PostgreSQL
+operator directly. The builder binds only the translated pattern and keeps an
+explicit null mask. Dynamic patterns, JSON/computed/guarded receivers, and
+`matches()` in value contexts or callback bodies keep the general lowering.
+An empty-table,
+forced-index diagnostic showed the direct `~` predicate eligible for a
+matching C-collated `pg_trgm` GIN index where the previous `regexp_like()`
+shape was not. This is fixture-specific plan evidence, not a timing or
+automatic-index-use guarantee. See
+[literal regex filter lowering](../../optimizations/037-postgresql-literal-regex-filter.md)
+for exact shapes and null behavior.
+
 ### Emit direct predicates for JSONB String lists
 
 For a directly bound JSONB `List<String>`, `contains()` with one or more

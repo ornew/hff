@@ -96,41 +96,62 @@ func regexContainsAnchor(re *syntax.Regexp) bool {
 	return false
 }
 
+// A malformed pattern evaluates to null, but a valid pattern outside the
+// supported RE2 subset is a Build error. Validate the original spelling even
+// when only its translated value will be bound to a SQL parameter.
+func (b *builder) literalRegexPattern(n hff.Node) (string, bool, error) {
+	if err := checkContext(b.ctx); err != nil {
+		return "", false, err
+	}
+	value, literal := n.Literal()
+	if !literal {
+		return "", false, b.failure(n, "PostgreSQL regex requires a literal pattern")
+	}
+	text, stringPattern := value.AsString()
+	if !stringPattern {
+		return "", false, nil
+	}
+	if err := b.checkTextParameter(n, text); err != nil {
+		return "", false, err
+	}
+	parsed, err := syntax.Parse(text, syntax.Perl)
+	if err != nil {
+		return "", false, nil
+	}
+	translated, err := postgresRegex(parsed)
+	if err != nil {
+		return "", false, b.failure(n, "PostgreSQL regex supports only literal ASCII patterns, absolute anchors, ASCII classes, alternation, and repetition through 255")
+	}
+	return translated, true, nil
+}
+
 func (b *builder) regexCall(n hff.Node, operator hff.Operator, receiver, pattern expression) (expression, error) {
 	if operator == "" && (n.Type().Kind() == hff.NullType || n.Type().Kind() == hff.NeverType) {
 		return expression{"NULL", receiver.present, hff.NullType}, nil
 	}
 	patternNode, _ := n.Child(1)
-	value, literal := patternNode.Literal()
-	if !literal {
+	if _, literal := patternNode.Literal(); !literal {
+		// Preserve the whole-expression diagnostic for dynamic patterns.
 		return expression{}, b.failure(n, "PostgreSQL regex requires a literal pattern")
 	}
-	text, stringPattern := value.AsString()
-	var match string
-	if stringPattern {
-		parsed, err := syntax.Parse(text, syntax.Perl)
+	translated, valid, err := b.literalRegexPattern(patternNode)
+	if err != nil {
+		return expression{}, err
+	}
+	match := "NULL::boolean"
+	if valid {
+		arg, err := b.parameter(patternNode, hff.String(translated))
 		if err != nil {
-			match = "NULL::boolean"
-		} else {
-			translated, err := postgresRegex(parsed)
-			if err != nil {
-				return expression{}, b.failure(patternNode, "PostgreSQL regex supports only literal ASCII patterns, absolute anchors, ASCII classes, alternation, and repetition through 255")
-			}
-			arg, err := b.parameter(patternNode, hff.String(translated))
-			if err != nil {
-				return expression{}, err
-			}
-			input, err := b.stringConversionInput(n, receiver)
-			if err != nil {
-				return expression{}, err
-			}
-			match = "regexp_like(" + input + " COLLATE \"C\"," + arg.code + ",'cs')"
-			if operator == hff.NotMatch {
-				match = "(NOT " + match + ")"
-			}
+			return expression{}, err
 		}
-	} else {
-		match = "NULL::boolean"
+		input, err := b.stringConversionInput(n, receiver)
+		if err != nil {
+			return expression{}, err
+		}
+		match = "regexp_like(" + input + " COLLATE \"C\"," + arg.code + ",'cs')"
+		if operator == hff.NotMatch {
+			match = "(NOT " + match + ")"
+		}
 	}
 	if operator == hff.Match || operator == hff.NotMatch {
 		code := "(CASE WHEN NOT " + receiver.present + " OR " + receiver.code + " IS NULL OR NOT " + pattern.present + " OR " + pattern.code + " IS NULL THEN FALSE ELSE " + match + " END)"

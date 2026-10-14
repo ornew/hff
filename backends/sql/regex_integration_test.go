@@ -46,7 +46,17 @@ func TestPostgreSQLLiteralRegexParity(t *testing.T) {
 		var sources []string
 		for _, pattern := range patterns {
 			quoted, _ := json.Marshal(pattern)
-			for _, expression := range []string{"data~" + string(quoted), "data!~" + string(quoted), "data:matches(" + string(quoted) + ")", "data!:matches(" + string(quoted) + ")", "!data!:matches(" + string(quoted) + ")", "data:matches(" + string(quoted) + "):type=\"null\"", "data!~" + string(quoted) + "=null"} {
+			for _, expression := range []string{
+				"data~" + string(quoted), "data!~" + string(quoted),
+				"data:matches(" + string(quoted) + ")", "data!:matches(" + string(quoted) + ")",
+				"!data!:matches(" + string(quoted) + ")", "data:matches(" + string(quoted) + "):type=\"null\"",
+				"data!~" + string(quoted) + "=null",
+				"!data~" + string(quoted), "!data!~" + string(quoted),
+				"!data:matches(" + string(quoted) + ")",
+				"data~" + string(quoted) + " | data=null",
+				"data~" + string(quoted) + " data~" + string(quoted),
+				"data:matches(" + string(quoted) + "):json=\"null\"",
+			} {
 				// Comparisons cannot chain, so observe nullable regex results
 				// through a parenthesized value expression.
 				if strings.HasSuffix(expression, "=null") {
@@ -55,6 +65,12 @@ func TestPostgreSQLLiteralRegexParity(t *testing.T) {
 				sources = append(sources, expression)
 			}
 		}
+		sources = append(sources,
+			`data~null`, `data!~null`, `data:matches(null)`,
+			`!data~null`, `!data!~null`, `!data:matches(null)`,
+			`data!:matches(null)`, `!data!:matches(null)`,
+			`data:matches(null):type="null"`,
+		)
 		for si, source := range sources {
 			p, err := e.Compile(ctx, source)
 			if err != nil {

@@ -15,11 +15,13 @@ func TestPostgreSQLRegexSubsetIsExplicit(t *testing.T) {
 	ctx := context.Background()
 	for _, pattern := range []string{".", "(?i)A", "(?m)^A", "日", "[^a]", `\bA`, "a{256}", "(?:^A)*", `\x00`} {
 		quoted, _ := json.Marshal(pattern)
-		p := compile(t, "name~"+string(quoted))
-		_, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
-		var detail *hff.Error
-		if !errors.As(err, &detail) || detail.Code != hff.BackendError || detail.Span == nil {
-			t.Fatalf("%q accepted unsupported pattern: %v", pattern, err)
+		for _, source := range []string{"name~" + string(quoted), "name!~" + string(quoted), "name:matches(" + string(quoted) + ")"} {
+			p := compile(t, source)
+			_, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))
+			var detail *hff.Error
+			if !errors.As(err, &detail) || detail.Code != hff.BackendError || detail.Span == nil {
+				t.Fatalf("%s accepted unsupported pattern: %v", source, err)
+			}
 		}
 	}
 	_, err := hffsql.Build(ctx, compile(t, "name~name"), hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings()...))

@@ -52,6 +52,7 @@ func TestDirectScalarWhereKeepsSimpleFiltersIndexable(t *testing.T) {
 		`!name:contains("Ali")`,
 		`age>18 name:startswith("Al")`,
 		`age>18 name:len>=5`,
+		`name~"Alice"`,
 		`name:contains(null)`,
 		`name:contains("Ali",null)`,
 	} {
@@ -76,7 +77,7 @@ func TestDirectScalarWhereKeepsSimpleFiltersIndexable(t *testing.T) {
 			t.Fatalf("predicate lost direct column reference: %s", query.Where())
 		}
 	}
-	for _, source := range []string{`age+1>20`, `name~"Alice"`, `name:contains(name)`} {
+	for _, source := range []string{`age+1>20`, `name!:matches("Alice")`, `name:contains(name)`} {
 		program, err := e.Compile(ctx, source)
 		if err != nil {
 			t.Fatal(source, err)

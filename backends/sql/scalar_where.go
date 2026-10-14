@@ -2,7 +2,6 @@ package sql
 
 import (
 	"strings"
-	"unicode/utf8"
 
 	"github.com/ornew/hff"
 )
@@ -30,6 +29,8 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 	case hff.BinaryNode:
 		op, _ := n.Operator()
 		switch op {
+		case hff.Match, hff.NotMatch:
+			return b.directScalarRegexEligible(n)
 		case hff.Equal, hff.NotEqual, hff.Less, hff.LessEqual, hff.Greater, hff.GreaterEqual:
 		default:
 			return false
@@ -62,6 +63,9 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 		return ok
 	case hff.BoolNode:
 		child, _ := n.Child(0)
+		if b.directScalarRegexEligible(child) {
+			return true
+		}
 		if child.Kind() == hff.CallNode {
 			return b.directScalarInEligible(child) || b.directScalarStringCallEligible(child) ||
 				b.directJSONBContainsEligible(child) || b.directJSONBAnyEligible(child)
@@ -240,6 +244,9 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 	}
 	if n.Kind() == hff.BoolNode {
 		child, _ := n.Child(0)
+		if b.directScalarRegexEligible(child) {
+			return b.directScalarRegexWhere(child)
+		}
 		if child.Kind() == hff.CallNode {
 			if b.directScalarInEligible(child) {
 				return b.directScalarIn(child)
@@ -271,6 +278,9 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 	}
 	left, _ := n.Child(0)
 	right, _ := n.Child(1)
+	if b.directScalarRegexEligible(n) {
+		return b.directScalarRegexWhere(n)
+	}
 	if b.directScalarLengthEligible(left, right) {
 		return b.directScalarLengthComparison(n, left, right)
 	}
@@ -343,8 +353,8 @@ func (b *builder) directScalarStringCall(n hff.Node) (string, error) {
 			continue
 		}
 		str, _ := value.AsString()
-		if !utf8.ValidString(str) || strings.ContainsRune(str, 0) {
-			return "", b.failure(argument, "PostgreSQL text cannot encode invalid UTF-8 or NUL")
+		if err := b.checkTextParameter(argument, str); err != nil {
+			return "", err
 		}
 	}
 	if nullArgument {

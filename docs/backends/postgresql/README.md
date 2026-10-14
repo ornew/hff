@@ -250,6 +250,17 @@ method result. See the
 for examples and the distinction between `matches()` null propagation and
 operator predicate behavior.
 
+In filter context, a directly bound native String column and literal pattern
+can use a shorter predicate form: HFF binds the translated pattern only
+and retains an explicit receiver-null mask. Malformed or null patterns become
+`FALSE` as filters; the literal's UTF-8/NUL contract is still checked before folding.
+Well-formed patterns outside the supported subset still fail `Build` when
+translation is required.
+Dynamic patterns, callback bodies, and guarded, JSON, computed, or value-context
+receivers keep the general lowering. See the
+[PostgreSQL optimization notes](optimizations.md#emit-eligible-native-string-method-predicates-directly)
+for SQL-shape evidence and the fixture-specific index diagnostic.
+
 Numeric `round()`, `ceil()`, and `floor()` are supported and preserve the
 integer or float subtype.
 The generic scalar `in()` method is supported for membership among its
