@@ -11,6 +11,9 @@ func (b *builder) computedJSONDocument(n hff.Node, value expression, stored hff.
 	if err != nil {
 		return "", err
 	}
+	if format == JSON && (b.jsonItemRoles(n) != nil || b.jsonItemsRoles(n) != nil) {
+		return "COALESCE(" + raw + ",'null'::json)", checkContext(b.ctx)
+	}
 	if err := b.checkComparisonDocumentSchema(n, format, stored); err != nil {
 		return "", err
 	}

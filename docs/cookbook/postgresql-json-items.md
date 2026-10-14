@@ -71,5 +71,28 @@ truthiness return false. `unique()` returns a Bool reporting
 whether the list already has no duplicates. `distinct()` instead returns the
 first-occurrence list, so the third query compares equal to the source. Role
 proofs retain type information through duplication but do not imply
-uniqueness. Folds and callback results that mix proven pairs with values whose
-roles cannot be established still use the general representation path.
+uniqueness. Folds or other callback results without a complete pair-role
+invariant retain the general representation path.
+
+Folds can retain the same pair roles when the seed and every possible
+accumulator result maintain one compatible pair or pair-list shape:
+
+```hff
+attachments:items:foldl(null,(acc,pair)=>pair):json=attachments:items[-1]:json
+attachments:items:foldr(null,(pair,acc)=>pair):json=attachments:items[0]:json
+attachments:items:foldl([], (acc,pair)=>acc:concat([pair])):json=attachments:items:json
+attachments:items:foldr([], (pair,acc)=>[pair]:concat(acc)):json=attachments:items:json
+```
+
+For a nonempty map, the first two queries select the last and first pair
+respectively. The latter two build a list of pairs in source key order. On an
+empty list, a fold returns its seed (`null` or `[]` in these examples). An
+ordinary null result becomes the next accumulator; it does not skip an item.
+A reached guarded no-value still propagates through the entire fold. `concat()`
+keeps pair-list roles when both operands have compatible provenance; an empty
+list or null operand may be neutral for this proof only. A null concat operand
+still makes the runtime result null. If the seed, callback result, or combined
+list can originate from an ambiguous schema such as String versus Duration,
+the backend retains general lowering and may reject operations that require the
+unrecoverable tagged identity. Pair-role provenance never changes the public
+type or capability contract.

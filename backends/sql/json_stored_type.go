@@ -220,7 +220,7 @@ func (b *builder) jsonCallbackStoredType(callback hff.Node, types []hff.Type, ro
 
 // Temporarily recover types and roles by lexical binding ID. Captured outer
 // parameters survive; same-name inner parameters never acquire their roles.
-func (b *builder) jsonCallbackParameters(callback hff.Node, types []hff.Type, roles []*jsonItemRoles) func() {
+func (b *builder) jsonCallbackParameters(callback hff.Node, types []hff.Type, roles []*jsonItemRoles, lists ...[]*jsonItemRoles) func() {
 	outerMemo := b.itemRoleMemo
 	b.itemRoleMemo = nil
 	parameters, _ := callback.Parameters()
@@ -233,7 +233,10 @@ func (b *builder) jsonCallbackParameters(callback hff.Node, types []hff.Type, ro
 		old[i], existed[i] = b.parameters[p.ID()]
 		value := old[i]
 		value.typ = types[i]
-		value.itemRoles = nil
+		value.itemRoles, value.itemListRoles = nil, nil
+		if len(lists) > 0 && i < len(lists[0]) {
+			value.itemListRoles = lists[0][i]
+		}
 		if i < len(roles) {
 			value.itemRoles = roles[i]
 		}

@@ -278,3 +278,112 @@ func TestJSONItemRoleAnalysisHandlesChainedMaps(t *testing.T) {
 		}
 	}
 }
+
+func itemFoldSources(tc itemRoleFixture) []string {
+	sources := []string{
+		`labels:items:foldl(null,(a,p)=>p):json!:exists`,
+		`labels:items:foldr(null,(p,a)=>p):json=first_json`,
+		`labels:items:foldr(null,(p,a)=>p)[0]="app"`,
+		`labels:items:foldl(other:items[0],(a,p)=>a)=other:items[0]`,
+		`labels:items:foldl(null,(a,p)=>other:items:find(q=>q[0]=p[0])):json!:exists`,
+		`labels:items:foldl(other:items[0],(a,p)=>other:items:foldr(a,(p,a)=>a)):json!:exists`,
+		`labels:items:flatmap(p=>[p,null]):foldl(null,(a,p)=>p!):json!:exists`,
+		`labels!:items:foldl(null,(a,p)=>p):json!:exists`,
+		`labels:items:foldl([], (a,p)=>a:concat([p])):json=items_json`,
+		`labels:items:foldr([], (p,a)=>[p]:concat(a)):json=items_json`,
+		`labels:items:foldl(other:items,(a,p)=>a):json=other:items:json`,
+		`labels:items:foldl([], (a,p)=>[p]):unique`,
+		`labels:items:foldl([], (a,p)=>[p,null]):unique`,
+		`labels:items:foldl([], (a,p)=>a:concat([p,p])):distinct:json=items_json`,
+		`labels:items:foldr([], (p,a)=>[p,p]:concat(a)):distinct:json=items_json`,
+		`labels:items:flatmap(p=>[p,null]):foldl([], (a,p)=>a:concat([p!])):json!:exists`,
+		`[]:foldl(labels:items,(a,p)=>a):json=items_json`,
+		`labels:items:foldl(labels:items,(a,p)=>null):json!:exists`,
+	}
+	if !tc.mixed {
+		sources = append(sources,
+			`labels:items:foldl(null,(a,p)=>p)[1]:type="`+tc.tag+`"`,
+			`labels:items:foldl([], (a,p)=>a:concat([p])):map(q=>q[1]):json=values_json`)
+	}
+	return sources
+}
+
+func TestJSONItemFoldQueriesBuild(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range itemRoleFixtures() {
+		e, err := engine.New(engine.WithSchema(itemRoleSchema(tc)), engine.WithCapabilities(capabilities.Standard()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, source := range itemFoldSources(tc) {
+			p, err := e.Compile(ctx, source)
+			if err != nil {
+				t.Fatal(tc.name, source, err)
+			}
+			for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
+				_, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(itemRoleBindings(format, tc.metadata)...))
+				if err != nil {
+					t.Error(tc.name, format, source, err)
+				}
+			}
+		}
+	}
+}
+
+func TestJSONItemRolesRejectAmbiguousOrigins(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range itemRoleFixtures() {
+		if !strings.HasSuffix(tc.name, "/map") {
+			continue
+		}
+		e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("left", tc.typ), schema.Map("right", schema.AnyType))), engine.WithCapabilities(capabilities.Standard()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, source := range []string{
+			`[left:items[0],right:items[0]]:map(p=>p[1]:type):contains("string")`,
+			`[left:items[0],right:items[0]]:json!:exists`,
+			`left:items:concat(right:items):json!:exists`,
+			`left:items:foldl(right:items[0],(a,p)=>p)[1]:type="bytes"`,
+			`left:items:foldl(right:items,(a,p)=>[p]):json!:exists`,
+			`left:items:foldl([], (a,p)=>a:concat([p,right:items[0]])):json!:exists`,
+		} {
+			p, err := e.Compile(ctx, source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
+				var options []hffsql.JSONBindingOption
+				if format == hffsql.JSONB {
+					options = append(options, hffsql.WithTypeMetadata(hffsql.Column("rhs_meta")))
+				}
+				_, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(
+					hffsql.BindJSON(hff.Path{"left"}, hffsql.Column("lhs"), format),
+					hffsql.BindJSON(hff.Path{"right"}, hffsql.Column("rhs"), format, options...)))
+				if err == nil {
+					t.Error(tc.name, format, "accepted ambiguous pair origins", source)
+				}
+			}
+		}
+	}
+}
+
+func TestJSONItemFoldInferenceHandlesChainedSeeds(t *testing.T) {
+	ctx := context.Background()
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Map("labels", schema.BytesType))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := `labels:items:foldl(null,(a,p)=>p)`
+	for i := 0; i < 12; i++ {
+		source = `[]:foldl(` + source + `,(a,p)=>a)`
+	}
+	p, err := e.Compile(ctx, source+`[1]:type="bytes"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindJSON(hff.Path{"labels"}, hffsql.Column("labels"), hffsql.JSONB)))
+	if err != nil {
+		t.Fatal(err)
+	}
+}

@@ -7,11 +7,12 @@ import (
 )
 
 type jsonParameter struct {
-	code      string
-	format    JSONFormat
-	typ       hff.Type
-	lossy     bool
-	itemRoles *jsonItemRoles
+	code          string
+	format        JSONFormat
+	typ           hff.Type
+	lossy         bool
+	itemRoles     *jsonItemRoles
+	itemListRoles *jsonItemRoles
 }
 
 // Callback projections belong to their element subquery. Captures retain the

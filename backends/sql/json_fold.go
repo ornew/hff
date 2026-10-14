@@ -45,12 +45,18 @@ func (b *builder) jsonFold(n hff.Node, name string) (expression, error) {
 	if err != nil {
 		return expression{}, err
 	}
-	result, steps, storedType, err := b.jsonFoldBody(callback, parameters, accumulatorIndex, previous, item, accumulatorType, seedType, receiver, seed, format)
+	proof := b.jsonFoldItemProvenance(n)
+	result, steps, storedType, err := b.jsonFoldBody(callback, parameters, accumulatorIndex, previous, item, accumulatorType, seedType, receiver, seed, format, proof)
 	if err != nil {
 		return expression{}, err
 	}
 	body, _ := callback.Child(0)
-	rawResult, err := b.computedJSONDocument(body, result, storedType)
+	var rawResult string
+	if (proof.pair != nil || proof.list != nil) && b.jsonValues[result.code] == JSON {
+		rawResult = "COALESCE(" + result.code + ",'null'::json)"
+	} else {
+		rawResult, err = b.computedJSONDocument(body, result, storedType)
+	}
 	if err != nil {
 		return expression{}, err
 	}
@@ -98,6 +104,11 @@ func (b *builder) jsonFold(n hff.Node, name string) (expression, error) {
 // Recursive state uses normalized JSON, retaining the exact inferred union.
 // Every seed and callback result must have a recoverable native representation.
 func (b *builder) jsonFoldType(n hff.Node, typ hff.Type) (hff.Type, error) {
+	if proof := b.jsonFoldItemProvenance(n); proof.pair != nil || proof.list != nil {
+		// Closed positional roles collapse equivalent list alternatives such as
+		// an empty seed and a populated pair list without changing public IR.
+		return itemProvenanceType(proof), nil
+	}
 	// Actual seeds and results are checked before entering recursive state.
 	// Removing null from Any can expand its static type to every HFF family;
 	// this backend's JSON-native storage contract still bounds runtime values.
@@ -111,7 +122,7 @@ func (b *builder) jsonFoldType(n hff.Node, typ hff.Type) (hff.Type, error) {
 	}
 	receiver, _ := n.Child(0)
 	seedType := b.jsonStoredType(seed)
-	itemType := jsonStoredMemberType(b.jsonStoredType(receiver), "", false, true)
+	itemType := jsonStoredMemberType(sortListType(b.jsonStoredType(receiver)), "", false, true)
 	accumulator := seedType
 	for attempt := 0; attempt < 64; attempt++ {
 		types := make([]hff.Type, len(parameters))
@@ -135,7 +146,13 @@ func (b *builder) jsonFoldType(n hff.Node, typ hff.Type) (hff.Type, error) {
 	return hff.Type{}, b.failure(n, "JSON fold tagged-string storage type does not reach a finite fixed point")
 }
 
-func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accumulatorIndex int, previous, item string, accumulatorType, seedType hff.Type, receiver, seed hff.Node, format JSONFormat) (expression, []string, hff.Type, error) {
+func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accumulatorIndex int, previous, item string, accumulatorType, seedType hff.Type, receiver, seed hff.Node, format JSONFormat, proofs ...jsonItemProvenance) (expression, []string, hff.Type, error) {
+	var proof jsonItemProvenance
+	if len(proofs) > 0 {
+		proof = proofs[0]
+	}
+	outerMemo := b.itemRoleMemo
+	b.itemRoleMemo = nil
 	outer := b.steps
 	outerPaths := b.sharedPaths
 	b.steps = nil
@@ -179,17 +196,20 @@ func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accu
 	for i, binding := range parameters {
 		id := binding.ID()
 		old[i], existed[i] = b.parameters[id]
-		parameter := jsonParameter{code: item + ".value", format: format, lossy: receiverLoss}
+		parameter := jsonParameter{code: item + ".value", format: format, lossy: receiverLoss,
+			typ: jsonStoredMemberType(sortListType(b.jsonStoredType(receiver)), "", false, true), itemRoles: b.jsonItemsRoles(receiver)}
 
 		if i == accumulatorIndex {
 			parameter.code, parameter.typ, parameter.format = previous+".acc", accumulatorType, JSON
 			parameter.lossy = accumulatorLoss
+			parameter.itemRoles, parameter.itemListRoles = proof.pair, proof.list
 		}
 		b.parameters[id] = parameter
 	}
 	defer func() {
 		b.steps = outer
 		b.sharedPaths = outerPaths
+		b.itemRoleMemo = outerMemo
 		for i, binding := range parameters {
 			if existed[i] {
 				b.parameters[binding.ID()] = old[i]

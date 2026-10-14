@@ -20,30 +20,32 @@ func (b *builder) jsonItemsRoles(n hff.Node) *jsonItemRoles {
 }
 
 func (b *builder) jsonItemsRolesUncached(n hff.Node) *jsonItemRoles {
+	if binding, ok := n.Binding(); ok {
+		if parameter, exists := b.parameters[binding.ID()]; exists {
+			return parameter.itemListRoles
+		}
+	}
 	if n.Kind() == hff.GuardNode || n.Kind() == hff.TypeGuardNode {
 		child, _ := n.Child(0)
 		return b.jsonItemsRoles(child)
 	}
 	if n.Kind() == hff.ListNode && n.ChildCount() > 0 {
-		var objects []hff.Type
+		var proof *jsonItemRoles
 		for i := 0; i < n.ChildCount(); i++ {
 			child, _ := n.Child(i)
 			roles := b.jsonItemRoles(child)
 			if roles == nil {
-				// A null element carries no key/value identity; ordinary null
-				// remains comparable data alongside otherwise proven pairs.
 				if child.Type().Kind() == hff.NullType {
 					continue
 				}
 				return nil
 			}
-			objects = append(objects, roles.object)
+			if proof != nil && jsonTaggedStringStateAmbiguous(proof.object, roles.object) {
+				return nil
+			}
+			proof = mergeItemRoles(proof, roles)
 		}
-		if len(objects) == 0 {
-			return nil
-		}
-		object := hff.NewUnionType(objects...)
-		return &jsonItemRoles{value: jsonStoredMemberType(object, "", false, false), object: object}
+		return proof
 	}
 	method, ok := n.Method()
 	if !ok {
@@ -54,6 +56,15 @@ func (b *builder) jsonItemsRolesUncached(n hff.Node) *jsonItemRoles {
 	case "items":
 		object := jsonObjectType(b.jsonStoredType(receiver))
 		return &jsonItemRoles{value: jsonStoredMemberType(object, "", false, false), object: object}
+	case "foldl", "foldr":
+		return b.jsonFoldItemProvenance(n).list
+	case "concat":
+		argument, _ := n.Child(1)
+		left, right := b.jsonItemsRoles(receiver), b.jsonItemsRoles(argument)
+		if left == nil && !neutralItemState(b.jsonStoredType(receiver), true) || right == nil && !neutralItemState(b.jsonStoredType(argument), true) {
+			return nil
+		}
+		return mergeItemRoles(left, right)
 	case "map":
 		callback, _ := n.Child(1)
 		return b.jsonCallbackItemProvenance(callback, receiver).pair
@@ -83,6 +94,9 @@ func (b *builder) jsonItemRolesUncached(n hff.Node) *jsonItemRoles {
 	case hff.IndexNode:
 		parent, _ := n.Child(0)
 		return b.jsonItemsRoles(parent)
+	}
+	if method, ok := n.Method(); ok && (method.Name() == "foldl" || method.Name() == "foldr") {
+		return b.jsonFoldItemProvenance(n).pair
 	}
 	if method, ok := n.Method(); ok && method.Name() == "find" {
 		receiver, _ := n.Child(0)
@@ -165,6 +179,7 @@ func (b *builder) jsonCallbackItemProvenance(callback, receiver hff.Node) jsonIt
 // this memo and restore it on exit, so proofs never leak across bindings.
 type jsonItemRoleMemo struct {
 	pairs, lists map[hff.Node]*jsonItemRoles
+	folds        map[hff.Node]jsonItemProvenance
 }
 
 func (b *builder) memoizedItemRoles(n hff.Node, list bool) *jsonItemRoles {
@@ -173,6 +188,7 @@ func (b *builder) memoizedItemRoles(n hff.Node, list bool) *jsonItemRoles {
 		b.itemRoleMemo = &jsonItemRoleMemo{
 			pairs: make(map[hff.Node]*jsonItemRoles),
 			lists: make(map[hff.Node]*jsonItemRoles),
+			folds: make(map[hff.Node]jsonItemProvenance),
 		}
 		defer func() { b.itemRoleMemo = nil }()
 	}

@@ -101,10 +101,12 @@ func (b *builder) jsonConcat(n hff.Node, values []expression, format JSONFormat)
 func (b *builder) concatJSONLists(n hff.Node, values []expression, format JSONFormat, schemas []hff.Type) (expression, error) {
 	leftNode, _ := n.Child(0)
 	rightNode, _ := n.Child(1)
-	for _, left := range jsonPossibleListElements(b.jsonStoredType(leftNode)) {
-		for _, right := range jsonPossibleListElements(b.jsonStoredType(rightNode)) {
-			if jsonTaggedStringStateAmbiguous(left, right) {
-				return expression{}, b.failure(n, "JSON list concat cannot distinguish String, Bytes, Duration, and Timestamp elements")
+	if b.jsonItemsRoles(n) == nil {
+		for _, left := range jsonPossibleListElements(b.jsonStoredType(leftNode)) {
+			for _, right := range jsonPossibleListElements(b.jsonStoredType(rightNode)) {
+				if jsonTaggedStringStateAmbiguous(left, right) {
+					return expression{}, b.failure(n, "JSON list concat cannot distinguish String, Bytes, Duration, and Timestamp elements")
+				}
 			}
 		}
 	}

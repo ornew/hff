@@ -618,11 +618,19 @@ uses a `Map<Bytes|null>` to select a named nonempty attachment. Its key and
 value roles remain typed through an `any()` callback. Role provenance also
 survives identity `map()` and `flatmap()` callbacks that return lists made
 from proven pairs and static null entries. This includes duplicated pairs,
-captured pairs, and nested map/flatmap callbacks. The role proof preserves the
-key and value types; it does not prove that keys remain unique. `fold()` and
-reconstructed or mixed arrays without a complete pair proof retain the general
-representation path, and operations that need unrecoverable tagged identity
-may still be rejected.
+captured pairs, and nested map/flatmap callbacks. Pair or pair-list roles can
+also pass through `foldl()`/`foldr()` when the seed and every possible
+successor establish one closed, compatible role invariant. Empty input returns
+the seed. Ordinary null is a fold value: a null callback result becomes the
+next accumulator rather than skipping the element; guarded no-value propagates
+through the whole fold. For list accumulation, `concat()` preserves roles only
+when both operands establish compatible pair-list provenance, or an operand is
+a neutral null/empty list for the provenance proof. Runtime `concat(null)`
+still returns null. These proofs preserve key and value types, not key
+uniqueness. Reconstructed or mixed arrays without a complete proof retain the
+general representation path. Same-category or otherwise ambiguous origins
+such as String versus Duration cannot be made recoverable by merging into
+`Any`; operations requiring that identity may be rejected.
 
 The schema-known `Bytes|Int|Float|Null` and
 `Bytes|Bool|Int|Float|Null` unions are supported for native JSON and for JSONB

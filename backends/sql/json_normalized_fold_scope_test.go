@@ -30,12 +30,18 @@ func TestNormalizedFoldProofRestoresEnclosingScope(t *testing.T) {
 	b := &builder{ctx: ctx, program: p, parameters: map[hff.BindingID]jsonParameter{parameters[0].ID(): outer}, jsonValues: map[string]JSONFormat{}, steps: []string{"outer_step"}}
 	b.rememberNormalizedJSON("previous.acc", JSON, schema.StringType)
 	prior := b.normalizedJSONValues["previous.acc"]
+	memo := &jsonItemRoleMemo{pairs: make(map[hff.Node]*jsonItemRoles), lists: make(map[hff.Node]*jsonItemRoles)}
+	b.itemRoleMemo = memo
+
 	result, steps, _, err := b.jsonFoldBody(callback, parameters, 0, "previous", "item", parameters[0].Type(), b.jsonStoredType(seed), receiver, seed, JSON)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(steps) == 0 || result.code == "" {
 		t.Fatal("callback was not lowered")
+	}
+	if b.itemRoleMemo != memo {
+		t.Fatal("callback replaced enclosing role-analysis scope")
 	}
 	if !reflect.DeepEqual(b.parameters[parameters[0].ID()], outer) || len(b.parameters) != 1 {
 		t.Fatal("callback replaced enclosing parameters")
@@ -49,6 +55,9 @@ func TestNormalizedFoldProofRestoresEnclosingScope(t *testing.T) {
 	delete(b.normalizedJSONValues, "previous.acc")
 	if _, _, _, err := b.jsonFoldBody(callback, parameters, 0, "previous", "item", parameters[0].Type(), b.jsonStoredType(seed), receiver, seed, JSON); err != nil {
 		t.Fatal(err)
+	}
+	if b.itemRoleMemo != memo {
+		t.Fatal("second callback replaced enclosing role-analysis scope")
 	}
 	if _, exists := b.normalizedJSONValues["previous.acc"]; exists {
 		t.Fatal("temporary predecessor proof escaped callback scope")
