@@ -73,9 +73,8 @@ values and therefore follow the backend model described above when implemented.
 
 Float `round()`, `ceil()`, and `floor()` follow the backend's declared native
 rounding behavior. Int `round()`, `ceil()`, and `floor()` are identity
-operations. Float `sum()` and `avg()` are planned to follow the selected
-backend's declared Float model; these aggregate methods are not implied to be
-available until separately implemented and exposed by the backend.
+operations. Float `sum()` and `avg()` follow the selected backend's declared
+Float model where implemented; this design does not itself enable a method.
 
 ### Implementation and invariants
 
@@ -145,8 +144,7 @@ models. Float aggregate tests are required when those methods are implemented.
 Local `sum()` and `avg()` support numeric inputs. Local `avg()` returns Float,
 accumulating Int contributions exactly until a Float appears and then using Go
 Float addition in list order; an all-Int total converts to Float before
-division by the contributing count. PostgreSQL `Build` currently rejects
-`avg()`. PostgreSQL JSON/JSONB no-argument list
+division by the contributing count. PostgreSQL JSON/JSONB no-argument list
 `sum()` supports recoverable Int, Float, and mixed Int/Float contributions,
 including `Any` lists whose numeric subtypes can be recovered. Callback
 projections also support mixed or dynamic numeric contributions when their
@@ -156,8 +154,15 @@ lost their Int/Float distinction. PostgreSQL Float `sum()` converts each
 contribution through round-trip-safe Float text, accumulates with `SUM(numeric)`,
 and checks the final Float conversion. It requires `extra_float_digits > 0`;
 HFF neither sets nor inspects the session setting. The numeric intermediate
-can differ from Local's list-order Float addition. PostgreSQL Float `avg()` and
-broader backend aggregate coverage remain future work. Other supported
+can differ from Local's list-order Float addition. PostgreSQL JSON/JSONB
+`avg()` converts Float contributions through round-trip-safe text, uses
+`AVG(numeric)`, and checks the final Float conversion. It requires
+`extra_float_digits > 0`; intermediate overflow, cancellation, rounding, and
+zero sign can differ from Local's list-order Float addition. PostgreSQL
+relation `avg()` supports numeric callback projections when their bound values
+preserve numeric subtypes; it does not require unique relation order unless a
+nested operation observes order. Native scalar-column `avg()` and broader
+backend aggregate coverage remain future work. Other supported
 boundaries and database-setting dependencies are documented in the backend guide.
 Backend-native Float behavior is not a promise of identical results across
 PostgreSQL versions or other SQL engines.

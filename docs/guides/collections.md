@@ -135,7 +135,32 @@ Int contributions exactly until a Float appears; then it adds using Go
 the number of contributing values. A non-finite result returns null. A null
 receiver returns null.
 
-PostgreSQL `Build` currently rejects `avg()`.
+For PostgreSQL schema-known JSON/JSONB lists, the same methods are supported
+when the binding preserves numeric subtypes. Float inputs use round-trip-safe
+Float text and `AVG(numeric)`, followed by a checked conversion to Float. The
+backend requires `extra_float_digits > 0`; HFF does not set the session value.
+For example, if `mixed` is `List<Int|Float|null>` and `items` is
+`List<Struct{price:Int|Float|null}>`:
+
+```hff
+mixed:avg=1.75
+items:avg(item=>item.price!)=1.75
+```
+
+These return Float for contributions `[1, 2.5, null]`. JSONB needs version-1
+numeric type metadata when storage does not preserve the Int/Float distinction.
+PostgreSQL relation bindings also support numeric callback projections when
+the bound values preserve their numeric subtypes. Relation aggregation does
+not require a unique order unless a nested operation observes order. For
+example, an unordered relation with a recoverable numeric `price` can use:
+
+```hff
+items:avg(item=>item.price)=12.5
+```
+
+Native scalar-column `avg()` is not currently supported. PostgreSQL's numeric
+intermediate can differ from Local's list-order accumulation through
+intermediate overflow, cancellation, rounding, and zero-sign behavior.
 
 ## Object queries
 

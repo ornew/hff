@@ -904,7 +904,7 @@ and propagates through the ordinary HFF evaluation rules.
 For schema-known JSON objects, the backend supports `size()`, `has(key)`,
 `get(key)`, `keys()`, `values()`, and `items()`. Enumeration orders keys with
 PostgreSQL's `C` collation. For schema-known JSON lists, it supports `size()`,
-`count()`, `sum()`, `filter(predicate)`, `has(index)`, `contains()`, `unique()`,
+`count()`, `sum()`, `avg()`, `filter(predicate)`, `has(index)`, `contains()`, `unique()`,
 `sort()`, `concat(list)`, `any()`, `all()`, `map()`, and `flatmap()` when the
 callback and resulting values can be represented by the binding. `filter()`
 preserves JSON list order and does not need a separate order mapping.
@@ -959,9 +959,22 @@ contributions just like the direct form. This PostgreSQL subset follows the
 backend-native Float model; see the
 [native Float design](../../design/021-backend-native-float-semantics.md).
 
-PostgreSQL `Build` currently rejects list `avg()`, `min()`, and `max()`,
-including on JSON/JSONB-backed lists. These methods are implemented by the
-Local backend; see the [collection guide](../../guides/collections.md).
+For JSON/JSONB lists, `avg()` supports recoverable Int, Float, and mixed
+Int/Float contributions, including callback projections when their numeric
+subtypes can be recovered. JSONB requires version-1 numeric type metadata when
+stored values may have lost that distinction. Null and guarded no-value
+contributions are skipped; a nonnumeric runtime contribution returns null.
+Empty and all-skipped lists return null. The result is Float. PostgreSQL
+converts each Float through round-trip-safe Float text before `AVG(numeric)`,
+then checks the final conversion to double precision. This requires
+`extra_float_digits > 0`; HFF does not set or inspect the session value.
+Intermediate overflow, cancellation, rounding, and zero sign can differ from
+Local's list-order Float addition. Relation `avg()` supports numeric callback
+projections when bound values preserve their numeric subtypes; it does not
+require unique relation ordering unless a nested operation observes order.
+Native scalar-column `avg()` is unsupported. `Build` rejects list `min()` and
+`max()`; those methods are implemented by Local. See
+the [collection guide](../../guides/collections.md#averaging-numeric-values).
 
 ### Containment for simple JSONB filters
 

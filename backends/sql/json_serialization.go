@@ -95,8 +95,8 @@ func (b *builder) losesFloat(n hff.Node, environment map[hff.BindingID]bool) boo
 	if !jsonHasFloat(n.Type()) {
 		return false
 	}
-	if method, ok := n.Method(); ok && (method.Name() == "number" || method.Name() == "fromjson" || method.Name() == "sum") {
-		// Parsing or aggregation creates fresh numeric values. The sum result
+	if method, ok := n.Method(); ok && (method.Name() == "number" || method.Name() == "fromjson" || method.Name() == "sum" || method.Name() == "avg") {
+		// Parsing or aggregation creates fresh numeric values. The result
 		// follows its backend Float model rather than the receiver's spelling.
 		return false
 	}

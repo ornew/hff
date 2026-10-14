@@ -250,6 +250,13 @@ order and therefore requires `WithUniqueOrder`. Its callback uses ordinary
 boolean conversion, with guarded no-value counting as false. PostgreSQL `Build`
 rejects relation filters whose result order cannot be represented.
 
+`avg()` over a relation also does not observe row order. PostgreSQL supports a
+numeric callback projection when each projected value has a recoverable Int or
+Float subtype; the relation does not need `WithUniqueOrder` unless a nested
+operation observes order. For example, an unordered relation can use
+`items:avg(item=>item.price)`. Native scalar-column `avg()` remains
+unsupported.
+
 When the callback is composed of direct native scalar fields, literals, and
 Boolean `AND`/`OR`/`NOT`, eligible scalar predicates can be lowered directly
 inside the correlated subquery. For the earlier filter

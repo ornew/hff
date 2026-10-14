@@ -772,6 +772,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 	if name == "sum" {
 		return b.jsonSum(n)
 	}
+	if name == "avg" {
+		return b.jsonAvg(n)
+	}
 	if name == "size" || name == "count" && n.ChildCount() == 1 {
 		if value, handled, err := b.relationSize(n); handled {
 			return value, err

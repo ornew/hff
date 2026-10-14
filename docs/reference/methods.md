@@ -139,6 +139,16 @@ accumulate exactly until the first Float contribution; from then on, Go
 total converts to Float before division by the contribution count. A non-finite
 result returns null, and a null receiver yields null. The zero-argument form
 requires `method:list.avg`; the callback form also requires `Callbacks`.
+PostgreSQL JSON/JSONB list bindings support `avg()` when numeric subtypes are
+recoverable, including callback projections. Float inputs pass through
+round-trip-safe Float text before `AVG(numeric)` and a checked final Float
+conversion. This requires `extra_float_digits > 0`; HFF does not set the
+database session value. Intermediate overflow, cancellation, rounding, and
+zero sign can differ from Local's list-order Float accumulation. PostgreSQL
+relation `avg()` also supports numeric callback projections when the bound
+values preserve their numeric subtypes. It does not require a unique relation
+order unless a nested operation observes order. Native scalar-column `avg()`
+is not currently supported.
 `min()` and `max()` accept numeric elements or numeric callback projections.
 They skip null values and guarded no-value results. A nonnumeric runtime value,
 an empty list, or a list with no contributing values returns null. Mixed Int and
@@ -146,8 +156,8 @@ Float values are compared exactly; the selected original value and subtype are
 returned (the callback result in projected forms), with the first value winning
 ties. A null receiver yields null. Their zero-argument forms require
 `method:list.min` and `method:list.max` respectively; callback forms also
-require `Callbacks`. PostgreSQL `Build` currently rejects `avg()`, `min()`,
-and `max()`; the Local backend implements them.
+require `Callbacks`. PostgreSQL `Build` currently rejects `min()` and `max()`;
+the Local backend implements them.
 See [list rules](../../spec/methods.md#lists) and the
 [callback guide](../guides/callbacks.md).
 

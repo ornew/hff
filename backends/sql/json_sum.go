@@ -6,10 +6,18 @@ import (
 	"github.com/ornew/hff"
 )
 
-// Sum one statically known numeric family through PostgreSQL numeric so
+// Aggregate one statically known numeric family through PostgreSQL numeric so
 // intermediate totals do not overflow the result carrier. Dynamic numeric
 // projections need a separate path that preserves each contributing subtype.
 func (b *builder) jsonSum(n hff.Node) (expression, error) {
+	return b.jsonNumericAggregate(n, false)
+}
+
+func (b *builder) jsonAvg(n hff.Node) (expression, error) {
+	return b.jsonNumericAggregate(n, true)
+}
+
+func (b *builder) jsonNumericAggregate(n hff.Node, average bool) (expression, error) {
 	receiver, _ := n.Child(0)
 	value, err := b.expression(receiver)
 	if err != nil {
@@ -24,7 +32,7 @@ func (b *builder) jsonSum(n hff.Node) (expression, error) {
 	}
 	stored := sortListType(b.jsonStoredType(receiver))
 	if stored.Kind() != hff.ListType {
-		return expression{}, b.failure(n, "sum requires a recoverable list schema")
+		return expression{}, b.failure(n, "numeric aggregate requires a recoverable list schema")
 	}
 	itemType := stored.Element()
 	var from, term, present, ordinal string
@@ -32,7 +40,7 @@ func (b *builder) jsonSum(n hff.Node) (expression, error) {
 	if n.ChildCount() == 1 {
 		family = staticSumFamily(itemType)
 		if family == hff.InvalidType {
-			return b.jsonDynamicSum(n, receiver, value, format, stored)
+			return b.jsonDynamicSum(n, receiver, value, format, stored, average)
 		}
 		alias := b.nextAlias()
 		from = string(format) + "_array_elements(" + value.code + ") AS " + alias + "(value)"
@@ -55,7 +63,7 @@ func (b *builder) jsonSum(n hff.Node) (expression, error) {
 			}
 			rows := b.nextAlias()
 			source := "(SELECT " + document + " AS value FROM " + from + " WHERE " + computed.present + ") AS " + rows
-			return b.jsonDynamicSumRows(n, value, source, rows+".value")
+			return b.jsonDynamicSumRows(n, value, source, rows+".value", average)
 		}
 		term, present = computed.code, computed.present
 		if computed.kind == hff.NullType {
@@ -66,17 +74,27 @@ func (b *builder) jsonSum(n hff.Node) (expression, error) {
 		present = both(present, ordinal+">0")
 	}
 	if strings.TrimSpace(term) == "" {
-		return expression{}, b.failure(n, "sum has no numeric projection")
+		return expression{}, b.failure(n, "numeric aggregate has no numeric projection")
 	}
-	// SUM(numeric) avoids intermediate bigint or Float overflow. PostgreSQL's
+	// Numeric aggregation avoids intermediate bigint or Float overflow. PostgreSQL's
 	// direct float-to-numeric cast discards significant digits; the required
 	// round-trip Float text retains them before numeric accumulation.
 	numericTerm := "(" + term + ")::numeric"
 	if family == hff.FloatType {
 		numericTerm = "(" + term + ")::text::numeric"
 	}
-	aggregate := "sum(CASE WHEN " + present + " THEN " + numericTerm + " END)"
+	operator := "sum"
+	if average {
+		operator = "avg"
+	}
+	aggregate := operator + "(CASE WHEN " + present + " THEN " + numericTerm + " END)"
 	alias := b.nextAlias()
+	if average {
+		total := alias + ".total"
+		result := "(CASE WHEN " + total + " IS NULL THEN 'null'::json WHEN pg_input_is_valid(" + total + "::text,'double precision') THEN " + b.floatText(total+"::double precision") + "::json ELSE 'null'::json END)"
+		code := "(CASE WHEN " + value.code + " IS NULL THEN NULL::json ELSE (SELECT " + result + " FROM (SELECT " + aggregate + " AS total FROM " + from + ") AS " + alias + ") END)"
+		return b.jsonDecode(n, code, JSON, n.Type(), value.present)
+	}
 	if family == hff.FloatType {
 		floatValue := alias + ".total::double precision"
 		result := "(CASE WHEN " + alias + ".total IS NULL THEN '0'::json WHEN pg_input_is_valid(" + alias + ".total::text,'double precision') THEN " + b.floatText(floatValue) + "::json ELSE 'null'::json END)"
@@ -90,7 +108,7 @@ func (b *builder) jsonSum(n hff.Node) (expression, error) {
 
 // A recoverable mixed list can choose its result family from the actual
 // contributing rows. JSONB must restore numeric subtype metadata first.
-func (b *builder) jsonDynamicSum(n, receiver hff.Node, value expression, format JSONFormat, stored hff.Type) (expression, error) {
+func (b *builder) jsonDynamicSum(n, receiver hff.Node, value expression, format JSONFormat, stored hff.Type, average bool) (expression, error) {
 	document, err := b.comparisonDocument(receiver, value.code, format, stored)
 	if err != nil {
 		return expression{}, err
@@ -99,10 +117,10 @@ func (b *builder) jsonDynamicSum(n, receiver hff.Node, value expression, format 
 	array := b.project("(CASE WHEN json_typeof(" + raw + ")='array' THEN " + raw + " ELSE NULL::json END)")
 	alias := b.nextAlias()
 	source := "json_array_elements(" + array + ") AS " + alias + "(value)"
-	return b.jsonDynamicSumRows(n, value, source, alias+".value")
+	return b.jsonDynamicSumRows(n, value, source, alias+".value", average)
 }
 
-func (b *builder) jsonDynamicSumRows(n hff.Node, value expression, from, item string) (expression, error) {
+func (b *builder) jsonDynamicSumRows(n hff.Node, value expression, from, item string, average bool) (expression, error) {
 	category := "json_typeof(" + item + ")"
 	text := "(" + item + " #>> '{}'::text[])"
 	integer := "(" + category + "='number' AND " + text + " !~ '[.eE]')"
@@ -113,6 +131,10 @@ func (b *builder) jsonDynamicSumRows(n hff.Node, value expression, from, item st
 	result := b.nextAlias()
 	total := result + ".total"
 	floatResult := b.floatText(total+"::double precision") + "::json"
+	if average {
+		code := "(CASE WHEN " + value.code + " IS NULL THEN NULL::json ELSE (SELECT CASE WHEN " + result + ".invalid OR " + total + " IS NULL THEN 'null'::json WHEN pg_input_is_valid(" + total + "::text,'double precision') THEN " + floatResult + " ELSE 'null'::json END FROM (SELECT avg(" + term + ") AS total,COALESCE(bool_or(" + category + " NOT IN ('number','null')),FALSE) AS invalid FROM " + from + ") AS " + result + ") END)"
+		return b.jsonDecode(n, code, JSON, n.Type(), value.present)
+	}
 	code := "(CASE WHEN " + value.code + " IS NULL THEN NULL::json ELSE (SELECT CASE WHEN " + result + ".invalid THEN 'null'::json WHEN " + total + " IS NULL THEN '0'::json WHEN " + result + ".floating THEN CASE WHEN pg_input_is_valid(" + total + "::text,'double precision') THEN " + floatResult + " ELSE 'null'::json END WHEN " + total + " BETWEEN '-9223372036854775808'::numeric AND '9223372036854775807'::numeric THEN to_json(" + total + "::bigint) ELSE 'null'::json END FROM (SELECT sum(" + term + ") AS total,COALESCE(bool_or(" + validFloat + "),FALSE) AS floating,COALESCE(bool_or(" + category + " NOT IN ('number','null')),FALSE) AS invalid FROM " + from + ") AS " + result + ") END)"
 	return b.jsonDecode(n, code, JSON, n.Type(), value.present)
 }

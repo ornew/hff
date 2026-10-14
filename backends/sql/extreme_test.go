@@ -17,7 +17,7 @@ func TestPostgreSQLRejectsUnimplementedNumericExtremes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, source := range []string{`items:min>0`, `items:max(x=>x)>0`, `items:avg>0`} {
+	for _, source := range []string{`items:min>0`, `items:max(x=>x)>0`} {
 		program, err := e.Compile(ctx, source)
 		if err != nil {
 			t.Fatal(source, err)

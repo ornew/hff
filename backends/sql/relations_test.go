@@ -71,6 +71,7 @@ func relationUnorderedQueries() []string {
 		`items:size<=0`, `!items:size=0`, `items:size>=2`,
 		`items:count=2`, `items:count(x=>x.price>10)=2`,
 		`items:sum(x=>x.price)=25`,
+		`items:avg(x=>x.price)=12.5`,
 		`items:count(x=>x.price>items:count)=2`,
 		`items:exists`, `items:type="list"`, `items:unique`, `items:has(-1)`,
 		`items:contains({"price":20,"active":true,"tags":["auth"]})`,

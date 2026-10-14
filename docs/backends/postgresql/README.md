@@ -452,7 +452,7 @@ guards and typed indexing. Dynamic operations require schema candidates and
 stored representations that preserve the distinctions their semantics observe;
 operations outside that supported subset remain unsupported. JSON list/object
 structural equality, list `contains()`, `unique()`, `sort()`, `concat(list)`,
-`count()`, `filter(predicate)`, `sum()`, and `any()`/`all()` are available for
+`count()`, `filter(predicate)`, `sum()`, `avg()`, and `any()`/`all()` are available for
 schema-known values when their required capabilities are enabled. JSON/JSONB
 no-argument and callback `sum()` support recoverable Int, Float, and mixed
 Int/Float contributions, including `Any` lists and callback results when
@@ -462,8 +462,17 @@ For JSON/JSONB Float sums, each contribution uses PostgreSQL's round-trip-safe
 Float text before `SUM(numeric)` and a checked final Float conversion. This
 requires `extra_float_digits > 0`; HFF does not change the database setting.
 Numeric intermediate accumulation can differ from Local's list-order Float
-addition. PostgreSQL `Build` currently rejects list `avg()`, `min()`, and
-`max()`.
+addition. For recoverable numeric JSON/JSONB list bindings, PostgreSQL
+supports no-argument and callback `avg()` using `AVG(numeric)` and checked
+Float conversion. Float contributions use round-trip-safe Float text and
+require `extra_float_digits > 0`; intermediate overflow, cancellation,
+rounding, and zero sign can differ from Local's list-order Float accumulation.
+Relation `avg()` supports numeric callback projections when bound values
+preserve their numeric subtypes. It does not require unique relation ordering
+unless a nested operation observes order. Native scalar-column `avg()` is
+unsupported. PostgreSQL `Build` currently rejects list `min()` and `max()`.
+The query Profile's `float.aggregation` detail describes the aggregate model
+and its session requirement.
 `sort()` supports recoverable dynamic `Any` and list-union values; see the JSON
 guide for its conditions.
 `map()` and `flatmap()` are supported when callback result types are known.

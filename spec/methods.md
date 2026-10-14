@@ -180,6 +180,15 @@ list order; an all-Int total is converted to Float before division. The total
 is divided by the number of contributing values. A non-finite result returns
 null. A null receiver yields null. The zero-argument method requires
 `method:list.avg`; the callback form also requires `Callbacks`.
+PostgreSQL JSON/JSONB list bindings use a backend-native numeric aggregate for
+`avg()` when every numeric subtype is recoverable. Float contributions are
+converted through round-trip-safe Float text before numeric aggregation, then
+the final average is checked when converted to Float. This can differ from
+Local's accumulation order and requires `extra_float_digits > 0`; HFF does not
+change the database setting.
+PostgreSQL relation bindings can also use `avg()` with a numeric callback
+projection when bound values preserve their numeric subtypes. Averaging does
+not require a unique relation order unless a nested operation observes order.
 `min()` and `max()` select from numeric list elements or numeric callback
 results. Null values and guarded no-value callback results are skipped. A
 nonnumeric runtime value makes the result null; an empty list or one with no
