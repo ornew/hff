@@ -48,6 +48,11 @@ func TestPostgreSQLStoredTimestampsMatchLocal(t *testing.T) {
 		`created:[timestamp]:exists`, `created:[int]:exists`,
 		`created:[timestamp|null]:type="null"`,
 		`created="0000-01-01T00:00:00Z":timestamp`,
+		`created!="2026-10-01T00:00:00.000000123Z":timestamp`,
+		`created<="1969-12-31T23:59:59.999999999Z":timestamp`,
+		`created>"1969-12-31T23:59:59.999999999Z":timestamp`,
+		`created>="2026-10-01T00:00:00.000000123Z":timestamp`,
+		`!(created="2026-10-01T00:00:00.000000123Z":timestamp)`,
 		`created:after("2026-09-30T23:59:59.999999999Z":timestamp)`,
 		`created:before("1970-01-01T00:00:00Z":timestamp)`,
 		`created:in("0000-01-01T00:00:00Z":timestamp,"2026-10-01T00:00:00.000000123Z":timestamp)`,
@@ -105,6 +110,118 @@ func TestPostgreSQLStoredTimestampsMatchLocal(t *testing.T) {
 			arguments = "(" + strings.Join(args, ",") + ")"
 		}
 		fmt.Fprintf(&script, "PREPARE timestamp_%d%s AS SELECT %s FROM (VALUES %s) events(created_at,created_ns_remainder); EXECUTE timestamp_%d%s;\n",
+			i, parameters, query.Where(), strings.Join(values, ","), i, arguments)
+	}
+	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", container, "psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-U", "postgres")
+	cmd.Stdin = strings.NewReader(script.String())
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	results := strings.Fields(string(out))
+	if len(results) != len(expected) {
+		t.Fatalf("got %d results, want %d: %s", len(results), len(expected), out)
+	}
+	for i, result := range results {
+		if (result == "t") != expected[i] {
+			t.Errorf("%s: PostgreSQL=%s local=%v", labels[i], result, expected[i])
+		}
+	}
+}
+
+func TestPostgreSQLPhysicalTimestampComparisonsMatchLocal(t *testing.T) {
+	container := os.Getenv("HFF_POSTGRES_CONTAINER")
+	if container == "" {
+		t.Fatal("integration tests require HFF_POSTGRES_CONTAINER")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	e, err := engine.New(engine.WithSchema(schema.Struct(
+		schema.Nullable(schema.Timestamp("created")),
+		schema.Nullable(schema.Timestamp("updated")),
+	)), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stamp := func(year int, month time.Month, day, hour, minute, second, nanosecond int) hff.Value {
+		return hff.Timestamp(time.Date(year, month, day, hour, minute, second, nanosecond, time.UTC))
+	}
+	rows := []struct {
+		created, updated hff.Value
+		createdSQL       string
+		createdRemainder int
+		updatedSQL       string
+	}{
+		{hff.Null(), hff.Null(), "", 0, ""},
+		{stamp(2026, 10, 1, 0, 0, 0, 123), hff.Null(), "2026-10-01 00:00:00+00", 123, ""},
+		{stamp(2026, 10, 1, 0, 0, 0, 123), stamp(2026, 10, 1, 0, 0, 0, 0), "2026-10-01 00:00:00+00", 123, "2026-10-01 00:00:00+00"},
+		{stamp(2026, 10, 1, 0, 0, 0, 0), stamp(2026, 10, 1, 0, 0, 0, 0), "2026-10-01 00:00:00+00", 0, "2026-10-01 00:00:00+00"},
+		{stamp(1969, 12, 31, 23, 59, 59, 999999999), stamp(1970, 1, 1, 0, 0, 0, 0), "1969-12-31 23:59:59.999999+00", 999, "1970-01-01 00:00:00+00"},
+		{stamp(0, 1, 1, 0, 0, 0, 0), stamp(2026, 10, 1, 0, 0, 0, 0), "0001-01-01 00:00:00+00 BC", 0, "2026-10-01 00:00:00+00"},
+		{stamp(1970, 1, 1, 0, 0, 0, 0), stamp(0, 1, 1, 0, 0, 0, 0), "1970-01-01 00:00:00+00", 0, "0001-01-01 00:00:00+00 BC"},
+	}
+	sources := []string{
+		`created=updated`, `created!=updated`, `created<updated`, `created<=updated`,
+		`created>updated`, `created>=updated`, `created:before(updated)`, `created:after(updated)`,
+		`updated="2026-10-01T00:00:00.000000123Z":timestamp`,
+		`updated!="2026-10-01T00:00:00.000000123Z":timestamp`,
+		`updated<"2026-10-01T00:00:00.000000123Z":timestamp`,
+		`updated>="2026-10-01T00:00:00.000000123Z":timestamp`,
+	}
+	bindings := []hffsql.Binding{
+		hffsql.BindTimestamp(hff.Path{"created"}, hffsql.Column("events", "created_at"),
+			hffsql.WithNanosecondRemainder(hffsql.Column("events", "created_ns"))),
+		hffsql.BindTimestamp(hff.Path{"updated"}, hffsql.Column("events", "updated_at")),
+	}
+	var script strings.Builder
+	var expected []bool
+	var labels []string
+	for i, source := range sources {
+		program, err := e.Compile(ctx, source)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		filter, err := local.Build(ctx, program)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		query, err := hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(bindings...))
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		if strings.Contains(query.Where(), "EXTRACT(EPOCH") {
+			t.Fatalf("%s: physical comparison used epoch reconstruction: %s", source, query.Where())
+		}
+		var types, args []string
+		for _, arg := range query.Args() {
+			typ, value := sqlFixtureParameter(t, arg)
+			types = append(types, typ)
+			args = append(args, value)
+		}
+		var values []string
+		for ri, row := range rows {
+			match, err := filter.Match(ctx, hff.Object(map[string]hff.Value{"created": row.created, "updated": row.updated}))
+			if err != nil {
+				t.Fatal(source, ri, err)
+			}
+			expected = append(expected, match)
+			labels = append(labels, fmt.Sprintf("%s row%d", source, ri))
+			created, createdNS, updated := "NULL::timestamptz", "NULL::smallint", "NULL::timestamptz"
+			if row.createdSQL != "" {
+				created = sqlFixtureString(row.createdSQL) + "::timestamptz"
+				createdNS = fmt.Sprintf("%d::smallint", row.createdRemainder)
+			}
+			if row.updatedSQL != "" {
+				updated = sqlFixtureString(row.updatedSQL) + "::timestamptz"
+			}
+			values = append(values, fmt.Sprintf("(%s,%s,%s)", created, createdNS, updated))
+		}
+		parameters, arguments := "", ""
+		if len(types) > 0 {
+			parameters = "(" + strings.Join(types, ",") + ")"
+			arguments = "(" + strings.Join(args, ",") + ")"
+		}
+		fmt.Fprintf(&script, "PREPARE physical_timestamp_%d%s AS SELECT %s FROM (VALUES %s) events(created_at,created_ns,updated_at); EXECUTE physical_timestamp_%d%s;\n",
 			i, parameters, query.Where(), strings.Join(values, ","), i, arguments)
 	}
 	cmd := exec.CommandContext(ctx, "docker", "exec", "-i", container, "psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-U", "postgres")

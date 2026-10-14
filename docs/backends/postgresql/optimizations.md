@@ -8,6 +8,22 @@ other schemas and data.
 
 ## SQL translation choices
 
+### Compare native Timestamp bindings by their physical columns
+
+For eligible native `BindTimestamp` filter comparisons against a Timestamp
+literal or another native bound Timestamp, the builder compares the physical
+`timestamptz` base and optional 0–999 ns remainder directly. Native
+`before()` and `after()` use this path as well. This avoids reconstructing
+numeric Unix-epoch nanoseconds for these predicates while preserving the
+storage and null contracts. Guards, structured/value expressions, and
+JSON/JSONB Timestamp expressions keep their existing lowering. In the checked
+indexed fixture, plain `EXPLAIN` used a Bitmap Heap Scan with a `BitmapOr` of
+two Bitmap Index Scans for the direct predicate; the representative epoch
+extraction expression used a sequential scan. This is plan evidence only, not
+a timing result or a general planner guarantee. See the
+[native Timestamp predicate record](../../optimizations/045-postgresql-native-timestamp-predicates.md)
+for the paired parity cases and reproduction.
+
 ### Reuse bounded equality in JSON membership
 
 For bounded List, Map, and Struct alternatives, `in()`, `contains()`, and

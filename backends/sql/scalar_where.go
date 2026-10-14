@@ -37,6 +37,9 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 		}
 		left, _ := n.Child(0)
 		right, _ := n.Child(1)
+		if b.directTimestampComparisonEligible(n) {
+			return true
+		}
 		if b.directJSONBObjectEqualEligible(n) {
 			return true
 		}
@@ -69,6 +72,9 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 		return ok
 	case hff.BoolNode:
 		child, _ := n.Child(0)
+		if b.directTimestampComparisonEligible(child) {
+			return true
+		}
 		if b.directScalarRegexEligible(child) || b.directScalarExistsEligible(child) {
 			return true
 		}
@@ -79,6 +85,9 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 		_, _, ok := b.directScalarColumn(child)
 		return ok
 	default:
+		if b.directTimestampComparisonEligible(n) {
+			return true
+		}
 		if b.directScalarExistsEligible(n) {
 			return true
 		}
@@ -303,6 +312,9 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 	}
 	if n.Kind() == hff.BoolNode {
 		child, _ := n.Child(0)
+		if b.directTimestampComparisonEligible(child) {
+			return b.directTimestampComparison(child)
+		}
 		if b.directScalarExistsEligible(child) {
 			return b.directScalarExistsWhere(child), nil
 		}
@@ -328,6 +340,9 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 	}
 	left, _ := n.Child(0)
 	right, _ := n.Child(1)
+	if b.directTimestampComparisonEligible(n) {
+		return b.directTimestampComparison(n)
+	}
 	if b.directJSONBObjectEqualEligible(n) {
 		return b.directJSONBObjectEqual(n)
 	}

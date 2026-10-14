@@ -116,7 +116,11 @@ func TestTimestampInRelationPredicates(t *testing.T) {
 		if err != nil {
 			t.Fatal(source, err)
 		}
-		if !strings.Contains(query.Where(), `"event"."created_ns_remainder"::numeric`) {
+		if source == `times:any(stamp=>stamp:after("2026-10-01T00:00:00Z":timestamp))` {
+			if strings.Contains(query.Where(), "EXTRACT(EPOCH") || !strings.Contains(query.Where(), `"event"."created_ns_remainder"`) {
+				t.Error(source, "lost the direct nanosecond comparison:", query.Where())
+			}
+		} else if !strings.Contains(query.Where(), `"event"."created_ns_remainder"::numeric`) {
 			t.Error(source, "lost the stored nanosecond remainder:", query.Where())
 		}
 	}

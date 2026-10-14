@@ -98,8 +98,18 @@ comparisons, `before()` and `after()`, `add(duration)`, `in()`, `exists()`, and
 UTC and take no zone argument. `string()` and `json()` also format in UTC.
 The `string:timestamp` conversion is accepted only for a literal RFC 3339
 string; parsing data-dependent strings and zone arguments are unsupported by
-this backend. `Build` rejects operations outside this subset. Timestamp
-storage in JSON or JSONB remains unsupported.
+this backend. `Build` rejects operations outside this subset. JSON/JSONB
+Timestamp values use a separate schema-known canonical-string representation;
+see the [PostgreSQL JSON guide](../backends/postgresql/json.md#timestamp-values-in-json-documents).
+
+For eligible scalar filter predicates, direct comparisons between a native
+`BindTimestamp` and a Timestamp literal or another native `BindTimestamp`, as
+well as `before()` and `after()`, compare the stored `timestamptz` and optional
+nanosecond remainder directly. Guarded, structured, and value-context
+expressions retain their existing lowering; JSON/JSONB Timestamp values use a
+separate representation and are not covered by this physical-column path.
+The [native Timestamp predicate record](../optimizations/045-postgresql-native-timestamp-predicates.md)
+describes the exact predicate shape and its limits.
 
 The [timestamp binding example](https://github.com/ornew/hff/tree/main/examples/sql-timestamps)
 builds this kind of predicate and prints whether the predicate was built and

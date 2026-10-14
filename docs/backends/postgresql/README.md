@@ -119,6 +119,15 @@ at `Build` if they require complete item or list values. Whole structs,
 relation items, lists, or objects containing a Timestamp cannot yet be
 materialized.
 
+For eligible scalar filter predicates, comparisons between a native
+`BindTimestamp` and a Timestamp literal or another native `BindTimestamp`,
+plus `before()` and `after()`, compare the physical `timestamptz` values and
+optional nanosecond remainders directly. They do not reconstruct the complete
+Unix-epoch nanosecond value for these comparisons. Guarded, structured, and
+value-context expressions, as well as JSON/JSONB Timestamp values, retain
+their existing lowering. See the [native Timestamp predicate record](../../optimizations/045-postgresql-native-timestamp-predicates.md)
+for the exact eligibility and plan-shape evidence.
+
 These bindings are not interchangeable. A one-to-one value can be a composite
 or a flattened struct; `BindRelation` always represents a list, even if the
 database currently has at most one matching row. A one-to-many relation maps
