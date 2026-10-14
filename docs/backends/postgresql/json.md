@@ -937,19 +937,34 @@ runtime type produces ordinary null. `get()` returns null for both a missing
 key and a key whose stored value is JSON null; use `has()` to distinguish
 those cases. A null key does not require numeric metadata.
 
-Values selected or enumerated from a schema-known object are normalized using
-their declared field types before they are returned or aggregated. This keeps,
-for example, a JSONB field declared as float distinct from an integer even
-when its stored numeric spelling is `1`. With a constant key such as
-`data:get("price")`, only the selected field's type needs to be recoverable;
-unrelated fields do not require numeric metadata. A dynamic key can select any
-member, so its candidate field types must be recoverable wherever JSONB has
-erased a needed numeric distinction. Native JSON retains JSON-native runtime
-types for `Any`; JSONB `Any` requires metadata when a selected or enumerated
-numeric subtype must be restored. Metadata restores numeric representations
-only; it does not add support for bytes, timestamps, or durations inside
-dynamic JSON values. Plans whose selected result cannot be determined from the
-schema and available representation information remain Build errors.
+For a schema-known Map, `get(key)` validates the applicable Map alternatives,
+selects the raw value, then decodes or normalizes only that candidate. A literal
+key has a known result schema, so only the selected value schema is checked;
+unused Struct fields do not impose representation requirements. If the
+selected value has one primitive type, a JSON-category check followed by a
+direct decode preserves wrong-category and null behavior without normalizing a
+comparison document. A selected union or nested Map still needs
+schema-guided normalization, but only after selection. Dynamic keys across
+Map alternatives validate the original Map schemas before merging their value
+types, because merging can otherwise hide an unsupported representation.
+For example, a value declared as Float remains Float when its JSONB spelling
+is `1`; the declared subtype guides decoding without guessing from the text.
+Known Map/Struct carriers also avoid a redundant receiver-category check under
+the declared storage contract. Existing JSON-null normalization preserves
+nullable and guarded-key behavior.
+
+Dynamic `get(key)` on heterogeneous Struct alternatives and `values()` or
+`items()` still normalize the complete object for per-key dispatch or because
+they observe multiple values. Native JSON retains JSON-native runtime types for
+`Any`; JSONB `Any` requires metadata when a selected or enumerated numeric
+subtype must be restored. Metadata restores numeric representations only; it
+does not add support for bytes, timestamps, or durations inside dynamic JSON
+values. If the selected result cannot be determined from the schema and
+available representation information, `Build` rejects the query. Static dot,
+bracket, and selected JSONB metadata-subtree access keep their existing paths;
+see [selected metadata restoration](optimizations.md#restore-only-a-selected-jsonb-metadata-subtree).
+The [selected-value SQL-shape record](optimizations.md#select-a-json-object-value-before-normalization)
+describes the measured access cases without claiming execution speed.
 
 ### Sort JSON-backed lists
 

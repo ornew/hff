@@ -277,6 +277,19 @@ general conversion path when required. See [composite bindings](composites.md)
 and [flattened struct bindings](flattened-structures.md) for representation
 requirements.
 
+### Select a JSON object value before normalization
+
+For a schema-known Map, `get(key)` can validate the applicable Map schemas,
+select the raw value, then decode or normalize only that candidate. A literal
+key validates only its selected value schema, so unused Struct fields do not
+add representation requirements. One known primitive category can decode
+directly after a category check; selected unions and nested Maps retain
+selected-value normalization. Dynamic access through heterogeneous Structs,
+and `values()`/`items()`, still normalize the object. The
+[selected Map value record](../../optimizations/030-postgresql-select-map-values-before-normalization.md)
+reports SQL shape and controls; these measurements make no runtime-speed
+claim.
+
 ### Restore only a selected JSONB metadata subtree
 
 For a fixed literal field chain, the translator can extract a selected subtree

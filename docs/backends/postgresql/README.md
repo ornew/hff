@@ -138,6 +138,13 @@ profile. JSONB bindings can use a separate version-1 JSON Pointer sidecar to
 restore supported numeric representations. See [PostgreSQL JSON and JSONB
 bindings](json.md) for the binding API, metadata format, collection access,
 storage requirements, and current rejection boundary.
+
+For schema-known Map `get(key)`, the SQL backend can select the raw value and
+normalize only that entry; when a single primitive type is known, it can check
+the JSON category and decode it directly. Dynamic Struct access and full
+`values()`/`items()` enumeration still need object-level dispatch. See the
+[JSON object access guide](json.md#dynamic-object-get-values-and-items).
+
 Struct values can also be bound to native PostgreSQL composite columns with
 `BindComposite`; see [composite bindings](composites.md) for attribute presence,
 null handling, and the supported nested and array profile.
