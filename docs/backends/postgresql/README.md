@@ -451,7 +451,8 @@ JSONB metadata supports selected numeric type
 guards and typed indexing. Dynamic operations require schema candidates and
 stored representations that preserve the distinctions their semantics observe;
 operations outside that supported subset remain unsupported. JSON list/object
-structural equality, list `contains()`, `unique()`, `sort()`, `concat(list)`,
+structural equality, list `contains()`, `unique()`, `distinct()`, `find()`,
+`sort()`, `concat(list)`,
 `count()`, `filter(predicate)`, `sum()`, `avg()`, `min()`, `max()`, and
 `any()`/`all()` are available for schema-known values when their required
 capabilities are enabled. JSON/JSONB

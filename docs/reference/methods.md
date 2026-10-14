@@ -100,6 +100,8 @@ See [string and byte rules](../../spec/methods.md#strings-and-bytes).
 | `list:min(func(T) -> number) -> number` | Smallest numeric callback result. |
 | `list:max() -> number` | Select the largest numeric element. |
 | `list:max(func(T) -> number) -> number` | Largest numeric callback result. |
+| `list:distinct() -> list<T>` | Stable deduplicated copy using HFF equality. |
+| `list:find(func(T) -> bool) -> T|null` | First original element matching the callback. |
 | `list:has(number) -> bool` | Whether an integer-valued index exists; negative indexes count from the end. |
 | `list:contains(any...) -> bool` | Whether every supplied value is an element; requires at least one argument. |
 | `list:unique() -> bool` | Whether all elements are distinct by HFF equality. |
@@ -166,6 +168,16 @@ PostgreSQL `Build` can reject a JSON or relation binding when the required
 representation or ordering is unavailable.
 See [list rules](../../spec/methods.md#lists) and the
 [callback guide](../guides/callbacks.md).
+
+`distinct()` keeps the first value from each HFF-equal group, including one null
+and the first representation of equal numeric values. It requires
+`method:list.distinct` and the structural equality capabilities applicable to
+the element type. `find(predicate)` returns the first original matching value,
+not the callback result; it requires `method:list.find` and `Callbacks`. Guarded
+no-value predicates count as false, and a null receiver yields null. Local and
+schema-known PostgreSQL JSON/JSONB lists support both when the bound
+representation is recoverable. PostgreSQL relations require `WithUniqueOrder`
+because both results observe first-occurrence order.
 
 For PostgreSQL, schema-known JSON/JSONB lists support no-argument and callback
 `sum()` for recoverable Int, Float, and mixed Int/Float contributions,

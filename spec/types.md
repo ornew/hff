@@ -93,12 +93,12 @@ the receiver before a method call when only some union members should be
 permitted.
 
 Structural equality capabilities follow the same static-type rule. Equality,
-inequality, membership, list containment, and list uniqueness require list or
-object equality permission only for composite value families that can be
-compared; compatible nested contents are checked recursively. `Any` and union
-types require every statically possible composite permission. An explicit type
-guard narrows the possible types before capability checking. See
-[capabilities](capabilities.md) and [evaluation](evaluation.md).
+inequality, membership, list containment, list uniqueness, and deduplication
+(`distinct()`) require list or object equality permission only for composite
+value families that can be compared; compatible nested contents are checked
+recursively. `Any` and union types require every statically possible composite
+permission. An explicit type guard narrows the possible types before capability
+checking. See [capabilities](capabilities.md) and [evaluation](evaluation.md).
 
 ```text
 schema: x has type String | Int

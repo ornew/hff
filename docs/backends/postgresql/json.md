@@ -905,17 +905,38 @@ For schema-known JSON objects, the backend supports `size()`, `has(key)`,
 `get(key)`, `keys()`, `values()`, and `items()`. Enumeration orders keys with
 PostgreSQL's `C` collation. For schema-known JSON lists, it supports `size()`,
 `count()`, `sum()`, `avg()`, `min()`, `max()`, `filter(predicate)`,
-`has(index)`, `contains()`, `unique()`, `sort()`, `concat(list)`, `any()`,
-`all()`, `map()`, and `flatmap()` when the
+`distinct()`, `find(predicate)`, `has(index)`, `contains()`, `unique()`,
+`sort()`, `concat(list)`, `any()`, `all()`, `map()`, and `flatmap()` when the
 callback and resulting values can be represented by the binding. `filter()`
 preserves JSON list order and does not need a separate order mapping.
 `contains()` requires every supplied needle to be present; a null
 needle is an ordinary value, while a null list receiver propagates null. A
 no-value argument propagates even if an earlier needle matched. `unique()`
-compares each element
-by HFF equality, so repeated stored nulls and repeated nested composite values
-are duplicates. These operations require applicable list/object equality
-capabilities for the types actually compared.
+compares each element by HFF equality, so repeated stored nulls and repeated
+nested composite values are duplicates. These operations require applicable
+list/object equality capabilities for the types actually compared.
+`distinct()` returns the first value from each HFF-equal group, in original
+order. `find(predicate)` returns the original first matching item rather than
+the callback result. Both need bindings that can recover values and output
+representations. JSONB needs version-1 type metadata when normalization has
+erased a representation the operation must retain, including an observable
+numeric subtype. `distinct()` needs applicable structural equality
+capabilities; `find()` treats guarded no-value predicates as false. The SQL
+translation preserves these result semantics but does not provide Local's
+procedural callback short-circuit or per-match work-budget behavior.
+
+For example, bind `tags` as `List<String|null>` with JSONB value
+`["api","api",null,"prod",null]` and `items` as
+`List<Struct{id:Int,active:Bool}>` with JSONB value
+`[{"id":1,"active":false},{"id":2,"active":true}]`:
+
+```hff
+tags:distinct:json="[\"api\",null,\"prod\"]"
+items:find(item=>item.active).id=2
+```
+
+The first filter observes stable de-duplication, including one null. The second
+reads `id` from the first matching original item.
 
 For JSON/JSONB lists, no-argument and callback `sum()` support recoverable Int,
 Float, and mixed Int/Float contributions. The no-argument form also supports

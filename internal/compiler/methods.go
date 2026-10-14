@@ -32,7 +32,7 @@ func (c *compiler) call(receiver plan.Node, n *syntax.MethodCall, span core.Span
 	if len(compatible) == 0 {
 		return plan.Node{}, c.failure(core.TypeError, n, fmt.Sprintf("method %q cannot be called on %s with %d arguments", name, describeType(receiver.Type()), len(n.Args)))
 	}
-	higher := name == "map" || name == "flatmap" || name == "any" || name == "all" || name == "filter" || (name == "count" || name == "sum" || name == "min" || name == "max" || name == "avg") && len(n.Args) == 1 || name == "foldl" || name == "foldr"
+	higher := name == "map" || name == "flatmap" || name == "any" || name == "all" || name == "filter" || name == "find" || (name == "count" || name == "sum" || name == "min" || name == "max" || name == "avg") && len(n.Args) == 1 || name == "foldl" || name == "foldr"
 	var args []plan.Node
 	var callbackResult core.Type
 	if higher {
@@ -107,7 +107,7 @@ func (c *compiler) call(receiver plan.Node, n *syntax.MethodCall, span core.Span
 					return plan.Node{}, err
 				}
 			}
-		case "list.unique":
+		case "list.unique", "list.distinct":
 			item := element(receiver.Type())
 			if err := c.equalityCapabilities(item, item, n); err != nil {
 				return plan.Node{}, err

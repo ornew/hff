@@ -140,6 +140,8 @@ partial serialization.
 | `list:min(func(T) -> number) -> number` | Smallest numeric callback result |
 | `list:max() -> number` | Largest numeric element |
 | `list:max(func(T) -> number) -> number` | Largest numeric callback result |
+| `list:distinct() -> list<T>` | Stable deduplication by HFF equality |
+| `list:find(func(T) -> bool) -> T|null` | First original element whose callback converts to true |
 | `list:has(number) -> bool` | Index-presence test |
 | `list:contains(any...) -> bool` | All supplied elements are present; at least one argument |
 | `list:unique() -> bool` | Whether every element is distinct |
@@ -205,6 +207,23 @@ when storage loses the Int/Float distinction. Bound relations support numeric
 callback projections; Int-only or null-only projections do not require a
 unique relation order, while Float or mixed projections do because ties can
 retain distinct representations.
+`distinct()` returns a new list containing the first occurrence of each value,
+in input order, using structural HFF equality. Null is an ordinary value and
+appears at most once. Mixed Int and Float values compare by their exact numeric
+value; when equal values have different subtypes or Float representations, the
+first original value is retained, including its signed zero. A null receiver
+yields null and a guarded receiver propagates no-value. The method requires
+`method:list.distinct`; when an element type
+can contain lists or objects, it also requires the corresponding structural
+equality capabilities, checked recursively as for `unique()`.
+`find(predicate)` returns the original first element whose callback result
+converts to true; it does not return the callback result. It evaluates elements
+from left to right and stops at the first match. Guarded no-value from the
+predicate converts to false. An empty list or no match returns null, as does a
+null receiver; finding an element whose value is null also returns ordinary
+null. A guarded receiver propagates no-value. The method requires
+`method:list.find` and `Callbacks`; nested callback limits and capability rules
+apply when the predicate contains nested callbacks.
 `has()` supports the same negative indices as element access. `unique()` returns
 whether every element is distinct using structural equality. `has()` returns
 false for an out-of-range integer-valued index, and null for a non-integer index. `sort()` is stable

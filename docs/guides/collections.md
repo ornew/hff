@@ -95,6 +95,41 @@ for the supported subset.
 `concat(list)` returns a new list containing the receiver followed by the
 argument.
 
+`distinct()` is useful when a list contains repeated values but its original
+order matters. For `tags: List<String|null>` equal to `["api", "api", null,
+"prod", null]` and `numbers: List<Int|Float>` equal to `[1, 1.0, -0.0, 0.0]`:
+
+```hff
+tags:distinct:json="[\"api\",null,\"prod\"]"
+numbers:distinct:json="[1,-0.0]"
+```
+
+It keeps the first occurrence using structural HFF equality. Null appears once;
+numeric values with equal exact value deduplicate across Int and Float, while
+the first value's subtype and signed-zero representation are retained. The
+method requires `method:list.distinct` and any structural equality capabilities
+required by the possible element types.
+
+`find(predicate)` returns the original first matching element, which makes it
+convenient to select a record before reading one of its fields:
+
+```hff
+items:find(item=>item.active).id=2
+```
+
+For `items: List<Struct{id:Int,active:Bool}>` equal to
+`[{"id":1,"active":false},{"id":2,"active":true}]`, Local evaluation stops
+at the second record and the query is true. Predicate results
+use ordinary boolean conversion; guarded no-value is false. Empty lists,
+no-match, and null receivers yield null. A matching null element also returns
+ordinary null. The method requires `method:list.find` and `Callbacks`; nested
+callback capability and depth limits apply when needed. Local supports both
+methods. PostgreSQL supports JSON/JSONB lists when the binding can recover the
+values and representations these operations need. Relations need a unique
+order because both operations observe the first occurrence. PostgreSQL
+preserves the result but does not execute callbacks with Local's procedural
+short-circuit or per-match work-budget behavior.
+
 ## Selecting a numeric extreme
 
 `min()` and `max()` select a numeric value directly or use a callback to

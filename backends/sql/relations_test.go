@@ -87,6 +87,7 @@ func relationOrderedQueries() []string {
 		`items:flatmap(x=>x.tags)=["auth","dev"]`,
 		`items:filter(x=>x.price>10):count=2`,
 		`items:filter(x=>x.active):map(x=>x.price)=[20]`,
+		`items:distinct:size=2`, `items:find(x=>x.price>10).price=20`,
 		`items:foldl(0.0,(acc,x)=>{"keep":acc,"text":acc:string}.keep)=0.0`,
 		`items:foldr(0.0,(x,acc)=>{"keep":acc,"text":acc:string}.keep)=0.0`,
 		`items:map(x=>x.price):any(price=>price>10) items[0].price=20`,

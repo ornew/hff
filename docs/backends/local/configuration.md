@@ -86,12 +86,13 @@ Call `CheckWithMethods` with the declaration ID suffixes when checking a set
 directly. See the [local extension guide](extensions.md) for the complete flow.
 
 Structural equality permissions are checked during compilation for `=`/`!=`,
-`in()`, `list:contains()`, and `list:unique()`. Scalar comparisons and explicit
-null tests do not need them. Required permissions follow the statically
-possible compared types, recursively through compatible nested containers;
-explicit type guards narrow those types. The StructuralEquality group enables
-both list and object equality. Removing the group removes both permissions;
-each permission can then be selected independently.
+`in()`, `list:contains()`, `list:unique()`, and `list:distinct()`. Scalar
+comparisons and explicit null tests do not need them. Required permissions
+follow the statically possible compared types, recursively through compatible
+nested containers; explicit type guards narrow those types. The
+StructuralEquality group enables both list and object equality. Removing the
+group removes both permissions; each permission can then be selected
+independently.
 
 ## Limits
 

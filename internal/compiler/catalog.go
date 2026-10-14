@@ -78,6 +78,8 @@ func builtins(name string) []declaration {
 		fixed("list", list, integer, any)
 	case "filter":
 		fixed("list", list, list, any)
+	case "find":
+		fixed("list", list, any, any)
 	case "sum", "min", "max", "avg":
 		fixed("list", list, number)
 		fixed("list", list, number, any)
@@ -86,7 +88,7 @@ func builtins(name string) []declaration {
 		fixed("object", object, boolean, str)
 	case "unique":
 		fixed("list", list, boolean)
-	case "sort":
+	case "sort", "distinct":
 		fixed("list", list, list)
 	case "get":
 		fixed("object", object, any, str)

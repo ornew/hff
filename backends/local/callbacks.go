@@ -7,7 +7,7 @@ import (
 
 func higherMethod(id string) bool {
 	switch id {
-	case "list.any", "list.all", "list.count", "list.filter", "list.sum", "list.min", "list.max", "list.avg", "list.map", "list.flatmap", "list.foldl", "list.foldr":
+	case "list.any", "list.all", "list.count", "list.filter", "list.find", "list.sum", "list.min", "list.max", "list.avg", "list.map", "list.flatmap", "list.foldl", "list.foldr":
 		return true
 	}
 	return false
@@ -86,7 +86,7 @@ func (e *evaluation) higher(n plan.Node, receiver core.Value, id string) (result
 		}
 		return accumulator, nil
 	}
-	predicate := id == "list.any" || id == "list.all" || id == "list.count" || id == "list.filter"
+	predicate := id == "list.any" || id == "list.all" || id == "list.count" || id == "list.filter" || id == "list.find"
 	var count int64
 	var output []core.Value
 	if id == "list.filter" || !predicate {
@@ -101,6 +101,9 @@ func (e *evaluation) higher(n plan.Node, receiver core.Value, id string) (result
 		}
 		if predicate {
 			yes := truth(evaluated)
+			if id == "list.find" && yes {
+				return ordinary(value), nil
+			}
 			if id == "list.any" && yes {
 				return ordinary(core.Bool(true)), nil
 			}
@@ -141,6 +144,9 @@ func (e *evaluation) higher(n plan.Node, receiver core.Value, id string) (result
 		}
 	}
 	if predicate {
+		if id == "list.find" {
+			return null(), nil
+		}
 		if id == "list.count" {
 			return ordinary(core.Int(count)), nil
 		}

@@ -78,6 +78,8 @@ func (e *evaluation) collectionMethod(id string, receiver core.Value, args []cor
 			}
 		}
 		return ordinary(core.Bool(true)), nil
+	case "list.distinct":
+		return e.distinctList(receiver)
 	case "list.concat":
 		a, _ := receiver.ListView()
 		b, _ := args[0].ListView()

@@ -125,11 +125,12 @@ Structural comparisons require the corresponding `ListEquality` or
 `ObjectEquality` capability; `StructuralEquality` selects both. Compilation
 checks the types that may actually be compared, recursively through compatible
 nested values. This applies to equality and inequality, `in()`,
-`list:contains()`, and `list:unique()`. Comparing scalar list elements does not
-require list equality; comparing list values does. Explicit null tests are not
-structural comparisons and require no structural equality permission. For
-`Any` and unions, all statically possible composite comparison families must be
-enabled. An explicit type guard narrows that set: `value:[list[string]]:unique`
+`list:contains()`, `list:unique()`, and `list:distinct()`. Comparing scalar
+list elements does not require list equality; comparing list values does.
+Explicit null tests are not structural comparisons and require no structural
+equality permission. For `Any` and unions, all statically possible composite
+comparison families must be enabled. An explicit type guard narrows that set:
+`value:[list[string]]:unique`
 compares scalar elements, whereas `value:[list[string]]=["a"]` compares list
 values and requires list equality.
 

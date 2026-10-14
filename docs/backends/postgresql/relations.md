@@ -250,6 +250,13 @@ order and therefore requires `WithUniqueOrder`. Its callback uses ordinary
 boolean conversion, with guarded no-value counting as false. PostgreSQL `Build`
 rejects relation filters whose result order cannot be represented.
 
+`distinct()` and `find(predicate)` preserve first-occurrence order, so a
+relation using either method must supply `WithUniqueOrder`. `distinct()` keeps
+the original first item from each HFF-equal group; `find()` returns the first
+original item whose callback result converts to true. Guarded no-value from the
+predicate is false. The builder rejects these operations when it cannot
+represent a unique relation order.
+
 `avg()` over a relation also does not observe row order. PostgreSQL supports a
 numeric callback projection when each projected value has a recoverable Int or
 Float subtype; the relation does not need `WithUniqueOrder` unless a nested

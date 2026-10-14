@@ -778,6 +778,12 @@ func (b *builder) call(n hff.Node) (expression, error) {
 	if name == "min" || name == "max" {
 		return b.jsonExtreme(n, name == "min")
 	}
+	if name == "find" {
+		return b.jsonFind(n)
+	}
+	if name == "distinct" {
+		return b.jsonDistinct(n)
+	}
 	if name == "size" || name == "count" && n.ChildCount() == 1 {
 		if value, handled, err := b.relationSize(n); handled {
 			return value, err

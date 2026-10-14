@@ -67,7 +67,7 @@ func (c *compiler) higherOrder(receiver plan.Node, n *syntax.MethodCall) ([]plan
 	}
 	item := element(receiver.Type())
 	if !fold {
-		callback, err := c.callback(lambda, []core.Type{item}, name == "any" || name == "all" || name == "count" || name == "filter")
+		callback, err := c.callback(lambda, []core.Type{item}, name == "any" || name == "all" || name == "count" || name == "filter" || name == "find")
 		if err != nil {
 			return nil, core.Type{}, err
 		}
@@ -92,6 +92,8 @@ func (c *compiler) higherOrder(receiver plan.Node, n *syntax.MethodCall) ([]plan
 			}
 		case "filter":
 			result = core.NewListType(item)
+		case "find":
+			result = item
 		case "map":
 			result = core.NewListType(result)
 		case "flatmap":

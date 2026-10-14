@@ -24,6 +24,8 @@ func specialize(d declaration, receiver core.Type, args []plan.Node, callbackRes
 		result = receiver
 	case "list":
 		switch d.name {
+		case "distinct":
+			result = core.NewListType(element(receiver))
 		case "concat":
 			var types []core.Type
 			types = append(types, element(receiver))
@@ -44,7 +46,7 @@ func specialize(d declaration, receiver core.Type, args []plan.Node, callbackRes
 			if receiver.Kind() == core.AnyType {
 				result = core.NewListType(item)
 			}
-		case "map", "flatmap", "any", "all", "filter", "foldl", "foldr", "sum", "min", "max", "avg":
+		case "map", "flatmap", "any", "all", "filter", "find", "foldl", "foldr", "sum", "min", "max", "avg":
 			result = callbackResult
 			if d.name == "avg" {
 				if len(args) == 0 {

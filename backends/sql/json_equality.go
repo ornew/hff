@@ -96,7 +96,7 @@ func (b *builder) jsonComparison(n, l, r hff.Node, left, right expression, op hf
 	if !lok || !rok {
 		return expression{}, b.failure(n, "structural equality requires JSON collection representations")
 	}
-	equal, err := b.jsonEqual(n, left.code, lf, l.Type(), right.code, rf, r.Type())
+	equal, err := b.jsonEqual(n, left.code, lf, b.jsonStoredType(l), right.code, rf, b.jsonStoredType(r))
 	if err != nil {
 		return expression{}, err
 	}

@@ -21,9 +21,9 @@ both. Compilation checks only structural value families that the static types
 can actually compare, recursively through compatible nested lists and objects.
 Scalar comparisons and explicit comparisons with a null literal are exempt.
 The permissions apply to `=`, `!=`, membership (`in()` and
-`list:contains()`), and `list:unique()`. A list of scalar values therefore
-does not need structural equality for `list:unique()`, while comparing the list
-value itself does.
+`list:contains()`), and `list:unique()`/`list:distinct()`. These methods need
+no structural equality permission for scalar elements; comparing or
+deduplicating composite values requires the applicable permissions.
 
 For `Any` and union operands, compilation checks all statically possible
 structural comparisons. An explicit type guard narrows those possibilities and
@@ -112,12 +112,12 @@ method candidates from its non-null `T` members; null still propagates normally.
 See [types](types.md), [syntax](syntax.md), and [evaluation](evaluation.md).
 
 Structural equality permissions are checked for `=`, `!=`, `in()`,
-`list:contains()`, and `list:unique()`. The compiler recursively checks
-compatible composite types that can be compared. `Any` and unions require each
-statically possible list or object permission, while explicit type guards
-narrow the checked types. Scalar comparisons and explicit null tests need no
-structural equality permission. `group:structural-equality` selects both
-`comparison:list-equality` and `comparison:object-equality`.
+`list:contains()`, `list:unique()`, and `list:distinct()`. The compiler
+recursively checks compatible composite types that can be compared. `Any` and
+unions require every statically possible list or object permission; explicit
+type guards narrow the checked types. Scalar comparisons and explicit null
+tests need no structural equality permission. `group:structural-equality`
+selects both `comparison:list-equality` and `comparison:object-equality`.
 
 ## Backend translation
 
