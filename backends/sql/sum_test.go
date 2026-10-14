@@ -25,7 +25,8 @@ func TestSumChecksProjectionAndBackendSupport(t *testing.T) {
 		{"integer projection", schema.ListOf(schema.Struct(schema.Int("price"))), `items:sum(x=>x.price)>0`, true},
 		{"float list", schema.ListOf(schema.FloatType), `items:sum>0`, true},
 		{"float projection", schema.ListOf(schema.Struct(schema.Float("price"))), `items:sum(x=>x.price)>0`, true},
-		{"mixed list", schema.ListOf(schema.Union(schema.IntType, schema.FloatType)), `items:sum>0`, false},
+		{"mixed list", schema.ListOf(schema.Union(schema.IntType, schema.FloatType)), `items:sum>0`, true},
+		{"any list", schema.ListOf(schema.AnyType), `items:sum>0`, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("items", tc.typ))), engine.WithCapabilities(capabilities.Standard()))
@@ -71,5 +72,26 @@ func TestSumPreservesCallbackParametersForNullProjection(t *testing.T) {
 		if !strings.Contains(query.Where(), fmt.Sprintf("$%d", i+1)) {
 			t.Fatalf("generated SQL dropped parameter %d: %s", i+1, query.Where())
 		}
+	}
+}
+
+func TestMixedSumRequiresRecoverableJSONBNumbers(t *testing.T) {
+	ctx := context.Background()
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.List("items", schema.Union(schema.IntType, schema.FloatType)))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	program, err := e.Compile(ctx, `items:sum>0`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain := hffsql.BindJSON(hff.Path{"items"}, hffsql.Column("records", "items"), hffsql.JSONB)
+	if _, err := hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(plain)); err == nil {
+		t.Fatal("ambiguous JSONB numeric sum built without type metadata")
+	}
+	withMetadata := hffsql.BindJSON(hff.Path{"items"}, hffsql.Column("records", "items"), hffsql.JSONB,
+		hffsql.WithTypeMetadata(hffsql.Column("records", "metadata")))
+	if _, err := hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(withMetadata)); err != nil {
+		t.Fatalf("recoverable JSONB numeric sum failed: %v", err)
 	}
 }

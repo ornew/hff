@@ -39,24 +39,30 @@ result is Float and follows the backend's declared Float model; a non-finite
 result is null. The zero-argument form requires `method:list.sum`; the callback
 form requires that method capability and `Callbacks`.
 
-The PostgreSQL JSON/JSONB backend supports statically homogeneous Int or Float
-contributions (including nullable elements). For example, with `scores` bound
-as `List<Float|null>`, both queries build and sum to `4.0` for `[1.25, 2.75]`:
+The PostgreSQL JSON/JSONB backend supports no-argument sums over mixed numeric
+lists and recoverable dynamic lists. For a `List<Int|Float|null>` binding,
+`scores:sum` returns Float for `[1, 2.5]`. A `List<Any>` binding can sum the
+same values when their runtime numeric subtypes are recoverable. For example,
+with `scores` bound as `List<Int|Float|null>` and `values` as `List<Any>`:
 
 ```hff
-scores:sum=4.0
-scores:sum(score=>score!)=4.0
+scores:sum=3.5
+values:sum=3.5
 ```
 
-An empty or all-skipped Float list still returns Int zero. PostgreSQL rejects
-mixed Int/Float and unresolved `Any` contributions at Build because the
-contributing subtype is not statically known. See the
+Null contributions are skipped; a nonnumeric runtime value in `values` makes
+the result null. An empty or all-skipped list returns Int zero. If every
+contribution is Int, the final sum is exact when it fits int64. If any
+contribution is Float, the result is Float. For JSONB, provide version-1
+numeric type metadata when stored numbers may have lost their Int/Float
+distinction. Callback projections remain limited to a statically homogeneous
+numeric family. See the
 [PostgreSQL JSON guide](../backends/postgresql/json.md#schema-known-collection-access)
-for the backend boundary. PostgreSQL obtains round-trip-safe Float text for
-each contribution, accumulates those decimal values with `SUM(numeric)`, and
-checks the final Float conversion. This requires `extra_float_digits > 0`; HFF
-does not set the database session value. Numeric accumulation can differ from
-Local's list-order Float additions.
+for the representation and callback limits. PostgreSQL obtains round-trip-safe
+Float text for each contribution, accumulates those decimal values with
+`SUM(numeric)`, and checks the final Float conversion. This requires
+`extra_float_digits > 0`; HFF does not set the database session value. Numeric
+accumulation can differ from Local's list-order Float additions.
 
 ```hff
 tags:size>=2

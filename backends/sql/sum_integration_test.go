@@ -254,6 +254,159 @@ func TestPostgreSQLFloatSumUsesNumericIntermediate(t *testing.T) {
 	}
 }
 
+func TestPostgreSQLMixedSumMatchesLocal(t *testing.T) {
+	container := os.Getenv("HFF_POSTGRES_CONTAINER")
+	if container == "" {
+		t.Fatal("integration tests require HFF_POSTGRES_CONTAINER")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	for _, itemType := range []hff.Type{schema.Union(schema.IntType, schema.FloatType, schema.NullType), schema.AnyType} {
+		e, err := engine.New(engine.WithSchema(schema.Struct(schema.List("items", itemType))), engine.WithCapabilities(capabilities.Standard()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows := []hff.Value{
+			hff.List(), hff.List(hff.Null()), hff.List(hff.Int(1), hff.Int(2)),
+			hff.List(hff.Int(1), hff.Float(2.5)),
+			hff.List(hff.Float(1)), hff.List(hff.Float(math.Copysign(0, -1))),
+			hff.List(hff.Int(1), hff.Float(2)),
+			hff.List(hff.Float(1.5), hff.Null(), hff.Int(2)),
+			hff.List(hff.Int(math.MaxInt64), hff.Int(1)),
+		}
+		if itemType.Kind() == hff.AnyType {
+			rows = append(rows, hff.List(hff.Int(1), hff.String("invalid")))
+		}
+		for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
+			t.Run(itemType.Key()+"/"+string(format), func(t *testing.T) {
+				var options []hffsql.JSONBindingOption
+				if format == hffsql.JSONB {
+					options = append(options, hffsql.WithTypeMetadata(hffsql.Column("records", "metadata")))
+				}
+				var script strings.Builder
+				var expected, labels []string
+				for _, source := range []string{`items:sum=0`, `items:sum=3`, `items:sum=3.5`, `items:sum=null`, `items:sum:[float]:exists`, `items:sum:json="1.0"`, `items:sum:json="3.5"`} {
+					program, err := e.Compile(ctx, source)
+					if err != nil {
+						t.Fatal(source, err)
+					}
+					filter, err := local.Build(ctx, program)
+					if err != nil {
+						t.Fatal(source, err)
+					}
+					query, err := hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL),
+						hffsql.WithBindings(hffsql.BindJSON(hff.Path{"items"}, hffsql.Column("records", "items"), format, options...)))
+					if err != nil {
+						t.Fatal(source, err)
+					}
+					var types, literals []string
+					for _, arg := range query.Args() {
+						typ, literal := sqlFixtureParameter(t, arg)
+						types, literals = append(types, typ), append(literals, literal)
+					}
+					params, args := "", ""
+					if len(types) > 0 {
+						params, args = "("+strings.Join(types, ",")+")", "("+strings.Join(literals, ",")+")"
+					}
+					for _, values := range rows {
+						matched, err := filter.Match(ctx, hff.Object(map[string]hff.Value{"items": values}))
+						if err != nil {
+							t.Fatal(source, err)
+						}
+						want := "f"
+						if matched {
+							want = "t"
+						}
+						expected = append(expected, want)
+						labels = append(labels, source+" on "+metadataJSONFixture(t, values))
+						name := fmt.Sprintf("mixed_sum_%d", len(expected))
+						fmt.Fprintf(&script, "PREPARE %s%s AS SELECT %s FROM (VALUES (%s::%s,%s::jsonb)) records(items,metadata); EXECUTE %s%s; DEALLOCATE %s;\n",
+							name, params, query.Where(), sqlFixtureString(metadataJSONFixture(t, values)), format, sqlFixtureString(pairTypeMetadata(t, values)), name, args, name)
+					}
+				}
+				command := exec.CommandContext(ctx, "docker", "exec", "-i", container, "psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-U", "postgres")
+				command.Stdin = strings.NewReader(script.String())
+				output, err := command.CombinedOutput()
+				if err != nil {
+					t.Fatalf("PostgreSQL mixed sum failed: %v\n%s", err, output)
+				}
+				actual := strings.Fields(string(output))
+				if len(actual) != len(expected) {
+					t.Fatalf("got %d results, want %d: %s", len(actual), len(expected), output)
+				}
+				for i, want := range expected {
+					if actual[i] != want {
+						t.Errorf("%s: PostgreSQL=%s local=%s", labels[i], actual[i], want)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestPostgreSQLMixedSumSkipsRejectedJSONFloats(t *testing.T) {
+	container := os.Getenv("HFF_POSTGRES_CONTAINER")
+	if container == "" {
+		t.Fatal("integration tests require HFF_POSTGRES_CONTAINER")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.List("items", schema.AnyType))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		json, source string
+		want         string
+	}{
+		{`[1,1e-400]`, `items:sum:json="1"`, "t"},
+		{`[1,1e-400]`, `items:sum:[float]:exists`, "f"},
+		{`[1e-400]`, `items:sum:json="0"`, "t"},
+		{`[1e400,1]`, `items:sum:json="1"`, "t"},
+		{`[1,2.5,1e-400]`, `items:sum:json="3.5"`, "t"},
+		{`[1,2.5,1e-400]`, `items:sum:[float]:exists`, "t"},
+	}
+	var script strings.Builder
+	for i, tc := range tests {
+		program, err := e.Compile(ctx, tc.source)
+		if err != nil {
+			t.Fatal(tc.source, err)
+		}
+		query, err := hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL),
+			hffsql.WithBindings(hffsql.BindJSON(hff.Path{"items"}, hffsql.Column("records", "items"), hffsql.JSON)))
+		if err != nil {
+			t.Fatal(tc.source, err)
+		}
+		var types, literals []string
+		for _, arg := range query.Args() {
+			typ, literal := sqlFixtureParameter(t, arg)
+			types, literals = append(types, typ), append(literals, literal)
+		}
+		params, args := "", ""
+		if len(types) > 0 {
+			params, args = "("+strings.Join(types, ",")+")", "("+strings.Join(literals, ",")+")"
+		}
+		name := fmt.Sprintf("rejected_sum_%d", i)
+		fmt.Fprintf(&script, "PREPARE %s%s AS SELECT %s FROM (VALUES (%s::json)) records(items); EXECUTE %s%s; DEALLOCATE %s;\n",
+			name, params, query.Where(), sqlFixtureString(tc.json), name, args, name)
+	}
+	command := exec.CommandContext(ctx, "docker", "exec", "-i", container, "psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-U", "postgres")
+	command.Stdin = strings.NewReader(script.String())
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("PostgreSQL rejected Float sum failed: %v\n%s", err, output)
+	}
+	actual := strings.Fields(string(output))
+	if len(actual) != len(tests) {
+		t.Fatalf("got %d results, want %d: %s", len(actual), len(tests), output)
+	}
+	for i, tc := range tests {
+		if actual[i] != tc.want {
+			t.Errorf("%s on %s: PostgreSQL=%s want=%s", tc.source, tc.json, actual[i], tc.want)
+		}
+	}
+}
+
 func TestPostgreSQLSumCapturedOuterValue(t *testing.T) {
 	container := os.Getenv("HFF_POSTGRES_CONTAINER")
 	if container == "" {

@@ -128,10 +128,12 @@ zero-argument form requires `method:list.sum`; callback forms also require the
 See [list rules](../../spec/methods.md#lists) and the
 [callback guide](../guides/callbacks.md).
 
-For PostgreSQL, schema-known JSON/JSONB lists support `sum()` and
-`sum(callback)` when contributions are statically Int, optionally null, or
-Float, optionally null. Mixed Int/Float and unresolved dynamic contributions
-are rejected by `Build`. Float sums use the backend's native Float model.
+For PostgreSQL, schema-known JSON/JSONB lists support no-argument `sum()` for
+recoverable Int, Float, and mixed Int/Float contributions, including `Any`
+lists when each numeric subtype can be recovered. JSONB needs version-1 numeric
+type metadata when stored values may have lost that distinction. Callback
+projections remain limited to a statically homogeneous numeric family. Float
+sums use the backend's native Float model.
 For PostgreSQL JSON/JSONB Float sums, each input is converted using
 round-trip-safe Float text and accumulated with `SUM(numeric)` before a checked
 Float conversion. This requires `extra_float_digits > 0`; HFF does not set the

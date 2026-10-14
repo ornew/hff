@@ -454,8 +454,11 @@ operations outside that supported subset remain unsupported. JSON list/object
 structural equality, list `contains()`, `unique()`, `sort()`, `concat(list)`,
 `count()`, `filter(predicate)`, `sum()`, and `any()`/`all()` are available for
 schema-known values when their required capabilities are enabled. JSON/JSONB
-`sum()` supports statically Int or Float contributions, including nullable
-values; mixed Int/Float and unresolved dynamic contributions remain unsupported.
+No-argument `sum()` supports recoverable Int, Float, and mixed Int/Float
+contributions, including `Any` lists when runtime numeric subtypes can be
+recovered. JSONB needs version-1 numeric type metadata when stored values may
+have lost their Int/Float distinction. Callback projections remain limited to
+a statically homogeneous numeric family.
 For JSON/JSONB Float sums, each contribution uses PostgreSQL's round-trip-safe
 Float text before `SUM(numeric)` and a checked final Float conversion. This
 requires `extra_float_digits > 0`; HFF does not change the database setting.

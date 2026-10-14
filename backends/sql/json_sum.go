@@ -32,7 +32,7 @@ func (b *builder) jsonSum(n hff.Node) (expression, error) {
 	if n.ChildCount() == 1 {
 		family = staticSumFamily(itemType)
 		if family == hff.InvalidType {
-			return expression{}, b.failure(n, "PostgreSQL sum currently requires a statically known numeric family")
+			return b.jsonDynamicSum(n, receiver, value, format, stored)
 		}
 		alias := b.nextAlias()
 		from = string(format) + "_array_elements(" + value.code + ") AS " + alias + "(value)"
@@ -79,6 +79,32 @@ func (b *builder) jsonSum(n hff.Node) (expression, error) {
 	total := "COALESCE(" + aggregate + ",0::numeric)"
 	code := "(CASE WHEN " + value.code + " IS NULL THEN NULL::bigint ELSE (SELECT CASE WHEN " + alias + ".total BETWEEN '-9223372036854775808'::numeric AND '9223372036854775807'::numeric THEN " + alias + ".total::bigint ELSE NULL::bigint END FROM (SELECT " + total + " AS total FROM " + from + ") AS " + alias + ") END)"
 	return expression{code: code, present: value.present, kind: hff.IntType}, nil
+}
+
+// A recoverable mixed list can choose its result family from the actual
+// contributing rows. JSONB must restore numeric subtype metadata first.
+func (b *builder) jsonDynamicSum(n, receiver hff.Node, value expression, format JSONFormat, stored hff.Type) (expression, error) {
+	document, err := b.comparisonDocument(receiver, value.code, format, stored)
+	if err != nil {
+		return expression{}, err
+	}
+	raw := b.project(document)
+	array := b.project("(CASE WHEN json_typeof(" + raw + ")='array' THEN " + raw + " ELSE NULL::json END)")
+	alias := b.nextAlias()
+	item := alias + ".value"
+	category := "json_typeof(" + item + ")"
+	text := "(" + item + " #>> '{}'::text[])"
+	integer := "(" + category + "='number' AND " + text + " !~ '[.eE]')"
+	floating := "(" + category + "='number' AND " + text + " ~ '[.eE]')"
+	floatValue := jsonFloatCast(text)
+	term := "(CASE WHEN " + integer + " THEN " + text + "::numeric WHEN " + floating + " THEN (" + floatValue + ")::text::numeric END)"
+	validFloat := "(" + floating + " AND " + floatValue + " IS NOT NULL)"
+	from := "json_array_elements(" + array + ") AS " + alias + "(value)"
+	result := b.nextAlias()
+	total := result + ".total"
+	floatResult := b.floatText(total+"::double precision") + "::json"
+	code := "(CASE WHEN " + value.code + " IS NULL THEN NULL::json ELSE (SELECT CASE WHEN " + result + ".invalid THEN 'null'::json WHEN " + total + " IS NULL THEN '0'::json WHEN " + result + ".floating THEN CASE WHEN pg_input_is_valid(" + total + "::text,'double precision') THEN " + floatResult + " ELSE 'null'::json END WHEN " + total + " BETWEEN '-9223372036854775808'::numeric AND '9223372036854775807'::numeric THEN to_json(" + total + "::bigint) ELSE 'null'::json END FROM (SELECT sum(" + term + ") AS total,COALESCE(bool_or(" + validFloat + "),FALSE) AS floating,COALESCE(bool_or(" + category + " NOT IN ('number','null')),FALSE) AS invalid FROM " + from + ") AS " + result + ") END)"
+	return b.jsonDecode(n, code, JSON, n.Type(), value.present)
 }
 
 func staticSumFamily(typ hff.Type) hff.TypeKind {
