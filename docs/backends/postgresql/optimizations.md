@@ -581,6 +581,16 @@ need to be projected; a whole item is built only when the callback observes
 that value. Guards, computed relation lists, or alias collisions can require
 the general list-materialization path.
 
+Inside these subqueries, eligible scalar predicates can also stay direct when
+the callback uses direct native scalar fields and literals combined with
+Boolean `AND`/`OR`/`NOT`. For example,
+`items:any(item=>item.price>100 item.active)` removes four inner
+`CROSS JOIN LATERAL` projections; two outer generic projections remain.
+Nullable or optional struct item state and noneligible callback expressions
+retain general lowering. This is a SQL-shape observation, not a runtime-speed
+claim. See the [relation callback predicate record](../../optimizations/044-postgresql-relation-callback-predicates.md)
+for scope and limits.
+
 For a plain bound relation, `has(0)` and `has(-1)` can use this witness query
 to test nonemptiness directly. The existing parent and relation presence/null
 case remains around the `EXISTS`; no unique item ordering is needed for these

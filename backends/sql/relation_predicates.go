@@ -90,11 +90,20 @@ func (b *builder) relationPredicate(n hff.Node, name string) (expression, bool, 
 		}
 	}()
 	body, _ := callback.Child(0)
-	result, err := b.expression(body)
-	if err != nil {
-		return expression{}, true, err
+	var predicate string
+	if b.directScalarWhereEligible(body) {
+		var err error
+		predicate, err = b.directScalarWhere(body)
+		if err != nil {
+			return expression{}, true, err
+		}
+	} else {
+		result, err := b.expression(body)
+		if err != nil {
+			return expression{}, true, err
+		}
+		predicate = b.truth(body, result)
 	}
-	predicate := b.truth(body, result)
 	operator := "EXISTS"
 	if name == "all" {
 		operator = "NOT EXISTS"

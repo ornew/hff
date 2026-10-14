@@ -79,7 +79,14 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 		_, _, ok := b.directScalarColumn(child)
 		return ok
 	default:
-		return b.directScalarExistsEligible(n)
+		if b.directScalarExistsEligible(n) {
+			return true
+		}
+		if n.Kind() == hff.VariableNode || n.Kind() == hff.ParameterNode || n.Kind() == hff.FieldNode {
+			_, _, ok := b.directScalarColumn(n)
+			return ok
+		}
+		return false
 	}
 }
 
@@ -176,6 +183,9 @@ func (b *builder) directScalarColumn(n hff.Node) (string, hff.TypeKind, bool) {
 		}
 		return column, identity.kind, true
 	}
+	if column, kind, direct := b.directPhysicalScalarColumn(n); direct {
+		return column, kind, true
+	}
 	if n.Kind() != hff.VariableNode && n.Kind() != hff.FieldNode {
 		return "", hff.InvalidType, false
 	}
@@ -204,12 +214,53 @@ func (b *builder) directScalarColumn(n hff.Node) (string, hff.TypeKind, bool) {
 	return column, kind, true
 }
 
+// A relation callback parameter can use its physical scalar column directly
+// when every enclosing struct item is always present and non-null. Nullable
+// or optional struct state still needs ordinary relation lowering.
+func (b *builder) directPhysicalScalarColumn(n hff.Node) (string, hff.TypeKind, bool) {
+	if n.Kind() != hff.ParameterNode && n.Kind() != hff.FieldNode {
+		return "", hff.InvalidType, false
+	}
+	root := n
+	for root.Kind() == hff.FieldNode {
+		parent, _ := root.Child(0)
+		mapping, ok := b.relationMapping(parent, b.physicalParameters)
+		if !ok || mapping.structure == nil || !fixedPredicate(mapping.structure.present, true) || !fixedPredicate(mapping.structure.null, false) {
+			return "", hff.InvalidType, false
+		}
+		root = parent
+	}
+	if root.Kind() != hff.ParameterNode {
+		return "", hff.InvalidType, false
+	}
+	mapping, ok := b.relationMapping(n, b.physicalParameters)
+	if !ok || mapping.structure != nil || mapping.relation != nil || mapping.timestamp || mapping.composite || mapping.format != "" {
+		return "", hff.InvalidType, false
+	}
+	kind, scalar := scalarKind(n.Type())
+	if !scalar || (kind != hff.IntType && kind != hff.FloatType && kind != hff.StringType && kind != hff.BoolType && kind != hff.BytesType && kind != hff.DurationType) {
+		return "", hff.InvalidType, false
+	}
+	column, err := quoteColumn(mapping.column)
+	if err != nil {
+		return "", hff.InvalidType, false
+	}
+	return column, kind, true
+}
+
+func fixedPredicate(predicate SQLPredicate, value bool) bool {
+	return predicate.node != nil && predicate.node.kind == "bool" && predicate.node.constant == value
+}
+
 func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 	if err := checkContext(b.ctx); err != nil {
 		return "", err
 	}
 	if b.directScalarExistsEligible(n) {
 		return b.directScalarExistsWhere(n), nil
+	}
+	if n.Kind() == hff.VariableNode || n.Kind() == hff.ParameterNode || n.Kind() == hff.FieldNode {
+		return b.directScalarTruth(n), nil
 	}
 	if n.Kind() == hff.NotNode {
 		child, _ := n.Child(0)
@@ -273,22 +324,7 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 			}
 			return b.directScalarStringCall(child)
 		}
-		column, kind, _ := b.directScalarColumn(child)
-		var test string
-		switch kind {
-		case hff.IntType, hff.FloatType, hff.DurationType:
-			test = column + " <> 0"
-		case hff.BytesType:
-			test = "octet_length(" + column + ") > 0"
-		case hff.StringType:
-			test = column + " COLLATE \"C\" <> '' COLLATE \"C\""
-		default:
-			test = column
-		}
-		if acceptsKind(child.Type(), hff.NullType) {
-			test = column + " IS NOT NULL AND " + test
-		}
-		return "(" + test + ")", nil
+		return b.directScalarTruth(child), nil
 	}
 	left, _ := n.Child(0)
 	right, _ := n.Child(1)
@@ -332,6 +368,25 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 		test = column + " IS NOT NULL AND " + test
 	}
 	return "(" + test + ")", nil
+}
+
+func (b *builder) directScalarTruth(n hff.Node) string {
+	column, kind, _ := b.directScalarColumn(n)
+	var test string
+	switch kind {
+	case hff.IntType, hff.FloatType, hff.DurationType:
+		test = column + " <> 0"
+	case hff.BytesType:
+		test = "octet_length(" + column + ") > 0"
+	case hff.StringType:
+		test = column + " COLLATE \"C\" <> '' COLLATE \"C\""
+	default:
+		test = column
+	}
+	if acceptsKind(n.Type(), hff.NullType) {
+		test = column + " IS NOT NULL AND " + test
+	}
+	return "(" + test + ")"
 }
 
 func (b *builder) directScalarLengthComparison(n, call, right hff.Node) (string, error) {

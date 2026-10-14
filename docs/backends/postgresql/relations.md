@@ -243,6 +243,15 @@ row or callback evaluation order, local HFF runtime budgets, or an index plan.
 A visible correlation merely gives PostgreSQL a predicate it may be able to
 use with an appropriate index and plan.
 
+When the callback is composed of direct native scalar fields, literals, and
+Boolean `AND`/`OR`/`NOT`, eligible scalar predicates can be lowered directly
+inside the correlated subquery. For the earlier filter
+`items:any(item=>item.price>100 item.active)`, this removes four inner
+`CROSS JOIN LATERAL` projections from the generated predicate; two outer
+generic projections remain. Nullable or optional struct item state and
+noneligible callback expressions retain general lowering. This describes SQL
+shape, not runtime speed.
+
 For a plain bound relation, the constant Int filters `items:has(0)` and
 `items:has(-1)` only need to determine whether the relation is nonempty. They
 use the same correlated existence check and do not require `WithUniqueOrder`.

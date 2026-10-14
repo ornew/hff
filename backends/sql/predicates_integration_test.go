@@ -91,7 +91,7 @@ func TestPostgreSQLTypedRelationCorrelation(t *testing.T) {
 	if container == "" {
 		t.Fatal("integration tests require HFF_POSTGRES_CONTAINER")
 	}
-	item := schema.Struct(schema.Int("price"), schema.Bool("active"))
+	item := schema.Struct(schema.Int("price"), schema.Nullable(schema.Bool("active")))
 	e, err := engine.New(engine.WithSchema(schema.Struct(schema.List("items", item))), engine.WithCapabilities(capabilities.Standard()))
 	if err != nil {
 		t.Fatal(err)
@@ -104,8 +104,8 @@ func TestPostgreSQLTypedRelationCorrelation(t *testing.T) {
 		t.Fatal(err)
 	}
 	var script strings.Builder
-	script.WriteString("CREATE TEMP TABLE hff_typed_orders(id bigint PRIMARY KEY,tenant_id bigint NOT NULL); INSERT INTO hff_typed_orders VALUES(42,17),(43,17),(44,17),(45,99); CREATE TEMP TABLE hff_typed_items(id bigint PRIMARY KEY,order_id bigint,price bigint,active boolean); INSERT INTO hff_typed_items VALUES(7,42,125,true),(8,42,35,false),(9,43,200,false),(10,45,125,true);\n")
-	sources := []string{`items:any(item=>item.price>100 item.active)`, `items!:any(item=>item.price>100 item.active)`, `items[0].price=125`}
+	script.WriteString("CREATE TEMP TABLE hff_typed_orders(id bigint PRIMARY KEY,tenant_id bigint NOT NULL); INSERT INTO hff_typed_orders VALUES(42,17),(43,17),(44,17),(45,99); CREATE TEMP TABLE hff_typed_items(id bigint PRIMARY KEY,order_id bigint,price bigint,active boolean); INSERT INTO hff_typed_items VALUES(7,42,125,true),(8,42,35,false),(9,43,200,NULL),(10,45,125,true);\n")
+	sources := []string{`items:any(item=>item.price>100 item.active)`, `items!:any(item=>item.price>100 item.active)`, `items[0].price=125`, `items:all(item=>item.active)`, `items:any(item=>item.active)`, `items:all(item=>item.price>100 | item.active)`}
 	for index, source := range sources {
 		p, err := e.Compile(context.Background(), source)
 		if err != nil {
@@ -114,6 +114,9 @@ func TestPostgreSQLTypedRelationCorrelation(t *testing.T) {
 		q, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindRelation(hff.Path{"items"}, relation)))
 		if err != nil {
 			t.Fatal(source, err)
+		}
+		if index != 2 && strings.Contains(q.Where(), `FROM "hff_typed_items" AS "item" CROSS JOIN LATERAL`) {
+			t.Fatalf("%s materialized a native scalar callback: %s", source, q.Where())
 		}
 		var types, literals []string
 		for _, arg := range q.Args() {
@@ -129,7 +132,7 @@ func TestPostgreSQLTypedRelationCorrelation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v\n%s", err, output)
 	}
-	if strings.Join(strings.Fields(string(output)), ",") != "42,42,42" {
+	if strings.Join(strings.Fields(string(output)), ",") != "42,42,42,44,45,42,43,44,45" {
 		t.Fatalf("unexpected matching ids: %s", output)
 	}
 }
