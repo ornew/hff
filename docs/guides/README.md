@@ -12,6 +12,8 @@ and API contracts are collected in the [Reference](../reference/README.md).
 - [Schemas and immutable values](schemas-and-values.md)
 - [Using the Go API](go-api.md): compose schemas, engine compilation, local
   filters, adapters, and SQL translation in a service.
+- [Serialized configuration](serialized-configuration.md): represent engine
+  schemas and PostgreSQL bindings as versioned, validated JSON data.
 - [Converting Go values](go-values.md): explicitly map Go records to an HFF
   schema without changing HFF's value or type semantics.
 - [Scalar and string methods](scalar-methods.md)

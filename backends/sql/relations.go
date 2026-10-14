@@ -92,7 +92,7 @@ func WithUniqueOrder(order ...RelationOrder) RelationOption {
 // present non-null list; order is optional unless a used operation depends on
 // order. Identifiers are validated here, but table contents are not inspected.
 func NewRelation(options ...RelationOption) (Relation, error) {
-	c := relationConfig{present: TrustedSQL("true"), null: TrustedSQL("false")}
+	c := relationConfig{present: Boolean(true), null: Boolean(false)}
 	for _, option := range options {
 		if option.apply == nil {
 			return Relation{}, configuration("invalid RelationOption")

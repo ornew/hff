@@ -24,12 +24,35 @@ type MethodImplementation struct {
 	declaration hff.MethodDeclaration
 	dialect     Dialect
 	function    MethodFunc
+	identity    *methodIdentity
+}
+
+type methodIdentity struct{ marker byte }
+
+// Declaration returns the immutable signature this translator implements.
+// It does not expose or invoke the executable translation function.
+func (m MethodImplementation) Declaration() hff.MethodDeclaration { return m.declaration }
+
+// Dialect returns the dialect selected when this translator was registered.
+func (m MethodImplementation) Dialect() Dialect { return m.dialect }
+
+// Valid reports whether the translator has a declaration and an executable
+// function. A zero implementation or one made with a nil function is invalid.
+func (m MethodImplementation) Valid() bool {
+	return m.declaration.Valid() && m.dialect != "" && m.function != nil && m.identity != nil
+}
+
+// SameRegistration reports whether two values came from the same Implement
+// call, including copies of that immutable registration. Equal signatures do
+// not prove that independently registered functions have equal behavior.
+func (m MethodImplementation) SameRegistration(other MethodImplementation) bool {
+	return m.Valid() && other.Valid() && m.identity == other.identity
 }
 
 // Implement registers a translator for declaration under dialect. Build checks
 // that the declaration exactly matches the one compiled into the Program.
 func Implement(declaration hff.MethodDeclaration, dialect Dialect, function MethodFunc) MethodImplementation {
-	return MethodImplementation{declaration, dialect, function}
+	return MethodImplementation{declaration: declaration, dialect: dialect, function: function, identity: &methodIdentity{}}
 }
 
 // WithMethods replaces the translators configured for SQL Build. The slice is

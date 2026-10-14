@@ -21,7 +21,7 @@ import (
 
 const referenceModule = "github.com/ornew/hff"
 
-var referencePackages = []string{".", "engine", "schema", "capabilities", "backends/local", "backends/sql", "adapters/govalue"}
+var referencePackages = []string{".", "engine", "schema", "capabilities", "config", "backends/local", "backends/sql", "adapters/govalue"}
 
 type referencePackage struct {
 	set   *token.FileSet

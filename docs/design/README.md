@@ -27,5 +27,6 @@ These documents explain the rationale, contracts, and tradeoffs behind HFF's lan
 | [019\. PostgreSQL JSON Union Dispatch](019-postgresql-json-union-dispatch.md) | Accepted | 2026\-10\-13 | \@ornew |
 | [020\. PostgreSQL JSON Timestamp Values](020-postgresql-json-timestamps.md) | Accepted | 2026\-10\-13 | \@ornew |
 | [021\. Backend\-Native Approximate Float Semantics](021-backend-native-float-semantics.md) | Accepted | 2026\-10\-14 | \@ornew |
+| [022\. Versioned configuration documents](022-versioned-configuration-format.md) | Accepted | 2026\-10\-14 | \@ornew |
 
 Use the [record template](000-template.md) when adding a design record.
