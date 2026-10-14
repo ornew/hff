@@ -1294,6 +1294,15 @@ list or object values are possible, structural equality retains the recursive
 path. See [scalar pair SQL shape](optimizations.md#compare-scalar-json-pairs-without-canonical-json-conversion)
 for details.
 
+Repeated numeric comparisons can reuse matching Float floor and Int/Float
+ordering projections within one projection scope. Inside one scalar JSON pair,
+identical stored text can share a numeric decode only when its family,
+ambiguity requirement, and Float override match. Each comparison still applies
+its own operator, direction, and presence behavior; callback and filter scopes
+remain isolated. These translation details do not change JSON or JSONB
+representation requirements. See [numeric comparison kernel reuse](optimizations.md#reuse-numeric-comparison-kernels-within-a-scope)
+for SQL-shape evidence and limits.
+
 An incompatible runtime family at the comparison root produces ordinary HFF
 null, which matches no row as a predicate. A runtime-null or no-value operand
 compares false. Within a list or object comparison, a mismatch between nested

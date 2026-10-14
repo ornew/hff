@@ -191,6 +191,17 @@ decoding](../../optimizations/022-postgresql-scalar-pair-decode.md) for the
 SQL-shape and fixture-specific `EXPLAIN` evidence. No execution timing was
 collected.
 
+### Reuse numeric comparison kernels within a scope
+
+When a projection repeats mixed numeric comparisons, the translator can reuse
+native Float floor and Int/Float ordering projections. Within one scalar JSON
+pair, identical stored text can also share a decode when its numeric family,
+ambiguity check, and Float override match. Operators, operand direction, and
+presence remain comparison-specific, and caches do not cross callback, filter,
+or independent JSON-pair scopes. The [numeric comparison kernel record](../../optimizations/032-postgresql-reuse-numeric-comparison-kernels.md)
+reports generated-SQL and plain-plan shape only; no execution timing was
+collected.
+
 ### Lower homogeneous scalar membership directly
 
 For eligible same-type scalar membership, the translator can use SQL

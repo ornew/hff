@@ -636,15 +636,7 @@ func (b *builder) mixedComparison(left, right expression, op hff.Operator) expre
 	if reversed {
 		integer, floating = right, left
 	}
-	i, f := integer.code, floating.code
-	// The positive bound is 2^63, not float64(MaxInt64), which rounds up to
-	// this bound. Inside [−2^63,2^63), floor(f) is an exactly representable
-	// integer and the bigint cast is safe and exact. No int64 is rounded to
-	// float64, and no float64 is rounded through PostgreSQL numeric.
-	const low = "'-9223372036854775808'::double precision"
-	const high = "'9223372036854775808'::double precision"
-	floor := b.project("(CASE WHEN " + f + " >= " + low + " AND " + f + " < " + high + " THEN floor(" + f + ")::bigint ELSE NULL END)")
-	comparison := b.project("(CASE WHEN " + i + " IS NULL OR " + f + " IS NULL THEN NULL WHEN " + f + " >= " + high + " THEN -1 WHEN " + f + " < " + low + " THEN 1 WHEN " + i + " < " + floor + " THEN -1 WHEN " + i + " > " + floor + " THEN 1 WHEN " + f + " > floor(" + f + ") THEN -1 ELSE 0 END)")
+	comparison := b.mixedNumericOrder(integer.code, floating.code)
 	if reversed {
 		comparison = "(-(" + comparison + "))"
 	}
@@ -653,6 +645,31 @@ func (b *builder) mixedComparison(left, right expression, op hff.Operator) expre
 		operator = "<>"
 	}
 	return boolean(both(both(left.present, right.present), "COALESCE(("+comparison+" "+operator+" 0), FALSE)"))
+}
+
+// mixedNumericOrder shares native numeric intermediates within the current
+// projection scope. The ordered carrier pair determines its -1/0/1 result;
+// each comparison retains its own operator, reversal and presence checks.
+func (b *builder) mixedNumericOrder(i, f string) string {
+	pairKey := "mixed-numeric-order:" + pathKey([]string{i, f})
+	if cached, ok := b.sharedPaths[pairKey]; ok {
+		return cached.code
+	}
+	// The positive bound is 2^63, not float64(MaxInt64), which rounds up to
+	// this bound. Inside [−2^63,2^63), floor(f) is an exactly representable
+	// integer and the bigint cast is safe and exact. No int64 is rounded to
+	// float64, and no float64 is rounded through PostgreSQL numeric.
+	const low = "'-9223372036854775808'::double precision"
+	const high = "'9223372036854775808'::double precision"
+	floorKey := "mixed-numeric-floor:" + f
+	floor := b.sharedPaths[floorKey].code
+	if floor == "" {
+		floor = b.project("(CASE WHEN " + f + " >= " + low + " AND " + f + " < " + high + " THEN floor(" + f + ")::bigint ELSE NULL END)")
+		b.rememberPath(floorKey, expression{floor, "TRUE", hff.IntType})
+	}
+	comparison := b.project("(CASE WHEN " + i + " IS NULL OR " + f + " IS NULL THEN NULL WHEN " + f + " >= " + high + " THEN -1 WHEN " + f + " < " + low + " THEN 1 WHEN " + i + " < " + floor + " THEN -1 WHEN " + i + " > " + floor + " THEN 1 WHEN " + f + " > floor(" + f + ") THEN -1 ELSE 0 END)")
+	b.rememberPath(pairKey, expression{comparison, "TRUE", hff.IntType})
+	return comparison
 }
 
 func (b *builder) call(n hff.Node) (expression, error) {

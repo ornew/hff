@@ -384,8 +384,22 @@ func (b *builder) decodedJSONNumericPair(left, right string, op hff.Operator, l,
 	}
 	shared := count(l)*count(r) > 1 || (l.integer && r.floating) || (l.floating && r.integer)
 	if shared {
-		left, right = b.project(left), b.project(right)
+		if left == right {
+			left = b.project(left)
+			right = left
+		} else {
+			left, right = b.project(left), b.project(right)
+		}
 	}
+	// Identical text alone is insufficient: family guards and an already
+	// decoded Float must also match. This cache never leaves the pair's
+	// isolated subquery, where these guarded casts are safe to evaluate.
+	type familyKey struct {
+		text, floating string
+		kind           hff.TypeKind
+		ambiguous      bool
+	}
+	decoded := make(map[familyKey]family)
 	families := func(text string, side jsonNumericSide, floating string) []family {
 		var values []family
 		for _, candidate := range []struct {
@@ -394,6 +408,16 @@ func (b *builder) decodedJSONNumericPair(left, right string, op hff.Operator, l,
 		}{{hff.IntType, side.integer}, {hff.FloatType, side.floating}} {
 			if !candidate.allowed {
 				continue
+			}
+			key := familyKey{text: text, kind: candidate.kind, ambiguous: side.ambiguous}
+			if candidate.kind == hff.FloatType {
+				key.floating = floating
+			}
+			if shared {
+				if cached, ok := decoded[key]; ok {
+					values = append(values, cached)
+					continue
+				}
 			}
 			condition := "TRUE"
 			if side.ambiguous {
@@ -410,7 +434,11 @@ func (b *builder) decodedJSONNumericPair(left, right string, op hff.Operator, l,
 			if shared {
 				code = b.project(code)
 			}
-			values = append(values, family{condition, expression{code, "TRUE", candidate.kind}})
+			value := family{condition, expression{code, "TRUE", candidate.kind}}
+			if shared {
+				decoded[key] = value
+			}
+			values = append(values, value)
 		}
 		return values
 	}
