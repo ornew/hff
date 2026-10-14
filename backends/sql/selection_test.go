@@ -42,6 +42,48 @@ func scalarSelectionFixture(item hff.Type) bool {
 	return item.Kind() != hff.AnyType && item.Kind() != hff.StructType
 }
 
+func TestPostgreSQLStructuralDistinctGrouping(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name    string
+		element hff.Type
+		grouped bool
+		walk    bool
+	}{
+		{"integer-object", schema.Struct(schema.Int("n")), true, false},
+		{"nullable-map", schema.MapOf(schema.NullableType(schema.StringType)), true, false},
+		{"nested-integers", schema.ListOf(schema.ListOf(schema.IntType)), true, false},
+		{"mixed-numbers", schema.ListOf(schema.Union(schema.IntType, schema.FloatType)), true, true},
+		{"dynamic", schema.AnyType, true, true},
+		{"tagged-bytes", schema.Struct(schema.Field("payload", schema.BytesType)), false, false},
+		{"nested-tagged", schema.MapOf(schema.ListOf(schema.DurationType)), false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e, err := engine.New(engine.WithSchema(schema.Struct(schema.List("items", tc.element))), engine.WithCapabilities(capabilities.Standard()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			p, err := e.Compile(ctx, `items:distinct:size>0`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			q, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindJSON(hff.Path{"items"}, hffsql.Column("records", "items"), hffsql.JSON)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(q.Where(), "DISTINCT ON") != tc.grouped {
+				t.Fatal("unexpected grouping selection", q.Where())
+			}
+			if strings.Contains(q.Where(), "WITH RECURSIVE") != tc.walk {
+				t.Fatal("unexpected dynamic key walk", q.Where())
+			}
+			if tc.grouped && strings.Contains(q.Where(), "WHERE NOT EXISTS") {
+				t.Fatal("grouped selection retained pairwise prior-row comparisons", q.Where())
+			}
+		})
+	}
+}
+
 func TestPostgreSQLSelectionRequiresJSONBMetadata(t *testing.T) {
 	ctx := context.Background()
 	e, err := engine.New(engine.WithSchema(schema.Struct(schema.List("items", schema.Union(schema.IntType, schema.FloatType)))), engine.WithCapabilities(capabilities.Standard()))

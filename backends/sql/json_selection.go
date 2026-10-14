@@ -83,6 +83,13 @@ func (b *builder) jsonDistinct(n hff.Node) (expression, error) {
 		cte = "WITH " + rows + " AS MATERIALIZED (SELECT " + item + " AS value," + ordinal + " AS ord," + strings.Join(columns, ",") + " FROM " + from + ")"
 		key := strings.Join(keys, ",")
 		selected = "SELECT DISTINCT ON (" + key + ") value,ord FROM " + rows + " ORDER BY " + key + ",ord"
+	} else if structuralDistinctKeyType(stored.Element()) {
+		key := item + "::jsonb"
+		if structuralDistinctNeedsNumericKey(stored.Element()) {
+			key = b.jsonStructuralDistinctKey(item, ordinal)
+		}
+		cte = "WITH " + rows + " AS MATERIALIZED (SELECT " + item + " AS value," + ordinal + " AS ord," + key + " AS key FROM " + from + ")"
+		selected = "SELECT DISTINCT ON (key) value,ord FROM " + rows + " ORDER BY key,ord"
 	} else {
 		cte = "WITH " + rows + " AS MATERIALIZED (SELECT " + item + " AS value," + ordinal + " AS ord FROM " + from + ")"
 		left, right := b.nextAlias(), b.nextAlias()

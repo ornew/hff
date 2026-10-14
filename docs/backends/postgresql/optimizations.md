@@ -508,6 +508,23 @@ remain in place. SQL-shape evidence for the shared key is in the
 the earlier [dynamic JSON sort measurements](../../optimizations/011-postgresql-dynamic-json-sort.md)
 cover the separate array-gating and comparison-document changes.
 
+### Group JSON-native structural distinct values once
+
+For recoverable structural List, Map, and Struct element trees, PostgreSQL can
+compute a structural key per item and use `DISTINCT ON` with the original
+ordinal to retain the first value. Trees without Float or `Any` alternatives
+use normalized JSONB equality keys. Trees that may contain Float or `Any` use
+a recursive full-path/category key and the shared exact numeric ordering key.
+Scalar element grouping continues to use its existing typed keys. Tagged
+Bytes, Duration, and Timestamp alternatives conservatively retain the existing
+type-aware pairwise equality path. Representation and metadata checks still
+precede structural grouping, and the selected value remains the original
+item. In the measured empty-table plans, the JSON-native keys removed
+prior-row join nodes; this is plan-shape evidence, not an execution-speed
+claim. See the
+[structural distinct grouping record](../../optimizations/049-postgresql-structural-distinct.md)
+for fallback boundaries and parity details.
+
 ### Prune scalar leaves during canonical JSON serialization
 
 The recursive token CTE keeps scalar and null rows as token sources but does

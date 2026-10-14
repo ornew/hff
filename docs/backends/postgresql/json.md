@@ -926,6 +926,18 @@ capabilities; `find()` treats guarded no-value predicates as false. The SQL
 translation preserves these result semantics but does not provide Local's
 procedural callback short-circuit or per-match work-budget behavior.
 
+For structural List, Map, and Struct element trees whose stored categories are
+recoverable, PostgreSQL can group distinct values by a structural key and keep
+the earliest ordinal. Trees that can contain Float or `Any` use a recursive
+path-and-category key with the shared exact numeric ordering key; trees without
+those numeric alternatives can use JSONB equality for the key. The original
+JSON value is retained as the result, so grouping does not replace its first
+representation. Scalar element grouping continues to use its existing typed
+keys. Tagged Bytes, Duration, and Timestamp alternatives conservatively retain
+the existing type-aware pairwise HFF-equality path. See
+[structural distinct grouping](../../optimizations/049-postgresql-structural-distinct.md)
+for the bounded applicability and SQL-shape evidence.
+
 For example, bind `tags` as `List<String|null>` with JSONB value
 `["api","api",null,"prod",null]` and `items` as
 `List<Struct{id:Int,active:Bool}>` with JSONB value
