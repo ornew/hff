@@ -134,6 +134,10 @@ partial serialization.
 | `list:filter(func(T) -> bool) -> list` | Keep elements whose callback result converts to true |
 | `list:sum() -> number` | Sum numeric elements |
 | `list:sum(func(T) -> number) -> number` | Sum numeric callback results |
+| `list:min() -> number` | Smallest numeric element |
+| `list:min(func(T) -> number) -> number` | Smallest numeric callback result |
+| `list:max() -> number` | Largest numeric element |
+| `list:max(func(T) -> number) -> number` | Largest numeric callback result |
 | `list:has(number) -> bool` | Index-presence test |
 | `list:contains(any...) -> bool` | All supplied elements are present; at least one argument |
 | `list:unique() -> bool` | Whether every element is distinct |
@@ -165,6 +169,15 @@ backend's declared Float model; a non-finite result is null. A null receiver
 yields null. The zero-argument method requires
 `method:list.sum`; the callback form also requires `Callbacks`. Cancellation or
 a resource-limit error aborts instead of returning a partial sum.
+`min()` and `max()` select from numeric list elements or numeric callback
+results. Null values and guarded no-value callback results are skipped. A
+nonnumeric runtime value makes the result null; an empty list or one with no
+contributing values also returns null. Mixed Int and Float values are compared
+exactly without rounding either value first. The selected original value is
+returned with its original numeric subtype (the numeric callback result when a
+projection callback is used), and the first value wins a tie. A null receiver
+yields null. The zero-argument forms require `method:list.min`
+and `method:list.max` respectively; callback forms also require `Callbacks`.
 `has()` supports the same negative indices as element access. `unique()` returns
 whether every element is distinct using structural equality. `has()` returns
 false for an out-of-range integer-valued index, and null for a non-integer index. `sort()` is stable

@@ -78,7 +78,7 @@ func builtins(name string) []declaration {
 		fixed("list", list, integer, any)
 	case "filter":
 		fixed("list", list, list, any)
-	case "sum":
+	case "sum", "min", "max":
 		fixed("list", list, number)
 		fixed("list", list, number, any)
 	case "has":

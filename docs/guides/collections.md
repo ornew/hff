@@ -95,6 +95,27 @@ for the supported subset.
 `concat(list)` returns a new list containing the receiver followed by the
 argument.
 
+## Selecting a numeric extreme
+
+Local `min()` and `max()` select a numeric value directly or use a callback to
+project each element to a number:
+
+```hff
+readings:min
+measurements:max(reading=>reading.temperature!)
+```
+
+For `readings` declared as `List<Int|Float|null>` with values `[5, null, 7.5]`,
+the first query returns Int `5`. If `measurements` contains structs with a
+nullable numeric `temperature`, the second query skips null and guarded no-value
+results. It returns the selected callback result with its original numeric
+subtype. A nonnumeric callback result makes the whole operation null. Empty or
+all-skipped lists also return null. Mixed Int and Float values are compared
+without pre-rounding. The first value wins a tie. A null receiver returns null.
+
+PostgreSQL `Build` currently rejects `min()` and `max()`; these examples are
+for the Local backend.
+
 ## Object queries
 
 ```hff

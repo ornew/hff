@@ -77,11 +77,15 @@ func (c *compiler) higherOrder(receiver plan.Node, n *syntax.MethodCall) ([]plan
 			result = primitive(core.BoolType)
 		case "count":
 			result = primitive(core.IntType)
-		case "sum":
+		case "sum", "min", "max":
 			var valid bool
-			result, valid = aggregateNumericResult(result)
+			if name == "sum" {
+				result, valid = aggregateNumericResult(result)
+			} else {
+				result, valid = aggregateExtremeResult(result)
+			}
 			if !valid {
-				return nil, core.Type{}, c.failure(core.TypeError, lambda, "sum callback must have an applicable numeric result")
+				return nil, core.Type{}, c.failure(core.TypeError, lambda, name+" callback must have an applicable numeric result")
 			}
 		case "filter":
 			result = core.NewListType(item)
@@ -149,15 +153,34 @@ func (c *compiler) higherOrder(receiver plan.Node, n *syntax.MethodCall) ([]plan
 // A sum with no contributing values is an Int zero. Otherwise its family is
 // determined by the values that may survive null and guarded no-value skips.
 func aggregateNumericResult(typ core.Type) (core.Type, bool) {
-	var numeric []core.Type
-	for _, branch := range branches(typ) {
-		if isNumber(branch) {
-			numeric = append(numeric, branch)
-		}
-	}
+	numeric := aggregateNumericCandidates(typ)
 	if len(numeric) == 0 && !bottom(typ) {
 		return core.Type{}, false
 	}
 	numeric = append(numeric, primitive(core.IntType))
 	return union(numeric...), true
+}
+
+func aggregateExtremeResult(typ core.Type) (core.Type, bool) {
+	numeric := aggregateNumericCandidates(typ)
+	if len(numeric) == 0 && !bottom(typ) {
+		return core.Type{}, false
+	}
+	if len(numeric) == 0 {
+		return primitive(core.NullType), true
+	}
+	return union(numeric...), true
+}
+
+func aggregateNumericCandidates(typ core.Type) []core.Type {
+	var numeric []core.Type
+	for _, branch := range branches(typ) {
+		switch {
+		case branch.Kind() == core.AnyType:
+			numeric = append(numeric, primitive(core.IntType), primitive(core.FloatType))
+		case isNumber(branch):
+			numeric = append(numeric, branch)
+		}
+	}
+	return numeric
 }

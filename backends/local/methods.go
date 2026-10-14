@@ -12,7 +12,7 @@ func supportedMethod(id string) bool {
 	switch id {
 	case "string.fromjson", "any.json", "any.string", "any.type", "any.exists", "any.in", "bool.and", "bool.or", "bool.not", "number.round", "number.ceil", "number.floor", "string.len", "bytes.len", "string.contains", "string.matches", "string.startswith", "string.endswith", "string.lower", "string.upper", "string.bool", "string.number", "string.concat":
 		return true
-	case "list.size", "list.count", "list.sum", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "object.size", "object.has", "object.get", "object.keys", "object.values", "object.items":
+	case "list.size", "list.count", "list.sum", "list.min", "list.max", "list.has", "list.contains", "list.unique", "list.sort", "list.concat", "object.size", "object.has", "object.get", "object.keys", "object.values", "object.items":
 		return true
 	case "list.any", "list.all", "list.filter", "list.map", "list.flatmap", "list.foldl", "list.foldr":
 		return true

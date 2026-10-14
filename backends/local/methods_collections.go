@@ -13,6 +13,9 @@ func (e *evaluation) collectionMethod(id string, receiver core.Value, args []cor
 	case "list.sum":
 		xs, _ := receiver.ListView()
 		return e.sumList(xs, plan.Node{}, false)
+	case "list.min", "list.max":
+		xs, _ := receiver.ListView()
+		return e.extremeList(xs, plan.Node{}, false, id == "list.min")
 	case "object.size":
 		obj, _ := receiver.ObjectView()
 		return ordinary(core.Int(int64(len(obj)))), nil

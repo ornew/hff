@@ -9,6 +9,9 @@ import (
 
 	"github.com/ornew/hff"
 	"github.com/ornew/hff/backends/local"
+	"github.com/ornew/hff/capabilities"
+	"github.com/ornew/hff/engine"
+	"github.com/ornew/hff/schema"
 )
 
 func TestCallbackMethods(t *testing.T) {
@@ -51,6 +54,18 @@ func TestCallbackMethods(t *testing.T) {
 		{`x:sum=null`, hff.List(hff.Float(1e308), hff.Float(1e308)), true},
 		{`x:sum(v=>v!)=3`, hff.List(hff.Int(1), hff.Null(), hff.Int(2)), true},
 		{`x:sum(v=>v)=0`, hff.List(hff.Null()), true},
+		{`x:min=null`, hff.List(), true},
+		{`x:max=null`, hff.List(hff.Null()), true},
+		{`x:min=1`, hff.List(hff.Int(3), hff.Null(), hff.Int(1), hff.Int(2)), true},
+		{`x:max=3`, hff.List(hff.Int(3), hff.Null(), hff.Int(1)), true},
+		{`x:min:[int]=9007199254740993`, hff.List(hff.Float(9007199254740994), hff.Int(9007199254740993)), true},
+		{`x:max:[int]=9007199254740993`, hff.List(hff.Float(9007199254740992), hff.Int(9007199254740993)), true},
+		{`x:min:[float]:exists`, hff.List(hff.Int(1), hff.Float(1)), false},
+		{`x:min:[float]:exists`, hff.List(hff.Float(1), hff.Int(1)), true},
+		{`x:max:[int]:exists`, hff.List(hff.Float(1), hff.Int(1)), false},
+		{`x:min=null`, hff.List(hff.Int(1), hff.String("bad")), true},
+		{`x:min(v=>v!)=1`, hff.List(hff.Null(), hff.Int(2), hff.Int(1)), true},
+		{`x:max(v=>v!)=2`, hff.List(hff.Null(), hff.Int(2), hff.Int(1)), true},
 		{`x:foldl(0,(a,v)=>a-v)=-6`, hff.List(hff.Int(1), hff.Int(2), hff.Int(3)), true},
 		{`x:foldl(7,(a,v)=>a+v)=7`, hff.List(), true},
 		{`x:foldr(null,(v,a)=>v)=null`, hff.List(), true},
@@ -70,6 +85,52 @@ func TestCallbackMethods(t *testing.T) {
 				t.Fatalf("got %v %v want %v", got, err, tc.want)
 			}
 		})
+	}
+}
+
+func TestNumericAggregateCapturesAnyUnion(t *testing.T) {
+	ctx := context.Background()
+	e, err := engine.New(engine.WithSchema(schema.Struct(
+		schema.List("items", schema.IntType),
+		schema.Field("choice", schema.Union(schema.AnyType, schema.NullType)),
+	)), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := hff.Object(map[string]hff.Value{
+		"items":  hff.List(hff.Int(1)),
+		"choice": hff.Float(1.5),
+	})
+	for _, source := range []string{
+		`items:min(v=>choice):[float]:exists`,
+		`items:max(v=>choice):[float]:exists`,
+		`items:sum(v=>choice):[float]:exists`,
+	} {
+		program, err := e.Compile(ctx, source)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		filter, err := local.Build(ctx, program)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		matched, err := filter.Match(ctx, record)
+		if err != nil || !matched {
+			t.Fatalf("%s: matched=%t error=%v", source, matched, err)
+		}
+	}
+}
+
+func TestNumericExtremesRequireNumericCandidates(t *testing.T) {
+	ctx := context.Background()
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.List("items", schema.StringType))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range []string{`items:min`, `items:max(v=>v)`} {
+		if _, err := e.Compile(ctx, source); err == nil {
+			t.Fatalf("%s compiled without numeric candidates", source)
+		}
 	}
 }
 

@@ -454,7 +454,7 @@ operations outside that supported subset remain unsupported. JSON list/object
 structural equality, list `contains()`, `unique()`, `sort()`, `concat(list)`,
 `count()`, `filter(predicate)`, `sum()`, and `any()`/`all()` are available for
 schema-known values when their required capabilities are enabled. JSON/JSONB
-No-argument and callback `sum()` support recoverable Int, Float, and mixed
+no-argument and callback `sum()` support recoverable Int, Float, and mixed
 Int/Float contributions, including `Any` lists and callback results when
 runtime numeric subtypes can be recovered. JSONB needs version-1 numeric type
 metadata when stored values may have lost their Int/Float distinction.
@@ -462,9 +462,9 @@ For JSON/JSONB Float sums, each contribution uses PostgreSQL's round-trip-safe
 Float text before `SUM(numeric)` and a checked final Float conversion. This
 requires `extra_float_digits > 0`; HFF does not change the database setting.
 Numeric intermediate accumulation can differ from Local's list-order Float
-addition. `sort()` also supports
-recoverable dynamic `Any` and list-union values; see the JSON guide for its
-conditions.
+addition. PostgreSQL `Build` currently rejects list `min()` and `max()`.
+`sort()` supports recoverable dynamic `Any` and list-union values; see the JSON
+guide for its conditions.
 `map()` and `flatmap()` are supported when callback result types are known.
 Folds are supported for known accumulator types; see the JSON guide for their
 type and null rules. Schema-known Bytes values can be materialized inside

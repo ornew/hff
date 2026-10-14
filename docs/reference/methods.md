@@ -94,6 +94,10 @@ See [string and byte rules](../../spec/methods.md#strings-and-bytes).
 | `list:filter(func(T) -> bool) -> list` | Keep original elements whose callback result converts to true. |
 | `list:sum() -> number` | Sum numeric elements. |
 | `list:sum(func(T) -> number) -> number` | Sum numeric callback results. |
+| `list:min() -> number` | Select the smallest numeric element. |
+| `list:min(func(T) -> number) -> number` | Smallest numeric callback result. |
+| `list:max() -> number` | Select the largest numeric element. |
+| `list:max(func(T) -> number) -> number` | Largest numeric callback result. |
 | `list:has(number) -> bool` | Whether an integer-valued index exists; negative indexes count from the end. |
 | `list:contains(any...) -> bool` | Whether every supplied value is an element; requires at least one argument. |
 | `list:unique() -> bool` | Whether all elements are distinct by HFF equality. |
@@ -125,6 +129,15 @@ contribution is Float, the result is Float and follows the backend's Float
 Profile; non-finite results return null. A null receiver yields null. The
 zero-argument form requires `method:list.sum`; callback forms also require the
 `Callbacks` capability.
+`min()` and `max()` accept numeric elements or numeric callback projections.
+They skip null values and guarded no-value results. A nonnumeric runtime value,
+an empty list, or a list with no contributing values returns null. Mixed Int and
+Float values are compared exactly; the selected original value and subtype are
+returned (the callback result in projected forms), with the first value winning
+ties. A null receiver yields null. Their zero-argument forms require
+`method:list.min` and `method:list.max` respectively; callback forms also
+require `Callbacks`. PostgreSQL `Build` currently rejects both methods; the
+Local backend implements them.
 See [list rules](../../spec/methods.md#lists) and the
 [callback guide](../guides/callbacks.md).
 
