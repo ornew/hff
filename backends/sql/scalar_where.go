@@ -37,6 +37,9 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 		}
 		left, _ := n.Child(0)
 		right, _ := n.Child(1)
+		if b.directJSONBObjectEqualEligible(n) {
+			return true
+		}
 		if b.directScalarColumnComparisonEligible(n) {
 			return true
 		}
@@ -71,7 +74,7 @@ func (b *builder) directScalarWhereEligible(n hff.Node) bool {
 		}
 		if child.Kind() == hff.CallNode {
 			return b.directScalarInEligible(child) || b.directScalarStringCallEligible(child) ||
-				b.directJSONBContainsEligible(child) || b.directJSONBAnyEligible(child)
+				b.directJSONBContainsEligible(child) || b.directJSONBAnyEligible(child) || b.directJSONBAllEligible(child)
 		}
 		_, _, ok := b.directScalarColumn(child)
 		return ok
@@ -265,6 +268,9 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 			if b.directJSONBAnyEligible(child) {
 				return b.directJSONBAny(child)
 			}
+			if b.directJSONBAllEligible(child) {
+				return b.directJSONBAll(child)
+			}
 			return b.directScalarStringCall(child)
 		}
 		column, kind, _ := b.directScalarColumn(child)
@@ -286,6 +292,9 @@ func (b *builder) directScalarWhere(n hff.Node) (string, error) {
 	}
 	left, _ := n.Child(0)
 	right, _ := n.Child(1)
+	if b.directJSONBObjectEqualEligible(n) {
+		return b.directJSONBObjectEqual(n)
+	}
 	if b.directScalarColumnComparisonEligible(n) {
 		return b.directScalarColumnComparison(n), nil
 	}

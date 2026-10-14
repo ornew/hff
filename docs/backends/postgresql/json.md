@@ -899,6 +899,42 @@ by HFF equality, so repeated stored nulls and repeated nested composite values
 are duplicates. These operations require applicable list/object equality
 capabilities for the types actually compared.
 
+### Containment for simple JSONB filters
+
+For a directly bound JSONB object without type metadata, a literal-key equality
+filter is supported when the value is a literal String or Bool:
+
+```hff
+payload.team="auth"
+payload.enabled=true
+```
+
+The filter lowers to an object-containment predicate of the form
+`column IS NOT NULL AND column @> jsonb_build_object(key, value)`, with the key
+and value kept as bound parameters. A SQL-null document, missing key, JSON-null
+value, or different value does not match. This path is limited to one literal
+key and a direct root JSONB binding without metadata. Inequality, null
+equality, numeric values, nested paths, JSON text bindings, computed receivers,
+and metadata-backed bindings keep the general lowering.
+
+For a directly bound JSONB list whose declared element type is non-nullable
+String, a simple equality callback can express that every element equals a
+String literal:
+
+```hff
+tags:all(item=>item="auth")
+tags:all(item=>"auth"=item)
+```
+
+The supported form lowers to `column IS NOT NULL AND column <@
+jsonb_build_array(value)`. An empty list matches because every element
+satisfies the predicate; duplicate elements do not change the result. At the
+filter boundary, a null list does not match. Nullable element types and complex
+callbacks keep the general lowering. In the checked plans, object `@>` selected
+a Bitmap Index Scan on a temporary GIN-indexed fixture. List `<@` remained a
+Seq Scan even with sequential scans disabled. This is plan evidence only, not a
+runtime-speed claim.
+
 ### Dynamic `size()`, `has()`, and `keys()`
 
 When the receiver is `Any` or a union that admits the relevant object/list

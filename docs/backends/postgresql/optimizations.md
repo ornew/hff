@@ -365,6 +365,28 @@ timing was collected. See the [direct JSONB String-list membership](../../optimi
 and [simple JSONB String-list any](../../optimizations/017-postgresql-jsonb-string-list-any.md)
 records for eligibility, parity, and limits.
 
+### Use containment for simple JSONB object and list filters
+
+For a directly bound, metadata-free JSONB object, literal-key equality against
+a String or Bool literal can use `column @> jsonb_build_object(key, value)`
+with an explicit non-null filter. For a directly bound JSONB `List<String>`, a
+simple `all()` equality callback can use `column <@ jsonb_build_array(value)`.
+The list subset preserves empty-list truth and duplicate-insensitive
+containment. Missing keys and JSON-null values are still handled by these
+predicates and evaluate false for the non-null literal examples above. Null
+equality, numeric or nested paths, JSON text, metadata-backed object bindings,
+nullable list elements, and complex callbacks do not use these specialized
+paths. See the [JSON guide](json.md#containment-for-simple-jsonb-filters) for
+examples and exact limits.
+
+On a temporary GIN-indexed JSONB column, plain `EXPLAIN` selected a Bitmap
+Index Scan for object `@>`. List `<@` remained a Seq Scan even with sequential
+scans disabled, so the checked list predicate did not expose a GIN index
+condition. This is fixture-specific plan evidence only; it does not establish
+runtime speed or production planner choices. See the
+[JSONB containment record](../../optimizations/042-postgresql-jsonb-containment-predicates.md)
+for parity coverage and the exact diagnostic.
+
 ### Project computed steps once
 
 Computed expressions are lowered through relational `LATERAL` projections.

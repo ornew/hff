@@ -81,15 +81,15 @@ func (b *builder) directJSONBContains(n hff.Node) (string, error) {
 }
 
 func (b *builder) directJSONBAnyEligible(n hff.Node) bool {
-	_, ok := b.directJSONBAnyNeedle(n)
+	_, ok := b.directJSONBStringPredicateNeedle(n, "any")
 	return ok
 }
 
 // Binding identity, rather than the parameter's spelling, distinguishes the
 // element tested by this callback from an outer or shadowed variable.
-func (b *builder) directJSONBAnyNeedle(n hff.Node) (hff.Node, bool) {
+func (b *builder) directJSONBStringPredicateNeedle(n hff.Node, name string) (hff.Node, bool) {
 	method, ok := n.Method()
-	if !ok || method.Name() != "any" || n.ChildCount() != 2 {
+	if !ok || method.Name() != name || n.ChildCount() != 2 {
 		return hff.Node{}, false
 	}
 	receiver, _ := n.Child(0)
@@ -122,8 +122,90 @@ func (b *builder) directJSONBAnyNeedle(n hff.Node) (hff.Node, bool) {
 func (b *builder) directJSONBAny(n hff.Node) (string, error) {
 	receiver, _ := n.Child(0)
 	column, _ := b.directJSONBStringListColumn(receiver)
-	needle, _ := b.directJSONBAnyNeedle(n)
+	needle, _ := b.directJSONBStringPredicateNeedle(n, "any")
 	return b.directJSONBStringContainment(column, []hff.Node{needle})
+}
+
+// A single literal equality has the same truth value for every String list
+// element as JSONB contained-by. In particular, an empty list satisfies all,
+// while a null element does not. Duplicates do not affect either result.
+func (b *builder) directJSONBAllEligible(n hff.Node) bool {
+	_, ok := b.directJSONBStringPredicateNeedle(n, "all")
+	return ok
+}
+
+func (b *builder) directJSONBAll(n hff.Node) (string, error) {
+	receiver, _ := n.Child(0)
+	column, _ := b.directJSONBStringListColumn(receiver)
+	needle, _ := b.directJSONBStringPredicateNeedle(n, "all")
+	value, err := b.literal(needle)
+	if err != nil {
+		return "", err
+	}
+	return "(" + column + " IS NOT NULL AND " + column + " <@ jsonb_build_array(" + value.code + "))", nil
+}
+
+// JSONB object containment agrees with HFF equality for one known key whose
+// value is String or Bool. It does not turn missing keys or JSON null into a
+// match, and it never applies structural subset semantics to object equality.
+func (b *builder) directJSONBObjectEqualParts(n hff.Node) (string, string, hff.Node, bool) {
+	if n.Kind() != hff.BinaryNode {
+		return "", "", hff.Node{}, false
+	}
+	op, ok := n.Operator()
+	if !ok || op != hff.Equal {
+		return "", "", hff.Node{}, false
+	}
+	left, _ := n.Child(0)
+	right, _ := n.Child(1)
+	if left.Kind() != hff.FieldNode || right.Kind() != hff.LiteralNode {
+		return "", "", hff.Node{}, false
+	}
+	value, literal := right.Literal()
+	if !literal || (value.Kind() != hff.StringKind && value.Kind() != hff.BoolKind) {
+		return "", "", hff.Node{}, false
+	}
+	kind, scalar := scalarKind(left.Type())
+	if !scalar || (kind != hff.StringType && kind != hff.BoolType) ||
+		(kind == hff.StringType && value.Kind() != hff.StringKind) ||
+		(kind == hff.BoolType && value.Kind() != hff.BoolKind) {
+		return "", "", hff.Node{}, false
+	}
+	parent, _ := left.Child(0)
+	if parent.Kind() != hff.VariableNode {
+		return "", "", hff.Node{}, false
+	}
+	path, ok := parent.Path()
+	if !ok {
+		return "", "", hff.Node{}, false
+	}
+	key, _ := left.Field()
+	for _, binding := range b.physicalBindings {
+		if pathKey(binding.path) == pathKey(path) && binding.format == JSONB &&
+			binding.metadata == nil && binding.structure == nil && binding.relation == nil && !binding.composite {
+			return b.bindings[pathKey(path)], key, right, true
+		}
+	}
+	return "", "", hff.Node{}, false
+}
+
+func (b *builder) directJSONBObjectEqualEligible(n hff.Node) bool {
+	_, _, _, ok := b.directJSONBObjectEqualParts(n)
+	return ok
+}
+
+func (b *builder) directJSONBObjectEqual(n hff.Node) (string, error) {
+	column, key, right, _ := b.directJSONBObjectEqualParts(n)
+	name, err := b.parameter(n, hff.String(key))
+	if err != nil {
+		return "", err
+	}
+	value, err := b.literal(right)
+	if err != nil {
+		return "", err
+	}
+	return "(" + column + " IS NOT NULL AND " + column + " @> jsonb_build_object(" +
+		name.code + "," + value.code + "))", nil
 }
 
 func (b *builder) directJSONBStringContainment(column string, needles []hff.Node) (string, error) {
