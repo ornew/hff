@@ -1,6 +1,8 @@
 {{define "playground"}}
 <section class="playground" aria-label="Filter playground">
   <div class="playground-toolbar">
+    <label for="playground-mode">Backend</label>
+    <div class="playground-select"><select id="playground-mode"><option value="local">Local</option><option value="sql">PostgreSQL preview</option></select><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></div>
     <label for="playground-example">Example</label>
     <div class="playground-select"><select id="playground-example"><option value="people">People</option><option value="labels">Service labels</option><option value="orders">Order items</option></select><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg></div>
   </div>
@@ -8,15 +10,24 @@
     <div class="playground-filter">
       <div class="playground-panel-header"><label for="playground-query">Filter</label><div class="playground-actions"><button id="playground-stop" type="button" hidden>Stop</button></div></div>
       <div class="query-editor-shell"><pre id="playground-query-highlights" class="query-highlights" aria-hidden="true"></pre><textarea id="playground-query" class="query-editor" rows="2" spellcheck="false"></textarea></div>
-      <dl class="playground-timings" aria-label="Run timings"><div><dt>Compile</dt><dd id="playground-compile-time">—</dd></div><div><dt>Build</dt><dd id="playground-build-time">—</dd></div><div title="Time for matching all records, including schema validation"><dt>Evaluate</dt><dd id="playground-evaluate-time">—</dd></div></dl>
-      <div class="playground-result-header"><h2>Results</h2><span id="playground-status" role="status" aria-live="polite">Loading…</span></div>
+      <dl class="playground-timings" aria-label="Run timings"><div><dt>Compile</dt><dd id="playground-compile-time">—</dd></div><div><dt>Build</dt><dd id="playground-build-time">—</dd></div><div id="playground-evaluate-timing" title="Time for matching all records, including schema validation"><dt>Evaluate</dt><dd id="playground-evaluate-time">—</dd></div></dl>
+      <div class="playground-result-header"><h2 id="playground-result-title">Results</h2><span id="playground-status" role="status" aria-live="polite">Loading…</span></div>
       <pre id="playground-result" data-state="empty" aria-label="Filtered records, JSONL" tabindex="0">Loading the local engine…</pre>
+      <div id="playground-sql-result" hidden>
+        <h3>WHERE expression</h3><pre id="playground-sql-where" aria-label="PostgreSQL WHERE expression" tabindex="0"></pre>
+        <h3>Arguments</h3><pre id="playground-sql-args" aria-label="Ordered PostgreSQL arguments" tabindex="0"></pre>
+      </div>
     </div>
-    <div class="playground-data">
+    <div class="playground-data" id="playground-local-data">
       <div class="playground-panel-header"><label for="playground-record">Records</label><span class="playground-format">JSONL</span></div>
       <textarea id="playground-record" rows="10" spellcheck="false" aria-describedby="playground-record-help"></textarea>
       <p id="playground-record-help" class="playground-help">One JSON record per line.</p>
       <div class="playground-schema"><label for="playground-schema">Schema</label><textarea id="playground-schema" rows="8" spellcheck="false"></textarea></div>
+    </div>
+    <div class="playground-data" id="playground-sql-data" hidden>
+      <div class="playground-panel-header"><label for="playground-configuration">Configuration</label><span class="playground-format">Versioned JSON</span></div>
+      <textarea id="playground-configuration" rows="22" spellcheck="false" aria-describedby="playground-configuration-help"></textarea>
+      <p id="playground-configuration-help" class="playground-help">Schema and PostgreSQL bindings. The preview builds SQL without connecting to a database.</p>
     </div>
   </div>
 </section>

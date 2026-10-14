@@ -25,10 +25,13 @@ function message(data) {
 }
 async function start() {
   worker = new Worker(new URL("./playground-worker-host.cjs", import.meta.url), { workerData: { root, url } });
-  assert.deepEqual(await message({ type: "init" }), { type: "ready" });
+  const ready = await message({ type: "init" });
+  assert.equal(ready.type, "ready");
+  assert.equal(ready.sqlExamples.length, 5);
+  return ready.sqlExamples;
 }
 try {
-  await start();
+  const sqlExamples = await start();
   const schema = [{ name: "age", type: "int" }];
   let result = await message({ type: "match", id: 1, request: JSON.stringify({ schema, query: "age>18", record: { age: 20 } }) });
   assert.deepEqual(result, { type: "result", id: 1, response: { ok: true, matched: true } });
@@ -39,6 +42,11 @@ try {
   assert.equal(result.response.matched, undefined);
   result = await message({ type: "match", id: 4, request: '{"schema":[{"name":"n","type":"int"}],"query":"n=9007199254740993","record":{"n":9007199254740993}}' });
   assert.equal(result.response.matched, true);
+  result = await message({ type: "match", id: 9, request: JSON.stringify({ mode: "sql", query: sqlExamples[0].query,
+    configuration: JSON.parse(sqlExamples[0].configuration) }) });
+  assert.equal(result.response.ok, true);
+  assert.ok(result.response.sql.where.includes("people"));
+  assert.ok(Array.isArray(result.response.sql.args));
   result = await message({ type: "match", id: 8, request: '{"schema":[{"name":"n","type":"int|float"}],"query":"n:[float]:exists | n=9007199254740993","records":[{"n":12},{"n":9007199254740993},{"n":1.0},{"n":-0.0}]}' });
   assert.deepEqual(result.response.batch.filtered, ['{"n":9007199254740993}', '{"n":1.0}', '{"n":-0.0}']);
   assert.equal(result.response.batch.total, 4);

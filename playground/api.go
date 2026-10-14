@@ -15,7 +15,9 @@ import (
 
 	"github.com/ornew/hff"
 	"github.com/ornew/hff/backends/local"
+	"github.com/ornew/hff/backends/sql"
 	"github.com/ornew/hff/capabilities"
+	"github.com/ornew/hff/config"
 	"github.com/ornew/hff/engine"
 	"github.com/ornew/hff/internal/core"
 	"github.com/ornew/hff/schema"
@@ -30,11 +32,22 @@ type field struct {
 	Fields   []field `json:"fields,omitempty"`
 }
 type request struct {
-	Query   string            `json:"query"`
-	Schema  []field           `json:"schema"`
-	Record  json.RawMessage   `json:"record"`
-	Records []json.RawMessage `json:"records"`
-	Without []capabilities.ID `json:"without,omitempty"`
+	Mode          string            `json:"mode,omitempty"`
+	Query         string            `json:"query"`
+	Configuration json.RawMessage   `json:"configuration,omitempty"`
+	Schema        []field           `json:"schema"`
+	Record        json.RawMessage   `json:"record"`
+	Records       []json.RawMessage `json:"records"`
+	Without       []capabilities.ID `json:"without,omitempty"`
+}
+type sqlArg struct {
+	Type  string `json:"type"`
+	Value string `json:"value"`
+}
+type sqlResult struct {
+	Where   string   `json:"where"`
+	Args    []sqlArg `json:"args"`
+	Timings timings  `json:"timings"`
 }
 type failure struct {
 	Stage       string        `json:"stage"`
@@ -69,6 +82,7 @@ type response struct {
 	Matched *bool        `json:"matched,omitempty"`
 	Error   *failure     `json:"error,omitempty"`
 	Batch   *batchResult `json:"batch,omitempty"`
+	SQL     *sqlResult   `json:"sql,omitempty"`
 }
 
 func handle(ctx context.Context, raw []byte) []byte {
@@ -115,6 +129,23 @@ func run(ctx context.Context, raw []byte) response {
 		return failed("request", err)
 	}
 	object, _ := admitted.AsObject()
+	if req.Mode == "sql" {
+		for _, name := range []string{"record", "records", "schema", "without"} {
+			if _, found := object[name]; found {
+				return failed("request", fmt.Errorf("SQL preview cannot include %s", name))
+			}
+		}
+		if _, found := object["configuration"]; !found {
+			return failed("request", fmt.Errorf("SQL preview needs configuration"))
+		}
+		return runSQL(ctx, req)
+	}
+	if req.Mode != "" && req.Mode != "local" {
+		return failed("request", fmt.Errorf("unknown playground mode %q", req.Mode))
+	}
+	if _, found := object["configuration"]; found {
+		return failed("request", fmt.Errorf("local mode cannot include configuration"))
+	}
 	records, batch := object["records"]
 	_, single := object["record"]
 	if batch == single {
@@ -180,6 +211,56 @@ func run(ctx context.Context, raw []byte) response {
 		return failed("match", err)
 	}
 	return response{OK: true, Matched: &matched}
+}
+
+func runSQL(ctx context.Context, req request) response {
+	loaded, err := config.Decode(req.Configuration, config.Registry{})
+	if err != nil {
+		return failed("configuration", err)
+	}
+	e, err := engine.New(engine.WithConfig(&loaded.Engine))
+	if err != nil {
+		return failed("configuration", err)
+	}
+	start := time.Now()
+	p, err := e.Compile(ctx, req.Query)
+	compileTime := float64(time.Since(start).Nanoseconds()) / 1e6
+	if err != nil {
+		return failed("compile", err)
+	}
+	start = time.Now()
+	q, err := sql.Build(ctx, p, sql.WithConfig(&loaded.SQL))
+	buildTime := float64(time.Since(start).Nanoseconds()) / 1e6
+	if err != nil {
+		return failed("build", err)
+	}
+	args, err := previewSQLArgs(q.Args())
+	if err != nil {
+		return failed("build", err)
+	}
+	return response{OK: true, SQL: &sqlResult{Where: q.Where(), Args: args,
+		Timings: timings{Compile: compileTime, Build: buildTime}}}
+}
+
+// Keep driver values typed and render numeric values as text: JavaScript JSON
+// numbers cannot preserve every int64 argument or the spelling of -0.0.
+func previewSQLArgs(values []any) ([]sqlArg, error) {
+	args := make([]sqlArg, 0, len(values))
+	for _, value := range values {
+		switch v := value.(type) {
+		case bool:
+			args = append(args, sqlArg{Type: "bool", Value: strconv.FormatBool(v)})
+		case int64:
+			args = append(args, sqlArg{Type: "int64", Value: strconv.FormatInt(v, 10)})
+		case float64:
+			args = append(args, sqlArg{Type: "float64", Value: strconv.FormatFloat(v, 'g', -1, 64)})
+		case string:
+			args = append(args, sqlArg{Type: "string", Value: v})
+		default:
+			return nil, fmt.Errorf("unsupported PostgreSQL preview argument type %T", value)
+		}
+	}
+	return args, nil
 }
 
 // Type strings use HFF's existing type-guard grammar. Exact plan shape prevents

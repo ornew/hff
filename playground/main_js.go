@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"syscall/js"
 )
 
@@ -20,6 +21,17 @@ func main() {
 			raw = args[0].String()
 		}
 		return string(handle(context.Background(), []byte(raw)))
+	}))
+	api.Set("sqlExamples", js.FuncOf(func(_ js.Value, _ []js.Value) any {
+		examples, err := sqlExamples()
+		if err != nil {
+			return `{"error":"SQL examples are unavailable"}`
+		}
+		data, err := json.Marshal(examples)
+		if err != nil {
+			return `{"error":"SQL examples are unavailable"}`
+		}
+		return string(data)
 	}))
 	js.Global().Set("hffPlayground", api)
 	if ready := js.Global().Get("hffPlaygroundReady"); ready.Type() == js.TypeFunction {

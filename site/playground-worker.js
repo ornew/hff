@@ -23,7 +23,11 @@ self.onmessage = async ({ data }) => {
   try {
     starting ??= start();
     await starting;
-    if (data.type === "init") { self.postMessage({ type: "ready" }); return; }
+    if (data.type === "init") {
+      const examples = JSON.parse(bridge.sqlExamples());
+      if (!Array.isArray(examples)) throw new Error(examples.error || "SQL examples are unavailable");
+      self.postMessage({ type: "ready", sqlExamples: examples }); return;
+    }
     if (data.type !== "match" || typeof data.request !== "string" || !Number.isSafeInteger(data.id)) throw new Error("Invalid playground message");
     if (new TextEncoder().encode(data.request).length > 1048576) throw new Error("Playground request exceeds 1 MiB");
     self.postMessage({ type: "result", id: data.id, response: JSON.parse(bridge.match(data.request)) });

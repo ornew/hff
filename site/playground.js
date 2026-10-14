@@ -35,13 +35,25 @@ const highlights = document.querySelector("#playground-query-highlights");
 const schema = document.querySelector("#playground-schema");
 const record = document.querySelector("#playground-record");
 const select = document.querySelector("#playground-example");
+const mode = document.querySelector("#playground-mode");
+const configuration = document.querySelector("#playground-configuration");
+const localData = document.querySelector("#playground-local-data");
+const sqlData = document.querySelector("#playground-sql-data");
+const sqlResult = document.querySelector("#playground-sql-result");
+const sqlWhere = document.querySelector("#playground-sql-where");
+const sqlArgs = document.querySelector("#playground-sql-args");
+const resultTitle = document.querySelector("#playground-result-title");
+const evaluateTiming = document.querySelector("#playground-evaluate-timing");
 const stop = document.querySelector("#playground-stop");
 const status = document.querySelector("#playground-status");
 const result = document.querySelector("#playground-result");
 const times = ["compile", "build", "evaluate"].map(name => document.querySelector(`#playground-${name}-time`));
 let worker, timer, debounceTimer, sequence = 0, active = 0, ready = false, runAfterReady = false;
+let sqlExamples = [];
+let sqlEditedBeforeReady = { query: false, configuration: false };
 function resetOutput(message = "Selected records appear here.") {
   clearHighlights();
+  result.hidden = false; sqlResult.hidden = true;
   result.textContent = message; result.dataset.state = "empty";
   times.forEach(element => { element.textContent = "—"; });
 }
@@ -102,11 +114,28 @@ function showHighlights(error) {
 query.addEventListener("scroll", syncHighlights);
 new ResizeObserver(syncHighlights).observe(query);
 function displayExample() {
+  if (mode.value === "sql") {
+    const example = sqlExamples.find(item => item.id === select.value);
+    if (!example) return;
+    query.value = example.query;
+    configuration.value = example.configuration;
+    resetOutput("Building SQL preview…");
+    return;
+  }
   const example = examples[select.value];
   query.value = example.query;
   schema.value = JSON.stringify(example.schema, null, 2);
   record.value = example.records.join("\n");
   resetOutput();
+}
+function setMode() {
+  const sql = mode.value === "sql";
+  localData.hidden = sql; sqlData.hidden = !sql;
+  evaluateTiming.hidden = sql;
+  resultTitle.textContent = sql ? "Generated SQL" : "Results";
+  select.replaceChildren(...(sql ? sqlExamples.map(example => new Option(example.label, example.id))
+    : Object.keys(examples).map((id, index) => new Option(["People", "Service labels", "Order items"][index], id))));
+  displayExample();
 }
 function end() { clearTimeout(timer); active = 0; stop.hidden = true; }
 function boot(thenRun = false) {
@@ -121,6 +150,15 @@ function boot(thenRun = false) {
     if (current !== worker) return;
     if (data.type === "ready") {
       ready = true; end(); status.textContent = "Ready";
+      sqlExamples = data.sqlExamples || [];
+      // Populate the first preset without discarding edits made while WASM
+      // loaded. Subsequent worker restarts keep both editors untouched.
+      if (mode.value === "sql" && select.options.length === 0) {
+        const enteredQuery = query.value, enteredConfiguration = configuration.value;
+        setMode();
+        if (sqlEditedBeforeReady.query) query.value = enteredQuery;
+        if (sqlEditedBeforeReady.configuration) configuration.value = enteredConfiguration;
+      }
       if (runAfterReady) { runAfterReady = false; execute(); }
     }
     if (data.type === "fatal") fail(data.message);
@@ -128,7 +166,7 @@ function boot(thenRun = false) {
       end();
       const response = data.response;
       if (!response.ok) {
-        status.textContent = "Could not filter records";
+        status.textContent = mode.value === "sql" ? "Could not build SQL" : "Could not filter records";
         const error = response.error;
         const location = error.record ? `Record ${error.record}: ` : error.line ? `Line ${error.line}, column ${error.column}: ` : "";
         result.textContent = error.diagnostics?.length
@@ -139,6 +177,18 @@ function boot(thenRun = false) {
         return;
       }
       const batch = response.batch;
+      if (response.sql) {
+        status.textContent = `${response.sql.args.length} bound arguments`;
+        result.hidden = true; sqlResult.hidden = false;
+        sqlWhere.textContent = response.sql.where;
+        sqlArgs.textContent = response.sql.args.length
+          ? response.sql.args.map((arg, index) => `$${index + 1}  ${arg.type}  ${arg.type === "string" ? JSON.stringify(arg.value) : arg.value}`).join("\n")
+          : "No bound arguments.";
+        [response.sql.timings.compile_ms, response.sql.timings.build_ms].forEach((value, i) => {
+          times[i].textContent = `${value.toFixed(value < 1 ? 3 : 2)} ms`;
+        });
+        return;
+      }
       status.textContent = `${batch.filtered.length} of ${batch.total} records`;
       // Rows remain raw text all the way through WASM, preserving int64,
       // float spelling and signed zero. Never parse/stringify user records.
@@ -159,12 +209,17 @@ function fail(message) {
 }
 function execute() {
   if (!ready) { runAfterReady = true; return; }
-  const rows = record.value.split(/\r?\n/).filter(line => line.trim() !== "");
-  const request = `{"query":${JSON.stringify(query.value)},"schema":${schema.value},"records":[${rows.join(",")}]}`;
+  let request;
+  if (mode.value === "sql") {
+    request = `{"mode":"sql","query":${JSON.stringify(query.value)},"configuration":${configuration.value}}`;
+  } else {
+    const rows = record.value.split(/\r?\n/).filter(line => line.trim() !== "");
+    request = `{"query":${JSON.stringify(query.value)},"schema":${schema.value},"records":[${rows.join(",")}]}`;
+  }
   active = ++sequence;
-  stop.hidden = false; status.textContent = "Filtering…";
-  resetOutput("Filtering records…");
-  timer = setTimeout(() => fail("Filtering stopped after 5 seconds. No partial result was returned."), 5000);
+  stop.hidden = false; status.textContent = mode.value === "sql" ? "Building SQL…" : "Filtering…";
+  resetOutput(mode.value === "sql" ? "Building SQL preview…" : "Filtering records…");
+  timer = setTimeout(() => fail("Preview stopped after 5 seconds. No partial result was returned."), 5000);
   worker.postMessage({ type: "match", id: active, request });
 }
 function requestRun() {
@@ -177,8 +232,17 @@ select.addEventListener("change", () => {
   displayExample();
   requestRun();
 });
-for (const input of [query, schema, record]) {
+mode.addEventListener("change", () => {
+  if (active) fail("Preview cancelled.");
+  sqlEditedBeforeReady = { query: false, configuration: false };
+  setMode(); requestRun();
+});
+for (const input of [query, schema, record, configuration]) {
   input.addEventListener("input", () => {
+    if (!ready && mode.value === "sql") {
+      if (input === query) sqlEditedBeforeReady.query = true;
+      if (input === configuration) sqlEditedBeforeReady.configuration = true;
+    }
     if (active) fail("Filtering cancelled because the input changed.");
     runAfterReady = false;
     resetOutput("Updating results…"); status.textContent = "Updating…";
