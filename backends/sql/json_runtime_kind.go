@@ -8,7 +8,7 @@ import (
 // union may instead use that class for Bytes, Duration, or Timestamp. Resolve the class
 // through the stored schema before exposing type() to a query.
 func (b *builder) jsonRuntimeTypeName(n hff.Node, code string, format JSONFormat, stored hff.Type) (string, error) {
-	if err := b.checkJSONStringSchemas(n, stored); err != nil {
+	if err := b.checkJSONRootStringSchemas(n, stored); err != nil {
 		return "", err
 	}
 	stringName := "string"
@@ -74,4 +74,24 @@ func (b *builder) jsonStringMatch(n hff.Node, code string, format JSONFormat) st
 		return "FALSE"
 	}
 	return string(format) + "_typeof(" + code + ")='string'"
+}
+
+// Only the root identity is observed; container descendants are not read.
+func (b *builder) checkJSONRootStringSchemas(n hff.Node, typ hff.Type) error {
+	members := []hff.Type{typ}
+	if typ.Kind() == hff.UnionType {
+		members = typ.Members()
+	}
+	var roots []hff.Type
+	for _, member := range members {
+		if err := checkContext(b.ctx); err != nil {
+			return err
+		}
+		switch member.Kind() {
+		case hff.ListType, hff.MapType, hff.StructType:
+		default:
+			roots = append(roots, member)
+		}
+	}
+	return b.checkJSONStringSchemas(n, hff.NewUnionType(roots...))
 }

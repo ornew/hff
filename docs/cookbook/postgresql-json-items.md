@@ -118,6 +118,24 @@ whole `labels` value still requires distinguishing String from Bytes and may
 be rejected by `Build`. A String in an `Any` field also remains a String; its
 spelling does not imply Bytes.
 
+Root type inspection and shape guards can observe the category without
+decoding the ambiguous `opaque` field. These queries use the same table,
+schema, and binding:
+
+```hff
+labels:type="object"
+labels:[object].app="auth"
+labels:[map[any]]:get("app")="auth"
+labels:[int]=0
+labels:[list[bytes]]:size=1
+```
+
+The first matches rows 1 and 2. The second and third match only row 1; the
+fourth matches row 3 and the fifth row 4. After an object guard, `app` retains
+its declared String type. The shape checks do not make `opaque` recoverable,
+and an `Any` string still does not imply Bytes. Operations that require
+numeric distinctions lost by JSONB still need type metadata.
+
 ## Guard recovered pair shapes
 
 The fixed roles also let a type guard inspect a pair without treating its two

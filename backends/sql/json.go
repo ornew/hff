@@ -436,12 +436,15 @@ func (b *builder) jsonTypeGuard(n hff.Node, value expression, format JSONFormat,
 	// a definite false so later null tests still produce ordinary false.
 	present := both(value.present, "COALESCE(("+test+"), FALSE)")
 	guarded := "CASE WHEN " + present + " THEN " + value.code + " ELSE NULL END"
+	if target.Kind() == hff.ListType || target.Kind() == hff.MapType || target.Kind() == hff.UnionType {
+		guarded, err = b.jsonGuardResult(n, guarded, format, source, target)
+		if err != nil {
+			return expression{}, err
+		}
+	}
 	return b.jsonDecode(n, guarded, format, b.jsonStoredType(n), present)
 }
 func (b *builder) jsonMatches(n hff.Node, code string, format JSONFormat, source, target hff.Type) (string, error) {
-	if err := b.checkJSONStringSchemas(n, source); err != nil {
-		return "", err
-	}
 	null := "(" + code + " IS NULL OR " + string(format) + "_typeof(" + code + ") = 'null')"
 	switch target.Kind() {
 	case hff.AnyType:
@@ -460,6 +463,18 @@ func (b *builder) jsonMatches(n hff.Node, code string, format JSONFormat, source
 			parts[i] = test
 		}
 		return "(" + strings.Join(parts, " OR ") + ")", nil
+	}
+	if jsonCategory(target.Kind()) == "string" {
+		if err := b.checkJSONRootStringSchemas(n, source); err != nil {
+			return "", err
+		}
+	}
+	if (target.Kind() == hff.ListType || target.Kind() == hff.MapType) && target.Element().Kind() == hff.AnyType {
+		class := "array"
+		if target.Kind() == hff.MapType {
+			class = "object"
+		}
+		return "(" + string(format) + "_typeof(" + code + ")='" + class + "')", nil
 	}
 	if source.Kind() == hff.UnionType && (target.Kind() == hff.ListType || target.Kind() == hff.MapType) {
 		return b.jsonUnionCollectionMatches(n, code, format, source, target)

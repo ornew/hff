@@ -19,8 +19,19 @@ func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, er
 		return value, true, err
 	}
 	source, stages := mapPipelineSource(n)
-	if len(stages) == 0 || !b.mapPipelineHasItemSlot(source, stages) {
+	if len(stages) == 0 {
 		return expression{}, false, nil
+	}
+	if !b.mapPipelineHasItemSlot(source, stages) {
+		// Keep unobserved ambiguous fields out of an intermediate materialization.
+		// The final mapped value still passes the ordinary representation checks.
+		complete, err := b.normalizationProofSchema(source, b.jsonStoredType(source))
+		if err != nil {
+			return expression{}, true, err
+		}
+		if complete {
+			return expression{}, false, nil
+		}
 	}
 	value, err := b.jsonMapPipelineFrom(n, name, source, stages, nil)
 	return value, true, err

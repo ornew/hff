@@ -16,6 +16,7 @@ type builder struct {
 	predicates            map[*predicateNode]string
 	ctx                   context.Context
 	program               hff.Program
+	declaredRootTypes     map[string]hff.Type
 	bindings              map[string]string
 	qualifiedNativePaths  map[string]string
 	physicalBindings      []Binding

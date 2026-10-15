@@ -227,6 +227,18 @@ object still requires type recovery and may be rejected by `Build`. This
 projection does not infer Bytes from an `Any` string or make ambiguous root
 alternatives generally recoverable.
 
+At the same root, `type()` and explicit object/list type guards can observe a
+category-disjoint shape without normalizing unrelated nested fields. After a
+guard, field access still uses the original per-field schema. A selected child
+whose own alternatives remain ambiguous is still rejected when the operation
+needs its active HFF type. Shape-only `Any` guards do not by themselves require
+numeric metadata. Operations that need numeric distinctions lost by JSONB
+require type metadata and are rejected by `Build` when it is absent; when
+available, metadata restores constrained numeric descendants before later
+guards inspect them. Ordinary decoder failures still become null. An `Any`
+position remains JSON-native and is not given a Bytes or Timestamp tag based
+on string contents.
+
 ### Tagged scalar alternatives with containers
 
 The supported category-disjoint subset permits one schema-known Bytes,

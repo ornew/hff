@@ -49,15 +49,20 @@ func unionProjectionRecords(name string, callbacks bool) []hff.Value {
 }
 
 func TestPostgreSQLUnionProjectionsMatchLocal(t *testing.T) {
+	runPostgreSQLProjectionSources(t, unionProjectionSources(), unionProjectionCallbackSources())
+}
+
+func runPostgreSQLProjectionSources(t *testing.T, rootSources, callbackSources []string) {
+	t.Helper()
 	container := os.Getenv("HFF_POSTGRES_CONTAINER")
 	if container == "" {
 		t.Fatal("integration tests require HFF_POSTGRES_CONTAINER")
 	}
 	for _, tc := range unionProjectionTypes() {
 		for _, callbacks := range []bool{false, true} {
-			typ, sources := tc.typ, unionProjectionSources()
+			typ, sources := tc.typ, rootSources
 			if callbacks {
-				typ, sources = schema.ListOf(schema.Union(tc.typ, schema.NullType)), unionProjectionCallbackSources()
+				typ, sources = schema.ListOf(schema.Union(tc.typ, schema.NullType)), callbackSources
 			}
 			e, err := engine.New(engine.WithSchema(schema.Struct(schema.Nullable(schema.Field("data", typ)))), engine.WithCapabilities(capabilities.Standard()))
 			if err != nil {
@@ -119,6 +124,11 @@ func TestPostgreSQLUnionProjectionsMatchLocal(t *testing.T) {
 }
 
 func TestPostgreSQLUnionProjectionsPrepare(t *testing.T) {
+	runPostgreSQLProjectionPrepare(t, unionProjectionSources(), unionProjectionCallbackSources())
+}
+
+func runPostgreSQLProjectionPrepare(t *testing.T, rootSources, callbackSources []string) {
+	t.Helper()
 	container := os.Getenv("HFF_POSTGRES_CONTAINER")
 	if container == "" {
 		t.Fatal("integration tests require HFF_POSTGRES_CONTAINER")
@@ -130,9 +140,9 @@ func TestPostgreSQLUnionProjectionsPrepare(t *testing.T) {
 	var labels []string
 	for _, tc := range unionProjectionTypes() {
 		for _, callbacks := range []bool{false, true} {
-			typ, sources := tc.typ, unionProjectionSources()
+			typ, sources := tc.typ, rootSources
 			if callbacks {
-				typ, sources = schema.ListOf(schema.Union(tc.typ, schema.NullType)), unionProjectionCallbackSources()
+				typ, sources = schema.ListOf(schema.Union(tc.typ, schema.NullType)), callbackSources
 			}
 			e, err := engine.New(engine.WithSchema(schema.Struct(schema.Nullable(schema.Field("data", typ)))), engine.WithCapabilities(capabilities.Standard()))
 			if err != nil {

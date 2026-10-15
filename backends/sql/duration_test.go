@@ -187,7 +187,8 @@ func TestStoredDurationBindingFormats(t *testing.T) {
 		{schema.Union(schema.DurationType, schema.IntType), true},
 		{schema.Union(schema.DurationType, schema.StringType, schema.NullType), false},
 		{schema.Union(schema.DurationType, schema.BytesType), false},
-		{schema.Union(schema.ListOf(schema.DurationType), schema.ListOf(schema.AnyType)), false},
+		// type() observes the list root without recovering its element types.
+		{schema.Union(schema.ListOf(schema.DurationType), schema.ListOf(schema.AnyType)), true},
 	} {
 		e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("data", test.typ))), engine.WithCapabilities(capabilities.Standard()))
 		if err != nil {

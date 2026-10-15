@@ -6,6 +6,21 @@ import "github.com/ornew/hff"
 // particular, removing null from Any must not invent unsupported storage
 // alternatives after JSON-native runtime values have already been established.
 func (b *builder) jsonStoredType(n hff.Node) hff.Type {
+	if n.Kind() == hff.VariableNode {
+		// Compiler inference may absorb a literal Any union. Preserve its
+		// declared alternatives before representation-sensitive operations.
+		if b.declaredRootTypes == nil {
+			b.declaredRootTypes = make(map[string]hff.Type)
+			for _, field := range b.program.Schema().Fields() {
+				b.declaredRootTypes[field.Name] = field.Type
+			}
+		}
+		if path, ok := n.Path(); ok && len(path) == 1 {
+			if typ, found := b.declaredRootTypes[path[0]]; found {
+				return typ
+			}
+		}
+	}
 	if n.Kind() == hff.FieldNode {
 		parent, _ := n.Child(0)
 		key, _ := n.Field()
@@ -54,6 +69,15 @@ func (b *builder) jsonStoredType(n hff.Node) hff.Type {
 		if roles := b.jsonItemsRoles(n); roles != nil {
 			return guardedItemCarrier(n.Type(), roles, true)
 		}
+		child, _ := n.Child(0)
+		target, _ := n.Constraint()
+		result := intersectItemType(b.jsonStoredType(child), target)
+		if result.Kind() == hff.NeverType {
+			// An impossible guard still needs its contextual SQL carrier. Its
+			// separate presence test prevents this type from implying success.
+			return n.Type()
+		}
+		return result
 	}
 	if method, ok := n.Method(); ok {
 		switch method.Name() {

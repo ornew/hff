@@ -10,16 +10,13 @@ import (
 // A JSON category identifies a collection family, not an individual union
 // member. Retain all possible element types before testing the actual values.
 func (b *builder) jsonUnionCollectionMatches(n hff.Node, code string, format JSONFormat, source, target hff.Type) (string, error) {
-	for _, member := range source.Members() {
-		if member.Kind() == hff.AnyType {
-			return b.dynamicJSONMatches(n, code, format, target)
-		}
-	}
 	class := string(format) + "_typeof(" + code + ")"
 	if target.Kind() == hff.ListType {
 		var elements []hff.Type
 		for _, member := range source.Members() {
-			if member.Kind() == hff.ListType {
+			if member.Kind() == hff.AnyType {
+				elements = append(elements, member)
+			} else if member.Kind() == hff.ListType {
 				elements = append(elements, member.Element())
 			}
 		}
@@ -39,6 +36,9 @@ func (b *builder) jsonUnionCollectionMatches(n hff.Node, code string, format JSO
 	hasObject := false
 	for _, member := range source.Members() {
 		switch member.Kind() {
+		case hff.AnyType:
+			hasObject = true
+			maps = append(maps, member)
 		case hff.MapType:
 			hasObject = true
 			maps = append(maps, member.Element())
