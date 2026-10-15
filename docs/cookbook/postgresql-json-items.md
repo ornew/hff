@@ -393,10 +393,10 @@ A null value is passed to the callback rather than skipped. An empty list
 returns its seed, and a null receiver returns null before the seed or callback
 is evaluated. Guard-produced no-value propagates through the whole fold.
 
-This comparison support covers typed trees whose value identities remain
-recoverable. Other consumers such as `in()`/`contains()`, `unique()`/`distinct()`,
-sorting, and aggregates retain their type-recovery requirements; they may need
-an explicit guard or fail `Build` when a value's type cannot be recovered.
+Typed-tree `in()`, list `contains()`, `unique()`, and `distinct()` can use the
+same recovered value identities as these comparisons. Sorting, aggregates,
+and other consumers still have separate type-recovery requirements; they may
+need an explicit guard or fail `Build` when a value's type cannot be recovered.
 Native JSON strings do not imply tagged identity, and JSONB still needs numeric
 metadata when storage erased a distinction the operation depends on.
 
@@ -415,9 +415,28 @@ inside the lists. This is structural equality, so different element families
 are unequal and mixed Int/Float values compare by exact numeric value. A
 top-level dynamic type mismatch yields null, while comparisons involving
 top-level null or no-value are false except for an explicit `=null` test.
-Other consumers such as `contains()`, `sort()`, and aggregates retain their
-existing type-recovery requirements; this comparison support does not enable
-every operation on every ambiguous tree.
+Sorting, aggregates, and other consumers retain their own type-recovery
+requirements; supporting these comparisons does not enable every operation on
+every ambiguous tree.
+
+### Membership and distinct on folded typed values
+
+Membership and deduplication can also consume a fold result while it retains
+its per-field types:
+
+```hff
+labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value])):contains("YQ==","YQ==":frombase64)
+labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value])):concat(labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value]))):distinct:size=4
+```
+
+The membership query matches row 1, where `app` is the String `"YQ=="` and
+`asset` is the Bytes value represented by that base64 text. The second query
+matches rows 1–3: each has four distinct field values, with row 3's null
+counting as one value. Row 4 has four nulls, which `distinct()` reduces to one.
+These examples compare scalar values; structural list/object elements also
+require the applicable equality capabilities. See the PostgreSQL JSON guide's
+[null and no-value behavior for `contains()`](../backends/postgresql/json.md#contains-on-dynamic-strings-and-lists)
+for the difference between String and List receivers.
 
 ### Fold pair and pair-list accumulators
 

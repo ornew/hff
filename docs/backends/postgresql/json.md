@@ -581,11 +581,13 @@ list callbacks, JSON construction, and `json()` serialization as base64 JSON
 strings. Typed Bytes equality and `in()` membership work when the compared
 values have statically known Bytes types. A Bytes fold seed or callback value
 is also supported when the accumulator and callback types remain explicit; an
-`Any` accumulator remains JSON-native and cannot carry Bytes identity. Generic
-dynamic tree comparisons involving a Bytes-bearing value remain unsupported,
-such as comparing a Bytes value through a generic path with an `Any`
-counterpart. A statically known Bytes field can coexist with unrelated `Any`
-fields in the same fold.
+`Any` accumulator remains JSON-native and cannot carry Bytes identity by itself.
+The typed-tree comparison and membership paths described below can use Bytes
+when its recovered schema remains available; they do not infer Bytes identity
+for an `Any` string. Generic comparisons through an unconstrained `Any` root or
+leaf remain unsupported when they require Bytes identity that the runtime tree
+does not carry. A statically known Bytes field can coexist with unrelated
+`Any` fields in the same fold.
 
 Typed map operations including `size()`, `has()`, `get()`, `keys()`, and
 `values()` work with Bytes values, and callbacks can process those values as
@@ -1546,11 +1548,28 @@ for the explicit null-test rule, and no-value still propagates through
 ordinary consumers.
 
 This comparison support does not make every ambiguous value safe to
-materialize. `in()`/`contains()`, `unique()`/`distinct()`, sorting, and other
-consumers still follow their existing recovery requirements and may need an
-explicit guard or fail `Build` when the value's type cannot be recovered.
-Native JSON strings never imply Bytes, Duration, or Timestamp identity, and
-JSONB Float-loss and metadata requirements remain unchanged.
+materialize. When values remain in a typed tree, `in()`, list `contains()`,
+`unique()`, and `distinct()` can use recovered identity without first
+serializing the values to ordinary JSON; existing schema-known paths are
+unchanged. They use HFF equality: different value families do not match, and
+Int/Float values compare by exact numeric value. `in()` requires at least one
+candidate, can inspect a null candidate, and propagates a null receiver. List
+`contains()` requires every candidate, and a null candidate can match a stored
+null element. Membership arguments are evaluated left to right before
+checking for a match; a reached no-value propagates and suppresses later
+arguments, while a prior non-match does not. For String `contains()`, a null
+argument propagates instead; see
+[`contains()` on dynamic strings and lists](#contains-on-dynamic-strings-and-lists).
+
+`unique()` reports whether all typed-tree elements are distinct. `distinct()`
+returns the first original value from each equal group in input order,
+preserving its type and observable Float representation. These operations need
+the same structural equality capabilities as their ordinary HFF forms when
+composite values may be compared. Sorting, `find()`, aggregates, and other
+consumers still have separate recovery requirements and may need an explicit
+guard or fail `Build`. Native JSON strings never imply Bytes, Duration, or
+Timestamp identity, and JSONB Float-loss and metadata requirements remain
+unchanged.
 
 A callback that ignores an ambiguous JSONB item and returns a known type, such
 as `foldl(0,(acc,item)=>acc+1)`, does not need metadata for that item's numeric
@@ -2027,8 +2046,10 @@ a source-located `hff.BackendError` from `Build`:
   index.
 - Dynamic folds whose seed or callback-result representations cannot be
   determined from the schema and available JSONB metadata.
-- Dynamic `Any` versus Bytes comparisons and generic dynamic tree comparisons
-  involving Bytes; dynamic JSON representations remain JSON-native. Other
+- Comparisons through an unconstrained dynamic `Any` root or leaf when Bytes
+  identity is not recoverable; dynamic JSON representations remain JSON-native.
+  Typed-tree paths with recovered Bytes schema use the bounded support
+  described above. Other
   multi-non-null unions containing Bytes remain unsupported where their
   representations overlap or the operation cannot be lowered. `String|Bytes`
   cannot be recovered from JSON strings. The schema-known

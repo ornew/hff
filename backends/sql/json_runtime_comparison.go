@@ -1,7 +1,6 @@
 package sql
 
 import (
-	"errors"
 	"strings"
 
 	"github.com/ornew/hff"
@@ -20,7 +19,7 @@ func (b *builder) deferredComparison(n hff.Node) (expression, bool, error) {
 	default:
 		return expression{}, false, nil
 	}
-	if !b.comparisonHasDeferredSource(n) {
+	if !b.hasDeferredValueSource(n) {
 		return expression{}, false, nil
 	}
 	// Keep established native and recoverable-document comparisons when the
@@ -31,21 +30,17 @@ func (b *builder) deferredComparison(n hff.Node) (expression, bool, error) {
 		normal.keepDeferredValues = false
 		value, err := normal.binary(n)
 		if err == nil {
-			b.adoptComparisonProbe(normal)
+			b.adoptDeferredProbe(normal)
 			return value, true, nil
 		}
-		var backendError *hff.Error
-		if !errors.As(err, &backendError) || backendError.Code != hff.BackendError {
-			return expression{}, true, err
-		}
-		if err := checkContext(b.ctx); err != nil {
+		if err := b.typedFallbackError(err); err != nil {
 			return expression{}, true, err
 		}
 	}
 	probe := b.validationBuilder()
 	probe.keepDeferredValues = true
 	leftNode, _ := n.Child(0)
-	left, handled, err := probe.comparisonDescriptor(leftNode)
+	left, handled, err := probe.typedValueDescriptor(leftNode)
 	if err != nil {
 		return expression{}, true, err
 	}
@@ -61,7 +56,7 @@ func (b *builder) deferredComparison(n hff.Node) (expression, bool, error) {
 		if op == hff.NotEqual {
 			test = "(NOT " + test + ")"
 		}
-		b.adoptComparisonProbe(probe)
+		b.adoptDeferredProbe(probe)
 		return boolean(both(left.present, test)), true, nil
 	}
 	if !handled {
@@ -82,7 +77,7 @@ func (b *builder) deferredComparison(n hff.Node) (expression, bool, error) {
 		return expression{}, true, err
 	}
 	rightNode, _ := n.Child(1)
-	right, rightHandled, rightErr := probe.comparisonDescriptor(rightNode)
+	right, rightHandled, rightErr := probe.typedValueDescriptor(rightNode)
 	if !handled && !rightHandled {
 		return expression{}, rightErr != nil, rightErr
 	}
@@ -106,14 +101,14 @@ func (b *builder) deferredComparison(n hff.Node) (expression, bool, error) {
 	lc, rc = probe.project(lc), probe.project(rc)
 	result, err := probe.runtimeComparison(n, lc, rc, op, both(left.present, right.present))
 	if err == nil {
-		b.adoptComparisonProbe(probe)
+		b.adoptDeferredProbe(probe)
 	}
 	return result, true, err
 }
 
-// Avoid cloning builder state for ordinary scalar comparisons. Deferred row
+// Avoid cloning builder state when there is no deferred value source. Row
 // parameters and folds are the sources that can carry a lexical typed value.
-func (b *builder) comparisonHasDeferredSource(n hff.Node) bool {
+func (b *builder) hasDeferredValueSource(n hff.Node) bool {
 	if binding, ok := n.Binding(); ok {
 		p := b.parameters[binding.ID()]
 		if p.deferred != nil || p.itemSlot != nil {
@@ -125,14 +120,14 @@ func (b *builder) comparisonHasDeferredSource(n hff.Node) bool {
 	}
 	for i := 0; i < n.ChildCount(); i++ {
 		child, _ := n.Child(i)
-		if b.comparisonHasDeferredSource(child) {
+		if b.hasDeferredValueSource(child) {
 			return true
 		}
 	}
 	return false
 }
 
-func (b *builder) comparisonDescriptor(n hff.Node) (*jsonDeferredValue, bool, error) {
+func (b *builder) typedValueDescriptor(n hff.Node) (*jsonDeferredValue, bool, error) {
 	if value, handled, err := b.deferredDescriptor(n); handled || err != nil {
 		return value, handled, err
 	}
@@ -142,7 +137,7 @@ func (b *builder) comparisonDescriptor(n hff.Node) (*jsonDeferredValue, bool, er
 	return nil, false, nil
 }
 
-func (b *builder) adoptComparisonProbe(probe builder) {
+func (b *builder) adoptDeferredProbe(probe builder) {
 	memo, preserve := b.itemRoleMemo, b.keepDeferredValues
 	*b = probe
 	b.itemRoleMemo, b.keepDeferredValues = memo, preserve

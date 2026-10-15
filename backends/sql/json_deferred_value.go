@@ -164,7 +164,7 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 			return parameter.deferred, true, nil
 		}
 	}
-	if (n.Kind() == hff.ListNode || n.Kind() == hff.ObjectNode) && (b.keepDeferredValues || b.containsDeferredReference(n) || b.comparisonHasDeferredSource(n)) {
+	if (n.Kind() == hff.ListNode || n.Kind() == hff.ObjectNode) && (b.keepDeferredValues || b.containsDeferredReference(n) || b.hasDeferredValueSource(n)) {
 		value, err := b.constructDeferredValue(n)
 		return value, true, err
 	}
@@ -187,6 +187,13 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 		return result, true, err
 	}
 	if method, ok := n.Method(); ok {
+		if builtinListCall(n, "distinct") && (b.keepDeferredValues || b.hasDeferredValueSource(n)) {
+			if b.jsonItemRoles(n) != nil || b.jsonItemsRoles(n) != nil {
+				return nil, false, nil
+			}
+			value, err := b.runtimeDistinctDescriptor(n)
+			return value, true, err
+		}
 		if !b.runtimeFoldProbe && (builtinListCall(n, "foldl") || builtinListCall(n, "foldr")) {
 			if b.jsonItemRoles(n) != nil || b.jsonItemsRoles(n) != nil {
 				// Existing positional proofs have specialized access and callback
@@ -334,6 +341,9 @@ func (b *builder) deferredLeafExpression(n hff.Node, parameter jsonParameter) (e
 }
 
 func (b *builder) deferredExpression(n hff.Node) (expression, bool, error) {
+	if value, handled, err := b.deferredMembership(n); handled || err != nil {
+		return value, handled, err
+	}
 	if value, handled, err := b.deferredComparison(n); handled || err != nil {
 		return value, handled, err
 	}
