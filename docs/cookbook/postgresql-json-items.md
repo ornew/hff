@@ -194,9 +194,10 @@ map produce no-value, so the later constant-true predicate cannot hide it.
 This pipeline keeps the selected slot's schema through direct map/filter
 sequences. Filters can remove rows before later maps, but their guards do not
 change the retained value's type. An earlier map's no-value remains a failure
-even if a later filter would remove that row. These bounded sequences do not
-cross general `concat()`, `flatmap()`, or folds; direct concat of eligible
-deferred `items()` branches has a narrower case below.
+even if a later filter would remove that row. The eligible concat and bounded
+`flatmap()` compositions described below can also carry these slots to a
+consumer. Other materialization boundaries and folds without a closed slot
+provenance remain outside this support.
 
 For example, filtering by observed type removes null payloads before the next
 map, while retaining the original field roles:
@@ -259,9 +260,24 @@ labels:items:map(pair=>pair[1]):concat(labels:items:map(pair=>pair[1])):map(valu
 Rows 1 and 2 match. The values from the first concat level stay ahead of the
 third deferred branch, and each branch keeps its own item-slot schema.
 
-This map/filter transport does not extend to general `flatmap()` or fold
-carriers, or other materialization boundaries. A later filter cannot erase a
-no-value produced by an earlier map:
+The same item-slot path supports bounded `flatmap()` composition from a list
+literal. This query duplicates each selected value before mapping it to its
+type name:
+
+```hff
+labels:items:map(pair=>pair[1]):flatmap(value=>[value,value]):map(value=>value:type)=["string","string","bytes","bytes","duration","duration","timestamp","timestamp"]
+```
+
+Rows 1 and 2 match. Each object's values remain in key order, and every value
+appears twice. Within this path, list literals, maps, filters, concat trees,
+nested `flatmap()` calls, and recoverable list expressions can be composed.
+A callback that returns a non-list makes the whole `flatmap()` result null;
+guarded no-value propagates no-value. The first invalid callback result
+determines the result, even if later callbacks return an empty list. Ordinary
+null inside a returned list remains data. Fold carriers and unrelated
+materialization boundaries remain outside this support.
+
+A later filter still cannot erase a no-value produced by an earlier map:
 
 ```hff
 labels:items:map(pair=>pair[1]):concat(labels:items:map(pair=>pair[1])):map(value=>value!):filter(value=>false):all(value=>true)

@@ -12,6 +12,9 @@ import (
 // a String from Bytes, Duration, or Timestamp. This pipeline carries lexical
 // descriptors instead; it never changes the public JSON storage contract.
 func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, error) {
+	if value, handled, err := b.jsonFlatmapPipeline(n, name); handled {
+		return value, true, err
+	}
 	if value, handled, err := b.jsonConcatMapPipeline(n, name); handled {
 		return value, true, err
 	}

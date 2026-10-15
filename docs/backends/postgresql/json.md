@@ -694,8 +694,20 @@ surrounding tree. A no-value from an input map remains a failure even if a
 later filter excludes that row or a later concat operand is null. A null
 concat result masks failures from maps after that concat. Filters do not
 narrow retained values, and ordinary null remains data. This path does not
-add general `flatmap()` or fold transport, or support other materialization
-boundaries.
+add fold transport or support unrelated materialization boundaries. Within
+this item-slot path, `flatmap()` can compose list literals, maps, filters,
+concat trees, nested `flatmap()` calls, and other recoverable list expressions.
+Selected slots retain their per-key identity until a terminal consumer or
+materialization that can recover the result type. `size()` and zero-argument
+`count()` can observe a deferred slot inside a list literal, such as
+`[value,[value]:size]`, without serializing the value. A `flatmap()` callback
+must return a list: a non-list result produces null, while guarded no-value
+propagates no-value. The first invalid callback result determines the result;
+later callbacks, including ones returning an empty list, do not replace it.
+Maps that wrap unresolved slots in collections before a later `flatmap()` (for
+example, `map(v=>[v])`), list-value guards or indexing, and unrelated
+materialization boundaries still require ordinary JSON recovery and are outside
+this support.
 
 For eligible `items()` pipelines, PostgreSQL can place row-dependent built-in
 callback work behind a filter's row gate when it depends on the current item;
