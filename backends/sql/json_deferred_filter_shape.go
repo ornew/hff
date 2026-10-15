@@ -6,6 +6,9 @@ import "github.com/ornew/hff"
 // Validate discarded callbacks separately before a shape-only observation so
 // unused payload parameters and row work do not escape into the real query.
 func (b *builder) deferredObserverReceiver(n hff.Node, name string) (*jsonDeferredValue, bool, error) {
+	if name == "len" {
+		return b.typedValueDescriptor(n)
+	}
 	if (name != "type" && name != "exists") || !deferredShapeFilter(n) {
 		return b.deferredDescriptor(n)
 	}

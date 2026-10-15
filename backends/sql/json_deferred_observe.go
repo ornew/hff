@@ -40,7 +40,7 @@ func (b *builder) observeDeferredValue(n hff.Node, value *jsonDeferredValue, nam
 		kind, fallback := hff.StringType, "'null'::text"
 		if name == "truth" || name == "exists" {
 			kind, fallback = hff.BoolType, "FALSE"
-		} else if name == "size" || name == "count" {
+		} else if name == "size" || name == "count" || name == "len" {
 			kind, fallback = hff.IntType, "NULL::bigint"
 		}
 		for i, choice := range value.choices {
@@ -89,6 +89,8 @@ func (b *builder) observeDeferredValue(n hff.Node, value *jsonDeferredValue, nam
 		return boolean(both(value.present, "(NOT "+null+")")), nil
 	case "truth":
 		return boolean(both(value.present, "(NOT "+null+" AND COALESCE("+size+">0,FALSE))")), nil
+	case "len":
+		return expression{"NULL::bigint", value.present, hff.IntType}, nil
 	case "size", "count":
 		return expression{"(CASE WHEN " + null + " THEN NULL::bigint ELSE " + size + " END)", value.present, hff.IntType}, nil
 	case "json", "string":
@@ -100,6 +102,9 @@ func (b *builder) observeDeferredValue(n hff.Node, value *jsonDeferredValue, nam
 
 func (b *builder) observeDeferredLeaf(n hff.Node, value *jsonDeferredValue, name string) (expression, error) {
 	parameter := *value.leaf
+	if name == "len" {
+		return b.deferredLength(n, value)
+	}
 	if parameter.itemSlot != nil {
 		slot := *parameter.itemSlot
 		slot.present = value.present
@@ -215,4 +220,63 @@ func (b *builder) serializeDeferredValue(n hff.Node, value *jsonDeferredValue) (
 	}
 	parts = append(parts, "'}'::text")
 	return "(" + strings.Join(parts, "||") + ")", nil
+}
+
+// Length observes only the root String or Bytes value. Unrelated container
+// children need not be serialized or recovered for an inapplicable call.
+func (b *builder) deferredLength(n hff.Node, value *jsonDeferredValue) (expression, error) {
+	parameter := *value.leaf
+	if parameter.itemSlot != nil {
+		slot := *parameter.itemSlot
+		code, err := b.jsonItemSlotOperation(n, slot, "NULL::bigint", func(source hff.Type) (string, error) { return b.storedLength(n, slot.raw, slot.format, source) })
+		return expression{code, value.present, hff.IntType}, err
+	}
+	carrier, err := b.deferredLeafExpression(n, parameter)
+	if err != nil {
+		return expression{}, err
+	}
+	switch carrier.kind {
+	case hff.NullType:
+		return expression{"NULL", value.present, hff.NullType}, nil
+	case hff.StringType:
+		return expression{"char_length(" + carrier.code + ")::bigint", value.present, hff.IntType}, nil
+	case hff.BytesType:
+		return expression{"octet_length(" + carrier.code + ")::bigint", value.present, hff.IntType}, nil
+	case hff.AnyType:
+		raw, format, err := b.jsonRepresentation(n, carrier)
+		if err != nil {
+			return expression{}, err
+		}
+		code, err := b.storedLength(n, raw, format, value.typ)
+		return expression{code, value.present, hff.IntType}, err
+	}
+	return expression{"NULL::bigint", value.present, hff.IntType}, nil
+}
+
+func (b *builder) storedLength(n hff.Node, raw string, format JSONFormat, typ hff.Type) (string, error) {
+	textPossible := jsonRootHasKind(typ, hff.AnyType) || jsonRootHasKind(typ, hff.StringType)
+	bytesPossible := jsonRootHasKind(typ, hff.BytesType)
+	if !textPossible && !bytesPossible {
+		return "NULL::bigint", checkContext(b.ctx)
+	}
+	// Only root string-family ambiguity matters to this scalar observation.
+	members := []hff.Type{typ}
+	if typ.Kind() == hff.UnionType {
+		members = typ.Members()
+	}
+	var scalars []hff.Type
+	for _, member := range members {
+		if member.Kind() != hff.ListType && member.Kind() != hff.MapType && member.Kind() != hff.StructType {
+			scalars = append(scalars, member)
+		}
+	}
+	if err := b.checkJSONStringSchemas(n, hff.NewUnionType(scalars...)); err != nil {
+		return "", err
+	}
+	text := "(" + raw + " #>> '{}'::text[])"
+	length := "char_length(" + text + ")::bigint"
+	if bytesPossible {
+		length = "octet_length(" + postgresDecodeBase64(text) + ")::bigint"
+	}
+	return "(CASE WHEN " + string(format) + "_typeof(" + raw + ")='string' THEN " + length + " ELSE NULL::bigint END)", nil
 }

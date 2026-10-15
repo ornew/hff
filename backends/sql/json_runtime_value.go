@@ -431,6 +431,10 @@ func (b *builder) observeRuntimeValue(n hff.Node, value *jsonDeferredValue, name
 		return expression{"(CASE WHEN " + tag + " IN ('int','float') THEN 'number' ELSE " + tag + " END)", value.present, hff.StringType}, nil
 	case "exists":
 		return boolean(both(value.present, "("+tag+"<>'null')")), nil
+	case "len":
+		text := "(" + payload + " #>> '{}')"
+		code := "(CASE WHEN " + tag + "='string' THEN char_length(" + text + ")::bigint WHEN " + tag + "='bytes' THEN octet_length(" + postgresDecodeBase64(text) + ")::bigint ELSE NULL::bigint END)"
+		return expression{code, value.present, hff.IntType}, nil
 	case "size", "count":
 		if name == "count" {
 			size = "(CASE WHEN " + tag + "='list' THEN json_array_length(" + payload + ")::bigint ELSE NULL::bigint END)"

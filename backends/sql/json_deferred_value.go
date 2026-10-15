@@ -187,6 +187,21 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 		return result, true, err
 	}
 	if method, ok := n.Method(); ok {
+		for _, name := range []string{"sum", "avg", "min", "max"} {
+			if !builtinListCall(n, name) {
+				continue
+			}
+			receiver, _ := n.Child(0)
+			if b.keepDeferredValues || b.hasDeferredValueSource(n) || computedDeferredSource(receiver) {
+				callback, _ := n.Child(1)
+				if _, _, keys := itemKeySource(receiver, callback); callback.Valid() && keys {
+					// Key-only aggregates do not need to recover the value slot.
+					return nil, false, nil
+				}
+				value, err := b.deferredAggregateDescriptor(n, name)
+				return value, true, err
+			}
+		}
 		if builtinListCall(n, "find") {
 			receiver, _ := n.Child(0)
 			needed := b.keepDeferredValues || b.hasDeferredValueSource(n) || computedDeferredSource(receiver)
@@ -371,15 +386,39 @@ func (b *builder) deferredExpression(n hff.Node) (expression, bool, error) {
 			}
 		}
 		switch method.Name() {
-		case "type", "exists", "size", "count", "json", "string":
+		case "type", "exists", "size", "count", "json", "string", "len":
 			if builtin {
 				receiver, _ := n.Child(0)
-				value, handled, err := b.deferredObserverReceiver(receiver, method.Name())
+				observer := b
+				var probe builder
+				if method.Name() == "len" {
+					probe = b.validationBuilder()
+					observer = &probe
+				}
+				value, handled, err := observer.deferredObserverReceiver(receiver, method.Name())
 				if handled || err != nil {
 					if err != nil {
 						return expression{}, handled, err
 					}
-					result, err := b.observeDeferredValue(n, value, method.Name())
+					if method.Name() == "len" && (value.typ.Kind() == hff.NullType || value.typ.Kind() == hff.NeverType) {
+						// A private null proof must not replace the ordinary SQL
+						// carrier selected from the public result type. Probe from
+						// before receiver lowering to avoid abandoned parameters.
+						normal := b.validationBuilder()
+						normal.keepDeferredValues = false
+						result, err := normal.call(n)
+						if err == nil {
+							b.adoptDeferredProbe(normal)
+							return result, true, nil
+						}
+						if err := b.typedFallbackError(err); err != nil {
+							return expression{}, true, err
+						}
+					}
+					result, err := observer.observeDeferredValue(n, value, method.Name())
+					if err == nil && method.Name() == "len" {
+						b.adoptDeferredProbe(probe)
+					}
 					return result, true, err
 				}
 			}

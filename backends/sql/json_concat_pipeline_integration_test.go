@@ -164,6 +164,10 @@ INSERT INTO events(id,labels) VALUES
 		`labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value])):sort:type="null"`,
 		`labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value])):find(value=>value:[bytes]:exists):string="YQ=="`,
 		`labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value])):find(value=>value:[timestamp]:exists):type="timestamp"`,
+		`labels:items:map(pair=>{"key":pair[0],"value":pair[1]}):foldl([], (acc,item)=>acc:concat([item])):sum(item=>item.key:len)=23`,
+		`labels:items:map(pair=>{"key":pair[0],"value":pair[1]}):foldl([], (acc,item)=>acc:concat([item])):avg(item=>item.key:len)=5.75`,
+		`labels:items:map(pair=>{"key":pair[0],"value":pair[1]}):foldl([], (acc,item)=>acc:concat([item])):min(item=>item.key:len)=3`,
+		`labels:items:map(pair=>{"key":pair[0],"value":pair[1]}):foldl([], (acc,item)=>acc:concat([item])):max(item=>item.key:len)=8`,
 	} {
 		p, err := e.Compile(ctx, source)
 		if err != nil {

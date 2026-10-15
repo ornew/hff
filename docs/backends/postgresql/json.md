@@ -1235,6 +1235,25 @@ are required for Float processing through JSON, and HFF does not change these
 settings. This adds no representation metadata beyond JSONB's existing
 numeric type metadata.
 
+The same four aggregate methods can consume a constructed or folded typed
+list when its numeric element type remains recoverable. Callback projections
+are eligible when their numeric result type is recoverable as well. Null and
+guarded no-value contributions are skipped; a reached nonnumeric value makes
+the aggregate null, while no-value from the whole source remains no-value.
+`sum()` and `avg()` use the PostgreSQL Float accumulation and checked
+conversion described above. `min()` and `max()` return the selected original
+value and subtype, keeping the first value on a tie. An ambiguous materialized
+list still requires a guard or schema/metadata that recovers its numeric
+representation; otherwise `Build` rejects it.
+The aggregate consumes only each projected numeric root, so unused children
+of a constructed value need not be serialized or type-recovered. A newly
+computed Float from `sum()` or `avg()` does not inherit stored signed-zero
+loss, while `min()` and `max()` return an original Float and preserve its
+observable representation; recover the input subtype where JSONB erased it.
+On recovered constructed or folded values, `len()` reads a String's Unicode
+code-point count or a Bytes value's byte count directly, without serializing
+unused payloads.
+
 ### Containment for simple JSONB filters
 
 For a directly bound JSONB object without type metadata, a literal-key equality
@@ -1585,8 +1604,10 @@ matching null element returns ordinary null, while receiver or whole-source
 no-value remains no-value. The source ordinal determines the first match, and
 relation bindings still require a unique order. SQL preserves the result
 semantics but does not promise physical callback short-circuiting or local
-per-match work budgets. Aggregates retain separate recovery requirements and
-may need an explicit guard or fail `Build`. Native JSON strings never imply
+per-match work budgets. Numeric aggregates can consume typed trees when their
+numeric values are recoverable, as described in
+[Numeric list extrema](#numeric-list-extrema). Other aggregate inputs may
+still need an explicit guard or fail `Build`. Native JSON strings never imply
 Bytes, Duration, or Timestamp identity, and JSONB Float-loss and metadata
 requirements remain unchanged.
 

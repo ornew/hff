@@ -196,8 +196,9 @@ sequences. Filters can remove rows before later maps, but their guards do not
 change the retained value's type. An earlier map's no-value remains a failure
 even if a later filter would remove that row. The eligible concat and bounded
 `flatmap()` compositions described below can also carry these slots to a
-consumer. Other materialization boundaries and folds without a closed slot
-provenance remain outside this support.
+consumer. Folds can also preserve recovered values in constructed typed trees;
+the aggregate section below shows the bounded numeric case. Other materialized
+values still need recoverable type information.
 
 For example, filtering by observed type removes null payloads before the next
 map, while retaining the original field roles:
@@ -397,10 +398,11 @@ Typed-tree `in()`, list `contains()`, `unique()`, and `distinct()` can use the
 same recovered value identities as these comparisons. Bounded sorting of
 recovered typed trees is shown in
 [Sort recovered deferred values](#sort-recovered-deferred-values). Aggregates
-and other consumers still have separate type-recovery requirements; they may
-need an explicit guard or fail `Build` when a value's type cannot be recovered.
-Native JSON strings do not imply tagged identity, and JSONB still needs numeric
-metadata when storage erased a distinction the operation depends on.
+on folded typed lists are supported when their numeric element types can be
+recovered, as shown below. Other consumers may still need an explicit guard or
+fail `Build` when a value's type cannot be recovered. Native JSON strings do
+not imply tagged identity, and JSONB still needs numeric metadata when storage
+erased a distinction the operation depends on.
 
 ### Compare a folded typed list
 
@@ -419,9 +421,8 @@ top-level dynamic type mismatch yields null, while comparisons involving
 top-level null or no-value are false except for an explicit `=null` test.
 Bounded sorting of recovered typed trees is shown in
 [Sort recovered deferred values](#sort-recovered-deferred-values).
-Aggregates and other consumers retain their own type-recovery requirements;
-supporting these comparisons does not enable every operation on every
-ambiguous tree.
+The aggregate section below shows the supported numeric consumers. These
+comparisons do not make every operation valid for every ambiguous tree.
 
 ### Membership and distinct on folded typed values
 
@@ -479,6 +480,31 @@ value is `Yg==`. The second matches rows 1–3, whose first Timestamp value is
 the `recorded` field. Row 4 has no matching non-null value. A guarded
 no-value predicate is false, and SQL preserves the first-match result without
 promising Local's physical callback short-circuit.
+
+### Aggregate a folded typed list
+
+These queries fold each key together with its original, heterogeneous value.
+The aggregate callback reads only the String key and projects its length as
+Int. The four keys `app`, `asset`, `elapsed`, and `recorded` have lengths 3, 5,
+7, and 8, so all four records match each query:
+
+```hff
+labels:items:map(pair=>{"key":pair[0],"value":pair[1]}):foldl([], (acc,item)=>acc:concat([item])):sum(item=>item.key:len)=23
+labels:items:map(pair=>{"key":pair[0],"value":pair[1]}):foldl([], (acc,item)=>acc:concat([item])):avg(item=>item.key:len)=5.75
+labels:items:map(pair=>{"key":pair[0],"value":pair[1]}):foldl([], (acc,item)=>acc:concat([item])):min(item=>item.key:len)=3
+labels:items:map(pair=>{"key":pair[0],"value":pair[1]}):foldl([], (acc,item)=>acc:concat([item])):max(item=>item.key:len)=8
+```
+
+The folded list retains each Bytes, Duration, Timestamp, String, or null value;
+only the numeric key-length projection contributes to the aggregate. For
+typed trees with Float contributions, PostgreSQL uses the backend Float
+aggregate profile described in the
+[JSON backend guide](../backends/postgresql/json.md#numeric-list-extrema):
+numeric intermediate accumulation and a checked final Float conversion. Null
+and guarded no-value contributions are skipped; a reached nonnumeric
+contribution makes the result null. A no-value result for the whole source
+remains no-value. JSONB still requires numeric metadata when storage erased a
+numeric subtype needed by the aggregate.
 
 ### Fold pair and pair-list accumulators
 

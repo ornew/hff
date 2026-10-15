@@ -147,7 +147,7 @@ func (b *builder) observeDeferredSelection(n hff.Node, value *jsonDeferredValue,
 	kind := hff.StringType
 	if name == "truth" || name == "exists" {
 		kind = hff.BoolType
-	} else if name == "size" || name == "count" {
+	} else if name == "size" || name == "count" || name == "len" {
 		kind = hff.IntType
 	}
 	result, err := b.resolveDeferredSelection(n, value, kind, func(child *jsonDeferredValue) (expression, error) {
