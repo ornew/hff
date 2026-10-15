@@ -6,6 +6,8 @@ import "github.com/ornew/hff"
 // has one value schema at every key, so normalize only a selected value after
 // validating the complete applicable schema. Dynamic heterogeneous Struct
 // access and values/items still normalize the object before combining values.
+// Recoverable heterogeneous Struct sources are intercepted by deferred
+// per-field lowering before this ordinary representation is requested.
 func (b *builder) jsonObjectAccess(n hff.Node, name string, values []expression) (expression, error) {
 	r := values[0]
 	if r.kind == hff.NullType {

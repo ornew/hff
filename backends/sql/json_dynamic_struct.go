@@ -85,22 +85,7 @@ func (b *builder) deferredDynamicStructAccess(n hff.Node) (*jsonDeferredValue, b
 	}
 	probe := b.validationBuilder()
 	receiver, _ := n.Child(0)
-	value, handled, err := probe.deferredDescriptor(receiver)
-	if err != nil {
-		return nil, true, err
-	}
-	if !handled {
-		if receiver.Kind() == hff.ObjectNode {
-			value, err = probe.constructDeferredValue(receiver)
-		} else {
-			var carrier expression
-			carrier, err = probe.expression(receiver)
-			if err == nil {
-				value = deferredLeaf(jsonParameter{typ: probe.jsonStoredType(receiver), direct: &carrier,
-					format: probe.jsonValues[carrier.code], lossy: probe.losesFloat(receiver, nil)})
-			}
-		}
-	}
+	value, err := probe.declaredStructReceiver(receiver)
 	if err != nil {
 		return nil, true, err
 	}
@@ -151,16 +136,19 @@ func (b *builder) accessDeferredStruct(n hff.Node, value *jsonDeferredValue, par
 	return makeDeferredChoices(choices, present), nil
 }
 
-func (b *builder) hasDeferredStructAccess(n hff.Node) (bool, error) {
+func (b *builder) hasDeferredStructSource(n hff.Node) (bool, error) {
 	if err := checkContext(b.ctx); err != nil {
 		return false, err
 	}
 	if _, needed, err := b.dynamicStructAccessType(n); needed || err != nil {
 		return needed, err
 	}
+	if _, needed, err := b.structValuesType(n); needed || err != nil {
+		return needed, err
+	}
 	for i := 0; i < n.ChildCount(); i++ {
 		child, _ := n.Child(i)
-		if needed, err := b.hasDeferredStructAccess(child); needed || err != nil {
+		if needed, err := b.hasDeferredStructSource(child); needed || err != nil {
 			return needed, err
 		}
 	}

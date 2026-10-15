@@ -210,6 +210,26 @@ selected field keeps its own declared type. This applies to a schema-known
 single or nullable Struct and explicit objects, not to unresolved Struct
 unions or same-position ambiguous alternatives.
 
+### Enumerate heterogeneous Struct values
+
+`values()` keeps each present field's declared type while enumerating a
+schema-known heterogeneous Struct or explicit object. With the `events`
+fixture, `app`, `asset`, `elapsed`, and `recorded` are enumerated in `C`
+collation order:
+
+```hff
+labels:values:any(value=>value:type="bytes")
+labels:values:map(value=>value:type):json=["string","bytes","duration","timestamp"]:json
+```
+
+Both queries match rows 1 and 2. The first finds the non-null Bytes value; the
+second checks the ordered field types. Row 3 retains its explicit null `asset`
+value, so its type list contains `"null"`; row 4 retains four null values.
+Missing fields would be omitted. A string in the `Any` `app` field remains a
+String even when its text resembles base64 or a Timestamp. This does not infer
+tagged identity from native JSON `Any` strings or resolve ambiguous stored
+unions.
+
 ## Continue a selected slot through a map chain
 
 A direct map/filter sequence can retain each selected value's field identity

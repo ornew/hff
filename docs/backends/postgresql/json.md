@@ -1358,12 +1358,21 @@ Known Map/Struct carriers also avoid a redundant receiver-category check under
 the declared storage contract. Existing JSON-null normalization preserves
 nullable and guarded-key behavior.
 
-`values()` still normalizes the complete source object because it observes
-multiple values. `items()` also normalizes the complete source object before
-constructing pairs, but PostgreSQL retains the String key and each value's
-declared role in the produced native JSON. That provenance supports per-key
-equality and serialization; after pairs are combined, value-slot extraction
-from a mixed Struct can still be ambiguous as described above. For a
+For a single or nullable schema-known heterogeneous Struct, and for an
+explicit object whose fields have recoverable schemas, `values()` enumerates
+the object's present keys in `C` collation order and retains each field's
+declared type in the resulting collection. Missing fields are omitted, while
+present fields containing JSON null remain as null values. `Map` values retain
+their existing lowering. Native JSON `Any` still cannot infer tagged identity
+from string contents, and overlapping Struct unions or same-position
+alternatives remain unsupported when their stored representations are
+ambiguous.
+
+`items()` also normalizes the complete source object before constructing pairs,
+but PostgreSQL retains the String key and each value's declared role in the
+produced native JSON. That provenance supports per-key equality and
+serialization; after pairs are combined, value-slot extraction from a mixed
+Struct can still be ambiguous as described above. For a
 schema-known single or nullable Struct, and for an explicit object value, a
 recoverable String key can select among the declared field descriptors without
 merging their types. PostgreSQL lowers the key once and retains the selected

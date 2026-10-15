@@ -50,6 +50,11 @@ func (b *builder) needsDeferredFlatmap(n hff.Node) (bool, error) {
 		if err := checkContext(b.ctx); err != nil {
 			return err
 		}
+		if _, needed, err := b.structValuesType(node); err != nil {
+			return err
+		} else if needed {
+			flatmap, slot = true, true
+		}
 		flatmap = flatmap || builtinListCall(node, "flatmap")
 		if builtinListCall(node, "map") {
 			callback, _ := node.Child(1)
