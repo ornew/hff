@@ -210,6 +210,20 @@ selected field keeps its own declared type. This applies to a schema-known
 single or nullable Struct and explicit objects, not to unresolved Struct
 unions or same-position ambiguous alternatives.
 
+The selected field's declared type can also flow into a callback consumer or
+a nested `flatmap()` predicate:
+
+```hff
+["asset","elapsed"]:map(key=>labels:get(key)):count(value=>value:type="bytes")=1
+["asset","elapsed"]:any(key=>[labels:get(key)]:flatmap(value=>[value]):any(value=>value:type="bytes"))
+```
+
+Both match rows 1 and 2, where `asset` is non-null Bytes and `elapsed` is
+Duration. Rows 3 and 4 do not match because `asset` is null and `elapsed` is
+not Bytes. The declared field schema supplies Bytes identity; a string in
+native JSON `Any` does not acquire that identity from its spelling. A
+no-value produced by an earlier map guard is not erased by a later filter.
+
 ### Enumerate heterogeneous Struct values
 
 `values()` keeps each present field's declared type while enumerating a

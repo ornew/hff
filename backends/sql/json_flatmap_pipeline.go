@@ -457,6 +457,11 @@ func (b *builder) jsonFlatmapPipeline(n hff.Node, name string) (expression, bool
 		return expression{}, false, nil
 	}
 	needed, err := b.needsDeferredFlatmap(receiver)
+	if err == nil && !needed {
+		// Struct selections retain field identity in row plans even without
+		// a flatmap or an already-bound deferred callback parameter.
+		needed, err = b.hasDeferredStructSource(receiver)
+	}
 	if err != nil || !needed {
 		return expression{}, needed || err != nil, err
 	}

@@ -1390,6 +1390,12 @@ see [selected metadata restoration](optimizations.md#restore-only-a-selected-jso
 The [selected-value SQL-shape record](optimizations.md#select-a-json-object-value-before-normalization)
 describes the measured access cases without claiming execution speed.
 
+For these schema-known Struct and explicit-object selections, the recovered
+field type can flow into callback consumers such as `count()`, `any()`, and
+`all()`, including a nested `flatmap()` predicate. A prior map guard that
+produces no-value remains a failure even if a later filter excludes that row;
+filtering does not erase failures from an earlier map.
+
 For key-only consumers of an otherwise supported `items()` source, the
 backend can instead traverse the object's keys directly. A fixed key-slot
 proof supports key comparisons,
