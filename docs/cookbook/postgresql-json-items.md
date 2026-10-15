@@ -43,6 +43,81 @@ go run ./examples/sql-json-items
 It prints the generated PostgreSQL predicate and arguments, then the Local
 results for the same records. Building the SQL does not connect to a database.
 
+## Project a recoverable field from an object union
+
+A query can select a uniquely typed field from an object branch without
+normalizing an unrelated field whose stored String representation is
+ambiguous:
+
+```sql
+CREATE TABLE projection_events (
+    id bigint PRIMARY KEY,
+    labels jsonb NOT NULL
+);
+
+INSERT INTO projection_events VALUES
+    (1, '{"app":"auth","opaque":"YQ=="}'),
+    (2, '{"app":"billing","opaque":"Yg=="}'),
+    (3, '0'),
+    (4, '["YQ=="]');
+```
+
+Use a category-disjoint root union. The `opaque` field intentionally has
+ambiguous String-or-Bytes identity; the `app` field remains a known String:
+
+```go
+objectType := schema.Struct(
+	schema.String("app"),
+	schema.Field("opaque", schema.Union(schema.StringType, schema.BytesType)),
+)
+labelsType := schema.Union(
+	objectType,
+	schema.IntType,
+	schema.ListOf(schema.BytesType),
+)
+```
+
+Configure the schema and binding, then build the first predicate:
+
+```go
+e, err := engine.New(
+	engine.WithSchema(schema.Struct(schema.Field("labels", labelsType))),
+	engine.WithCapabilities(capabilities.Standard()),
+)
+if err != nil {
+	return err
+}
+program, err := e.Compile(ctx, `labels.app="auth"`)
+if err != nil {
+	return err
+}
+query, err := hffsql.Build(ctx, program,
+	hffsql.WithDialect(hffsql.PostgreSQL),
+	hffsql.WithBindings(hffsql.BindJSON(
+		hff.Path{"labels"},
+		hffsql.Column("projection_events", "labels"),
+		hffsql.JSONB,
+	)),
+)
+if err != nil {
+	return err
+}
+```
+
+Build the second predicate with the same binding. Both predicates match only
+row 1:
+
+```hff
+labels.app="auth"
+labels:get("app")="auth"
+```
+
+The root JSON category selects the object branch, and the selected `app`
+field has a recoverable String type. Selecting `opaque` or serializing the
+whole `labels` value still requires distinguishing String from Bytes and may
+be rejected by `Build`. A String in an `Any` field also remains a String; its
+spelling does not imply Bytes.
+
 ## Guard recovered pair shapes
 
 The fixed roles also let a type guard inspect a pair without treating its two

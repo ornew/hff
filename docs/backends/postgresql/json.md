@@ -216,6 +216,17 @@ alternatives remain Build errors when an operation needs an active HFF type
 that cannot be recovered. Some shape-only operations can still be supported
 when they do not need to identify the ambiguous nested member.
 
+A bounded projection can also read a uniquely declared field from an
+object-shaped branch of a category-disjoint root union without normalizing
+unrelated fields. For example, a schema shaped as
+`Struct{app:String, opaque:String|Bytes}|Int|List<Bytes>` can project
+`labels.app` when `labels` is bound to JSON/JSONB: the root category identifies
+the Struct branch and `app` has a recoverable String type. The separate
+`opaque` field remains ambiguous, so selecting it or materializing the whole
+object still requires type recovery and may be rejected by `Build`. This
+projection does not infer Bytes from an `Any` string or make ambiguous root
+alternatives generally recoverable.
+
 ### Tagged scalar alternatives with containers
 
 The supported category-disjoint subset permits one schema-known Bytes,

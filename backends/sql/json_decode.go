@@ -13,9 +13,9 @@ func (b *builder) jsonDecodeProjected(n hff.Node, code string, format JSONFormat
 		if typ.Kind() != hff.AnyType && typ.Kind() != hff.UnionType {
 			return expression{}, b.failure(n, "JSON value requires a supported schema type")
 		}
-		if err := b.checkJSONStringSchemas(n, typ); err != nil {
-			return expression{}, err
-		}
+		// Keep this as an unmaterialized JSON carrier, just as for a known
+		// container below. A projection checks the selected schema; consumers
+		// of the whole value must validate all structural positions themselves.
 		normalized := "(CASE WHEN " + string(format) + "_typeof(" + code + ") = 'null' THEN NULL ELSE " + code + " END)"
 		b.jsonValues[normalized] = format
 		b.copyNormalizedJSON(code, normalized, format)
