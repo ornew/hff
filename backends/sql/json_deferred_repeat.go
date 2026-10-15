@@ -7,86 +7,115 @@ import (
 	"github.com/ornew/hff"
 )
 
-// A repeated lexical parameter has one value descriptor and several output
-// positions. Share its row scope rather than copying the enclosing FROM for
-// each position. Equal types, names, or SQL text are not an identity proof.
+// Identical pure expressions in one lexical environment have one value
+// descriptor and several output positions. Compare typed IR and backend order
+// demand, never just public types or generated SQL text.
 func (b *builder) repeatedDeferredList(n hff.Node) (jsonDeferredList, bool, error) {
-	first, count, ok, err := b.repeatedDeferredParameter(n)
-	if err != nil || !ok || count < 2 {
+	if b.disableDeferredRepeat {
+		return jsonDeferredList{}, false, nil
+	}
+	groups, compressed, err := b.deferredRepeatGroups(n)
+	if err != nil || !compressed {
 		return jsonDeferredList{}, false, err
 	}
 	// Keep the original constructor validation, including every child and
 	// lexical lookup, without leaking discarded parameters or projections.
 	probe := b.validationBuilder()
+	// Constructor children can contain more constructors. Disable sharing
+	// throughout validation, so duplicate wrappers are traversed once rather
+	// than recursively adding a new validation pass at every nested level.
+	probe.disableDeferredRepeat = true
 	if _, err := probe.deferredListConstructor(n); err != nil {
 		return jsonDeferredList{}, true, err
 	}
-	value, err := b.deferredValue(first)
-	if err != nil {
-		return jsonDeferredList{}, true, err
-	}
-	positions := make([]string, count)
-	for i := range positions {
-		if err := checkContext(b.ctx); err != nil {
+	plan := jsonDeferredList{null: "FALSE", present: "TRUE"}
+	for _, group := range groups {
+		value, err := b.deferredValue(group.first)
+		if err != nil {
 			return jsonDeferredList{}, true, err
 		}
-		positions[i] = "(" + strconv.Itoa(i) + ")"
-	}
-	alias := b.nextAlias()
-	return jsonDeferredList{
-		null: "FALSE", present: deferredParameterPresence(value),
-		// literal must remain false: a single arm now emits several positions.
-		// Literal indexing instead treats each arm as exactly one element.
-		arms: []jsonDeferredArm{{
+		plan.present = both(plan.present, deferredParameterPresence(value))
+		positions := make([]string, len(group.positions))
+		for i, position := range group.positions {
+			if err := checkContext(b.ctx); err != nil {
+				return jsonDeferredList{}, true, err
+			}
+			positions[i] = "(" + strconv.Itoa(position) + ")"
+		}
+		alias := b.nextAlias()
+		for _, position := range group.positions {
+			for len(plan.literalPositions) <= position {
+				plan.literalPositions = append(plan.literalPositions, 0)
+			}
+			plan.literalPositions[position] = len(plan.arms)
+		}
+		plan.arms = append(plan.arms, jsonDeferredArm{
 			from:    "(VALUES " + strings.Join(positions, ",") + ") AS " + alias + "(ord)",
 			ordinal: []string{alias + ".ord"}, selected: "TRUE", value: value,
 			parameters: copyJSONParameters(b.parameters),
-		}},
-	}, true, nil
+		})
+	}
+	// literal must remain false: an arm can emit several positions. Literal
+	// indexing instead treats each arm as exactly one element.
+	return plan, true, nil
 }
 
-func (b *builder) repeatedDeferredParameter(n hff.Node) (hff.Node, int, bool, error) {
-	if err := checkContext(b.ctx); err != nil {
-		return hff.Node{}, 0, false, err
-	}
-	if builtinListCall(n, "concat") {
-		left, _ := n.Child(0)
-		right, _ := n.Child(1)
-		first, lcount, lok, err := b.repeatedDeferredParameter(left)
-		if err != nil || !lok {
-			return hff.Node{}, 0, false, err
-		}
-		second, rcount, rok, err := b.repeatedDeferredParameter(right)
-		if err != nil || !rok {
-			return hff.Node{}, 0, false, err
-		}
-		lbind, _ := first.Binding()
-		rbind, _ := second.Binding()
-		if lbind.ID() != rbind.ID() {
-			return hff.Node{}, 0, false, nil
-		}
-		return first, lcount + rcount, true, nil
-	}
-	if n.Kind() != hff.ListNode || n.ChildCount() == 0 {
-		return hff.Node{}, 0, false, nil
-	}
-	first, _ := n.Child(0)
-	binding, ok := first.Binding()
-	if !ok || first.Kind() != hff.ParameterNode {
-		return hff.Node{}, 0, false, nil
-	}
-	if _, bound := b.parameters[binding.ID()]; !bound {
-		return hff.Node{}, 0, false, nil
-	}
-	for i := 1; i < n.ChildCount(); i++ {
+type deferredRepeatGroup struct {
+	first     hff.Node
+	positions []int
+}
+
+func (b *builder) deferredRepeatGroups(n hff.Node) ([]deferredRepeatGroup, bool, error) {
+	var leaves []hff.Node
+	var collect func(hff.Node) (bool, error)
+	collect = func(n hff.Node) (bool, error) {
 		if err := checkContext(b.ctx); err != nil {
-			return hff.Node{}, 0, false, err
+			return false, err
 		}
-		child, _ := n.Child(i)
-		other, bound := child.Binding()
-		if !bound || child.Kind() != hff.ParameterNode || other.ID() != binding.ID() {
-			return hff.Node{}, 0, false, nil
+		if n.Kind() == hff.ListNode {
+			if n.ChildCount() == 0 {
+				return false, nil
+			}
+			for i := 0; i < n.ChildCount(); i++ {
+				child, _ := n.Child(i)
+				leaves = append(leaves, child)
+			}
+			return true, nil
 		}
+		if builtinListCall(n, "concat") {
+			left, _ := n.Child(0)
+			right, _ := n.Child(1)
+			if ok, err := collect(left); err != nil || !ok {
+				return false, err
+			}
+			return collect(right)
+		}
+		return false, nil
 	}
-	return first, n.ChildCount(), true, nil
+	if ok, err := collect(n); err != nil || !ok {
+		return nil, false, err
+	}
+	var groups []deferredRepeatGroup
+	seen := map[string]int{}
+	compressed := false
+	for position, leaf := range leaves {
+		key, bound, err := b.deferredRepeatExpressionKey(leaf)
+		if err != nil || key == "" {
+			// An extension or callback anywhere in the constructor keeps the
+			// whole original path, including its Build invocation behavior.
+			return nil, false, err
+		}
+		if index, exists := seen[key]; bound && exists {
+			groups[index].positions = append(groups[index].positions, position)
+			compressed = true
+			continue
+		}
+		if bound {
+			seen[key] = len(groups)
+		}
+		// Unbound leaves, including empty-list data and null, retain their
+		// own output positions. They are not zero-row outer arms.
+		groups = append(groups, deferredRepeatGroup{leaf, []int{position}})
+	}
+	return groups, compressed, nil
 }

@@ -803,14 +803,28 @@ literal-list indexing and guards, object field or `get()` access, and `type()`,
 type, ordinary null, and guarded no-value remain distinct through these
 wrappers.
 
-For a `flatmap()` callback that repeats the same parameter unchanged in every
-literal-list leaf, PostgreSQL can share the parameter's ordered input rows.
-For example, `labels:items:map(p=>p[1]):flatmap(v=>[v,v])` duplicates each
-selected value in order; a strict built-in `concat()` tree of such leaves can
-use the same path. Null remains repeated data, and no-value still fails the
-whole list. Guards, indexes, method calls, computed expressions, and merely
-equal-looking SQL expressions do not qualify; they keep their ordinary
-lowering.
+For a `flatmap()` callback that repeats pure expressions in a literal-list
+result, PostgreSQL can share one ordered row source for each group of
+structurally identical, callback-free built-in expressions in an eligible
+deferred pipeline. For example,
+`labels:items:flatmap(p=>[p[1],p[0],p[1]])` can share the two `p[1]` leaves
+while retaining the distinct `p[0]` leaf between them. Literal leaves such as
+`[]` and `null` remain independent, and every leaf keeps its original output
+position and presence; a no-value in any leaf still fails the whole list.
+The proof includes binding identity, resolved types, constraints, operation
+signatures, and child order. At least one bound lexical reference must occur
+in a shared expression; it may be a captured outer binding. Merely matching
+SQL text or result types is not enough. If a leaf contains a nested callback,
+custom method, or unsupported node, the callback list keeps ordinary lowering.
+Validation runs before sharing. See the [repeated parameter record](../../optimizations/059-postgresql-repeated-flatmap-parameters.md)
+and [repeated expression record](../../optimizations/060-postgresql-repeated-flatmap-expressions.md)
+for the two bounded cases and their SQL-shape observations.
+
+The optimized literal list keeps each leaf's original position alongside its
+shared row source. A later constant or dynamic literal index can therefore
+select the descriptor at the requested position without rebuilding all row
+alternatives. Guarded-list normalization remains with its owning descriptor;
+transformations that cannot preserve the position view use ordinary lowering.
 
 An eligible deferred list can also be indexed before materialization. Its
 indices count retained rows in full ordinal order, including after filters and

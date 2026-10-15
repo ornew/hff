@@ -45,6 +45,7 @@ type builder struct {
 	runtimeFoldProbe      bool
 	runtimeRoleAnalysis   bool
 	keepDeferredValues    bool
+	disableDeferredRepeat bool
 }
 
 // present tracks HFF's internal no-value separately from SQL NULL.

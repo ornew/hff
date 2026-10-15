@@ -14,6 +14,25 @@ type jsonDeferredList struct {
 	null, present string
 	arms          []jsonDeferredArm
 	literal       bool
+	// A compressed constructor can still select a literal child directly.
+	// Positions index arms, not emitted rows; nil means no literal view.
+	literalPositions []int
+}
+
+func (p jsonDeferredList) literalArmPositions() ([]int, bool) {
+	if p.literalPositions != nil {
+		return p.literalPositions, true
+	}
+	if !p.literal {
+		return nil, false
+	}
+	positions := make([]int, 0, len(p.arms))
+	for i, arm := range p.arms {
+		if !arm.empty {
+			positions = append(positions, i)
+		}
+	}
+	return positions, true
 }
 
 type jsonDeferredArm struct {
@@ -661,7 +680,19 @@ func (b *builder) deferredListConstructor(n hff.Node) (jsonDeferredList, error) 
 			}
 			r.arms[i].ordinal = append([]string{"1"}, r.arms[i].ordinal...)
 		}
-		return jsonDeferredList{null: "(" + l.null + " OR " + r.null + ")", present: both(l.present, "("+l.null+" OR "+r.present+")"), arms: append(l.arms, r.arms...), literal: l.literal && r.literal}, nil
+		var positions []int
+		if !l.literal || !r.literal {
+			lp, leftLiteral := l.literalArmPositions()
+			rp, rightLiteral := r.literalArmPositions()
+			if leftLiteral && rightLiteral {
+				positions = make([]int, 0, len(lp)+len(rp))
+				positions = append(positions, lp...)
+				for _, position := range rp {
+					positions = append(positions, len(l.arms)+position)
+				}
+			}
+		}
+		return jsonDeferredList{null: "(" + l.null + " OR " + r.null + ")", present: both(l.present, "("+l.null+" OR "+r.present+")"), arms: append(l.arms, r.arms...), literal: l.literal && r.literal, literalPositions: positions}, nil
 	}
 	return b.deferredList(n)
 }

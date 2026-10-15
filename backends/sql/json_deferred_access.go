@@ -55,6 +55,13 @@ func withDeferredPresence(value *jsonDeferredValue, present string) *jsonDeferre
 	return &copy
 }
 
+func deferredLiteralPositions(value *jsonDeferredValue) ([]int, bool) {
+	if value.list == nil {
+		return nil, false
+	}
+	return value.list.literalArmPositions()
+}
+
 // Access selects a descriptor, not a JSON category. A dynamic key or position
 // keeps alternatives separate until a later guard or observer resolves them.
 type deferredAccessIndex struct {
@@ -196,20 +203,15 @@ func (b *builder) accessDeferredIndex(n hff.Node, value *jsonDeferredValue, inde
 		}
 		return makeDeferredChoices(choices, both(value.present, operand.present)), nil
 	}
-	if value.list != nil && value.list.literal {
-		arms := []jsonDeferredArm{}
-		for _, arm := range value.list.arms {
-			if !arm.empty {
-				arms = append(arms, arm)
-			}
-		}
+	if positions, literal := deferredLiteralPositions(value); literal {
 		if index.knownPosition {
 			position := index.position
 			if position < 0 {
-				position += float64(len(arms))
+				position += float64(len(positions))
 			}
-			for i, arm := range arms {
+			for i, armIndex := range positions {
 				if position == float64(i) {
+					arm := value.list.arms[armIndex]
 					return withDeferredPresence(deferredLeaf(arm.value), value.present), nil
 				}
 			}
@@ -224,14 +226,15 @@ func (b *builder) accessDeferredIndex(n hff.Node, value *jsonDeferredValue, inde
 			return nil, err
 		}
 		choices := []jsonDeferredChoice{}
-		for i, arm := range arms {
-			positions := "(" + strconv.Itoa(i) + "," + strconv.Itoa(i-len(arms)) + ")"
+		for i, armIndex := range positions {
+			arm := value.list.arms[armIndex]
+			positionSet := "(" + strconv.Itoa(i) + "," + strconv.Itoa(i-len(positions)) + ")"
 			var tests []string
 			if numeric.integerPossible {
-				tests = append(tests, both(numeric.isInteger, "("+numeric.integer.code+" IN "+positions+")"))
+				tests = append(tests, both(numeric.isInteger, "("+numeric.integer.code+" IN "+positionSet+")"))
 			}
 			if numeric.floatPossible {
-				tests = append(tests, both(numeric.isFloat, "("+numeric.floating.code+" IN "+positions+")"))
+				tests = append(tests, both(numeric.isFloat, "("+numeric.floating.code+" IN "+positionSet+")"))
 			}
 			condition := "FALSE"
 			if len(tests) > 0 {

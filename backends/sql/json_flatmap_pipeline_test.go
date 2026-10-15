@@ -96,6 +96,9 @@ func TestJSONFlatmapPipelineRetainsFloatLoss(t *testing.T) {
 		{`labels:items:map(p=>p[1]):flatmap(v=>[v,v]):map(v=>v[0]:json):exists`, true},
 		{`labels:items:map(p=>p[1]):flatmap(v=>[v]:concat([v])):map(v=>v[0]:json):exists`, true},
 		{`labels:items:map(p=>p[1]):flatmap(v=>[v,v]):map(v=>v:type):exists`, false},
+		{`labels:items:flatmap(p=>[p[1],p[1]]):map(v=>v[0]:json):exists`, true},
+		{`labels:items:flatmap(p=>[[p[1]],[p[1]]]):flatmap(v=>v):map(v=>v[0]:json):exists`, true},
+		{`labels:items:flatmap(p=>[p[1],p[1]]):map(v=>v:type):exists`, false},
 	} {
 		p, err := e.Compile(ctx, tc.source)
 		if err != nil {
@@ -272,6 +275,9 @@ func TestFlatmapPipelinePreservesCancellationAtEveryCheckpoint(t *testing.T) {
 	for _, source := range []string{
 		`labels:items:map(p=>p[1]):flatmap(v=>[v,v]):concat(labels:items:map(p=>p[1]):flatmap(v=>[v])):map(v=>v:type):exists`,
 		`labels:items:map(p=>p[1]):flatmap(v=>[v]:concat([v,v])):map(v=>v:type):exists`,
+		`labels:items:flatmap(p=>[p[1]!,p[1]!]):map(v=>v:type):exists`,
+		`labels:items:flatmap(p=>[[p[1]],[p[1]]]):flatmap(v=>v):map(v=>v:type):exists`,
+		`labels:items:flatmap(p=>[p[1],p[0],p[1]]):map(v=>v:type):exists`,
 		`labels:items:map(p=>p[1]):flatmap(v=>[v]:flatmap(x=>[x,v])):map(v=>v:type):exists`,
 		`labels:items:map(p=>p[1]):flatmap(v=>[]):flatmap(v=>v):map(v=>v:type):exists`,
 	} {

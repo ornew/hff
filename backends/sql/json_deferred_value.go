@@ -397,6 +397,9 @@ func (b *builder) deferredValueList(n hff.Node, value *jsonDeferredValue) (jsonD
 	plan := *value.list
 	plan.present = value.present
 	plan.arms = append([]jsonDeferredArm(nil), plan.arms...)
+	if plan.literalPositions != nil {
+		plan.literalPositions = append([]int{}, plan.literalPositions...)
+	}
 	for i := range plan.arms {
 		if err := checkContext(b.ctx); err != nil {
 			return jsonDeferredList{}, err

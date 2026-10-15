@@ -228,7 +228,7 @@ func (b *builder) narrowDeferredValue(n hff.Node, value *jsonDeferredValue, targ
 		var types []hff.Type
 		for i, arm := range plan.arms {
 			var child *jsonDeferredValue
-			if plan.literal && len(arm.steps) == 0 && !arm.empty {
+			if (plan.literal || plan.literalPositions != nil) && len(arm.steps) == 0 && !arm.empty {
 				// A literal's children belong to this lexical scope. Keep their
 				// normalization projections here: direct indexing can select a
 				// child without entering a generated row scope.

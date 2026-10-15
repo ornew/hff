@@ -20,16 +20,24 @@ other deferred-list consumers retain their existing lowering. See [empty concat
 arms](../../optimizations/055-postgresql-empty-concat-arms.md) for the bounded
 proof, parity scope, and plan observations. No runtime-speed claim follows.
 
-### Share repeated flatmap parameter rows
+### Share repeated flatmap rows
 
-In eligible JSON/JSONB `flatmap()` callbacks, PostgreSQL can use one ordered
-row source when a nonempty literal list or strict built-in `concat()` tree
-repeats the same bare lexical parameter in every leaf. It retains the original
-value descriptor, order, null values, and no-value behavior. Validation still
-runs first. Computed values, guards, indexes, method results, and equal SQL
-text from distinct expressions do not qualify. See [repeated flatmap
+In eligible JSON/JSONB `flatmap()` callbacks, PostgreSQL can reuse ordered
+rows for groups of structurally identical callback-free built-in expressions
+in a nonempty literal list or strict built-in `concat()` tree. The expressions
+need not be adjacent or account for every leaf: distinct expressions and
+unbound literals remain at their original positions. Sharing requires strict
+typed-tree identity, including resolved types, lexical binding IDs, literal
+values, operation and guard details, child order, and backend order demand;
+each shared expression must contain a bound lexical reference, which may be a
+capture. Matching SQL text or result types alone do not qualify. The original
+constructor is fully validated first, and order, null/no-value, captures, and
+diagnostics are preserved. A nested callback, custom method, or unsupported
+node in the list retains ordinary lowering for the whole list. See [repeated flatmap
 parameters](../../optimizations/059-postgresql-repeated-flatmap-parameters.md)
-for the bounded SQL-shape observations; they do not establish runtime speed.
+and [repeated flatmap expressions](../../optimizations/060-postgresql-repeated-flatmap-expressions.md)
+for the bounded proofs and SQL-shape observations; neither establishes runtime
+speed.
 
 ### Simplify unconstrained JSON item-payload guards
 
