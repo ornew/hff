@@ -92,6 +92,11 @@ func jsonHasFloat(typ hff.Type) bool {
 // Track float provenance through callbacks: a map that returns a constant does
 // not inherit a representation loss from its receiver's unused elements.
 func (b *builder) losesFloat(n hff.Node, environment map[hff.BindingID]bool) bool {
+	if id, key := itemKeyBinding(n); key {
+		if parameter, bound := b.parameters[id]; bound && parameter.itemKey != "" {
+			return false
+		}
+	}
 	if !jsonHasFloat(n.Type()) {
 		return false
 	}
@@ -144,6 +149,13 @@ func (b *builder) losesFloat(n hff.Node, environment map[hff.BindingID]bool) boo
 				nested[id] = loss
 			}
 			receiverLoss := b.losesFloat(receiver, environment)
+			if name == "map" || name == "flatmap" {
+				if _, _, keys := itemKeySource(receiver, callback); keys {
+					// Only keys enter this binding's observed result. An
+					// unobserved Float value cannot make the output lossy.
+					receiverLoss = false
+				}
+			}
 			seedLoss := false
 			if len(parameters) == 1 {
 				nested[parameters[0].ID()] = receiverLoss

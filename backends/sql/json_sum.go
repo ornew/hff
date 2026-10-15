@@ -24,16 +24,12 @@ func (b *builder) jsonNumericAggregate(n hff.Node, average bool) (expression, er
 		}
 	}
 	receiver, _ := n.Child(0)
-	value, err := b.expression(receiver)
+	value, format, keys, err := b.jsonCollectionReceiver(n, true)
 	if err != nil {
 		return expression{}, err
 	}
 	if value.kind == hff.NullType {
 		return value, nil
-	}
-	value, format, err := b.jsonCallbackReceiver(n, value)
-	if err != nil {
-		return expression{}, err
 	}
 	stored := sortListType(b.jsonStoredType(receiver))
 	if stored.Kind() != hff.ListType {
@@ -55,7 +51,7 @@ func (b *builder) jsonNumericAggregate(n hff.Node, average bool) (expression, er
 		callback, _ := n.Child(1)
 		var computed expression
 		var projected hff.Type
-		from, ordinal, _, _, computed, projected, _, err = b.jsonCallbackRows(n, value, format, callback, itemType, false)
+		from, ordinal, _, _, computed, projected, _, err = b.jsonCallbackRows(n, value, format, callback, itemType, false, keys)
 		if err != nil {
 			return expression{}, err
 		}

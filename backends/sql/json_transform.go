@@ -8,12 +8,19 @@ import (
 
 // Lower a lexical callback into a row source, isolating its projections from
 // the enclosing expression. Each row retains its source ordinal and no-value.
-func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONFormat, callback hff.Node, itemType hff.Type, wantPredicate bool) (from, ordinal, item, predicate string, result expression, stored hff.Type, roles jsonItemProvenance, err error) {
+func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONFormat, callback hff.Node, itemType hff.Type, wantPredicate bool, keyRows ...*jsonItemKeyRows) (from, ordinal, item, predicate string, result expression, stored hff.Type, roles jsonItemProvenance, err error) {
 	parameters, ok := callback.Parameters()
 	if !ok || len(parameters) != 1 {
 		return "", "", "", "", expression{}, hff.Type{}, jsonItemProvenance{}, b.failure(n, "list transformation requires one callback parameter")
 	}
 	alias := b.nextAlias()
+	var keys *jsonItemKeyRows
+	if len(keyRows) > 0 {
+		keys = keyRows[0]
+	}
+	if keys != nil {
+		alias = keys.alias
+	}
 	outer := b.steps
 	outerPaths := b.sharedPaths
 	b.steps = nil
@@ -31,6 +38,11 @@ func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONForm
 		itemType = jsonStoredMemberType(sortListType(b.jsonStoredType(receiver)), "", false, true)
 	}
 	b.parameters[id] = jsonParameter{code: alias + ".value", format: format, typ: itemType, lossy: loss, itemRoles: b.jsonItemsRoles(receiver)}
+	if keys != nil {
+		parameter := b.parameters[id]
+		parameter.itemKey = keys.key
+		b.parameters[id] = parameter
+	}
 	defer func() {
 		b.steps = outer
 		b.sharedPaths = outerPaths
@@ -46,6 +58,10 @@ func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONForm
 		return "", "", "", "", expression{}, hff.Type{}, jsonItemProvenance{}, err
 	}
 	from = string(format) + "_array_elements(" + value.code + ") WITH ORDINALITY AS " + alias + "(value,ord)"
+	ordinal, item = alias+".ord", alias+".value"
+	if keys != nil {
+		from, ordinal, item = keys.from, keys.ordinal, ""
+	}
 	if len(b.steps) > 0 {
 		from += " CROSS JOIN LATERAL " + strings.Join(b.steps, " CROSS JOIN LATERAL ")
 	}
@@ -54,21 +70,28 @@ func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONForm
 	if wantPredicate {
 		predicate = b.truth(body, result)
 	}
-	return from, alias + ".ord", alias + ".value", predicate, result, b.jsonStoredType(body), jsonItemProvenance{pair: b.jsonItemRoles(body), list: b.jsonItemsRoles(body)}, nil
+	return from, ordinal, item, predicate, result, b.jsonStoredType(body), jsonItemProvenance{pair: b.jsonItemRoles(body), list: b.jsonItemsRoles(body)}, nil
 }
 
 func (b *builder) jsonTransform(n hff.Node, name string) (expression, error) {
 	receiver, _ := n.Child(0)
-	value, err := b.expression(receiver)
+	var value expression
+	var format JSONFormat
+	var keys *jsonItemKeyRows
+	var err error
+	if name == "filter" {
+		value, err = b.expression(receiver)
+		if err == nil && value.kind != hff.NullType {
+			value, format, err = b.jsonCallbackReceiver(n, value)
+		}
+	} else {
+		value, format, keys, err = b.jsonCollectionReceiver(n, true)
+	}
 	if err != nil {
 		return expression{}, err
 	}
 	if value.kind == hff.NullType {
 		return value, nil
-	}
-	value, format, err := b.jsonCallbackReceiver(n, value)
-	if err != nil {
-		return expression{}, err
 	}
 	filterItemType := hff.Type{}
 	if name == "filter" {
@@ -90,7 +113,7 @@ func (b *builder) jsonTransform(n hff.Node, name string) (expression, error) {
 		value, format = expression{array, value.present, hff.ListType}, JSON
 	}
 	callback, _ := n.Child(1)
-	from, ordinal, item, predicate, result, resultType, roles, err := b.jsonCallbackRows(n, value, format, callback, filterItemType, name == "filter")
+	from, ordinal, item, predicate, result, resultType, roles, err := b.jsonCallbackRows(n, value, format, callback, filterItemType, name == "filter", keys)
 	if err != nil {
 		return expression{}, err
 	}

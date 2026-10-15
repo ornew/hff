@@ -255,6 +255,11 @@ func ordinaryPresence(values []expression) string {
 	return present
 }
 func (b *builder) jsonIndex(n hff.Node) (expression, error) {
+	if id, key := itemKeyBinding(n); key {
+		if parameter, bound := b.parameters[id]; bound && parameter.itemKey != "" {
+			return expression{code: parameter.itemKey, present: "TRUE", kind: hff.StringType}, nil
+		}
+	}
 	parent, _ := n.Child(0)
 	value, err := b.expression(parent)
 	if err != nil {

@@ -54,6 +54,29 @@ null, and guard-produced no-value retain their separate HFF behavior. See the
 [PostgreSQL JSON guide](../backends/postgresql/json.md#bytes-in-json-documents)
 for the supported subset and its limits.
 
+## Consume object keys without reading values
+
+When an otherwise supported `items()` consumer uses only the fixed key slot,
+PostgreSQL can traverse the object's keys directly without decoding values or
+constructing `[key, value]` arrays. For example, with `attachments` bound as
+`Map<Bytes|null>|Null`, this query checks whether any key starts with the
+release prefix:
+
+```hff
+attachments:items:any(pair=>pair[0]:startswith("release-"))
+```
+
+Rows 1, 3, and 4 match because their keys start with `release-`, including the
+rows whose Bytes value is empty or null. The key text is available without
+decoding those values. The source expression still runs, and null/no-value
+behavior is unchanged. This path requires a fixed key-slot access (`0` or
+`-2`) and does not apply when the callback reads the value, observes the full
+pair/list shape, or returns pairs.
+See the [key-only traversal record](../optimizations/052-postgresql-direct-object-item-keys.md)
+for the full eligibility boundary and SQL-shape evidence.
+
+## Preserve and combine complete pairs
+
 For a non-null map, these queries show identity preservation, duplicate
 detection, and first-occurrence deduplication:
 

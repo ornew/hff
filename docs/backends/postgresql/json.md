@@ -1237,11 +1237,12 @@ Known Map/Struct carriers also avoid a redundant receiver-category check under
 the declared storage contract. Existing JSON-null normalization preserves
 nullable and guarded-key behavior.
 
-Dynamic `get(key)` on heterogeneous Struct alternatives, `values()`, and
-`items()` still normalize the complete source object for per-key dispatch or
-because they observe multiple values. While constructing schema-known `items()`
-pairs, PostgreSQL retains the String key and each value's declared role in the
-produced native JSON. That provenance supports per-key equality and
+Dynamic `get(key)` on heterogeneous Struct alternatives and `values()` still
+normalize the complete source object for per-key dispatch or because they
+observe multiple values. `items()` also normalizes the complete source object
+before constructing pairs, but PostgreSQL retains the String key and each
+value's declared role in the produced native JSON. That provenance supports
+per-key equality and
 serialization; after pairs are combined, value-slot extraction from a mixed
 Struct can still be ambiguous as described above. Native JSON retains
 JSON-native runtime types for `Any`; JSONB `Any` requires metadata when a
@@ -1254,6 +1255,20 @@ bracket, and selected JSONB metadata-subtree access keep their existing paths;
 see [selected metadata restoration](optimizations.md#restore-only-a-selected-jsonb-metadata-subtree).
 The [selected-value SQL-shape record](optimizations.md#select-a-json-object-value-before-normalization)
 describes the measured access cases without claiming execution speed.
+
+For key-only consumers of an otherwise supported `items()` source, the
+backend can instead traverse the object's keys directly. A fixed key-slot
+proof supports key comparisons,
+guards, and eligible `any()`, `all()`, `count()`, `map()`, `flatmap()`, and
+`sum()`, `avg()`, `min()`, and `max()` projections without restoring
+unobserved values or building pair arrays. `size()` and zero-argument
+`count()` can count keys directly.
+Ordered consumers retain the established key order. The source expression is
+still evaluated, and null/no-value behavior is unchanged. Full-pair or
+list-shape type guards, dynamic indexes, value-slot reads, and pair-returning
+`filter()`/`find()` retain pair construction and general lowering. See the
+[key-only items recipe](../../cookbook/postgresql-json-items.md#consume-object-keys-without-reading-values)
+and [direct object-key traversal record](../../optimizations/052-postgresql-direct-object-item-keys.md).
 
 ### Sort JSON-backed lists
 

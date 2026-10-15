@@ -13,6 +13,7 @@ type jsonParameter struct {
 	lossy         bool
 	itemRoles     *jsonItemRoles
 	itemListRoles *jsonItemRoles
+	itemKey       string
 }
 
 // Callback projections belong to their element subquery. Captures retain the
@@ -22,16 +23,12 @@ func (b *builder) jsonPredicate(n hff.Node, name string) (expression, error) {
 		return value, err
 	}
 	receiver, _ := n.Child(0)
-	value, err := b.expression(receiver)
+	value, format, keys, err := b.jsonCollectionReceiver(n, false)
 	if err != nil {
 		return expression{}, err
 	}
 	if value.kind == hff.NullType {
 		return value, nil
-	}
-	value, format, err := b.jsonCallbackReceiver(n, value)
-	if err != nil {
-		return expression{}, err
 	}
 	callback, _ := n.Child(1)
 	parameters, ok := callback.Parameters()
@@ -39,6 +36,9 @@ func (b *builder) jsonPredicate(n hff.Node, name string) (expression, error) {
 		return expression{}, b.failure(n, "collection predicate requires one callback parameter")
 	}
 	alias := b.nextAlias()
+	if keys != nil {
+		alias = keys.alias
+	}
 	outerSteps := b.steps
 	outerPaths := b.sharedPaths
 	b.steps = nil
@@ -47,11 +47,25 @@ func (b *builder) jsonPredicate(n hff.Node, name string) (expression, error) {
 		b.parameters = make(map[hff.BindingID]jsonParameter)
 	}
 	id := parameters[0].ID()
+	previous, existed := b.parameters[id]
 	receiverLoss := b.losesFloat(receiver, nil)
 	restoreProvenance := b.callbackProvenance(id, receiver)
 	defer restoreProvenance()
 	b.parameters[id] = jsonParameter{code: alias + ".value", format: format, typ: jsonStoredMemberType(sortListType(b.jsonStoredType(receiver)), "", false, true), lossy: receiverLoss, itemRoles: b.jsonItemsRoles(receiver)}
-	defer func() { b.steps = outerSteps; b.sharedPaths = outerPaths; delete(b.parameters, id) }()
+	if keys != nil {
+		parameter := b.parameters[id]
+		parameter.itemKey = keys.key
+		b.parameters[id] = parameter
+	}
+	defer func() {
+		b.steps = outerSteps
+		b.sharedPaths = outerPaths
+		if existed {
+			b.parameters[id] = previous
+		} else {
+			delete(b.parameters, id)
+		}
+	}()
 	body, _ := callback.Child(0)
 	result, err := b.expression(body)
 	if err != nil {
@@ -64,6 +78,9 @@ func (b *builder) jsonPredicate(n hff.Node, name string) (expression, error) {
 		predicate = "(NOT " + predicate + ")"
 	}
 	from := string(format) + "_array_elements(" + value.code + ") AS " + alias + "(value)"
+	if keys != nil {
+		from = keys.from
+	}
 	if len(b.steps) > 0 {
 		from += " CROSS JOIN LATERAL " + strings.Join(b.steps, " CROSS JOIN LATERAL ")
 	}

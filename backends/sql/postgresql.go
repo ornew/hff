@@ -247,6 +247,9 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		if !ok {
 			return expression{}, b.failure(n, "unbound callback parameter")
 		}
+		if parameter.itemKey != "" {
+			return expression{}, b.failure(n, "key-only item parameter cannot be read as a complete pair")
+		}
 		if item, exists := b.parameterItems[binding.ID()]; exists {
 			// Native scalar items already have their typed carrier. A JSON
 			// round trip adds no information and needlessly repeats conversion.
@@ -795,6 +798,9 @@ func (b *builder) call(n hff.Node) (expression, error) {
 	}
 	if name == "size" || name == "count" && n.ChildCount() == 1 {
 		if value, handled, err := b.relationSize(n); handled {
+			return value, err
+		}
+		if value, handled, err := b.jsonItemsKeySize(n); handled {
 			return value, err
 		}
 	}

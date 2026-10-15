@@ -18,6 +18,7 @@ type itemRoleFixture struct {
 	first, second, zero hff.Value
 	mixed               bool
 	metadata            bool
+	extraPairs          [][2]hff.Value
 }
 
 func itemRoleFixtures() []itemRoleFixture {

@@ -8,6 +8,19 @@ other schemas and data.
 
 ## SQL translation choices
 
+### Traverse object keys directly for key-only `items()` consumers
+
+When an `items()` callback or transformation observes only the fixed key
+slot, PostgreSQL can scan object keys without normalizing values or building
+key/value pair arrays. This includes eligible key-only `any()`, `all()`,
+`count()`, `map()`, `flatmap()`, `sum()`, `avg()`, `min()`, and `max()`
+projections, plus `size()` and zero-argument `count()`. The source expression,
+key order, callback scope, null, and no-value behavior remain in force.
+Consumers that read a value slot, inspect a complete pair/list shape, use a
+dynamic index, or return pairs keep generic lowering. See [direct object-key
+traversal](../../optimizations/052-postgresql-direct-object-item-keys.md) for
+the supported proof and SQL-shape evidence; no runtime-speed claim follows.
+
 ### Compare native Timestamp bindings by their physical columns
 
 For eligible native `BindTimestamp` filter comparisons against a Timestamp

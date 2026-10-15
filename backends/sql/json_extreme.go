@@ -6,16 +6,12 @@ import "github.com/ornew/hff"
 // aggregate key. Int/Float and signed-zero ties retain the first source row.
 func (b *builder) jsonExtreme(n hff.Node, minimum bool) (expression, error) {
 	receiver, _ := n.Child(0)
-	value, err := b.expression(receiver)
+	value, format, keys, err := b.jsonCollectionReceiver(n, true)
 	if err != nil {
 		return expression{}, err
 	}
 	if value.kind == hff.NullType {
 		return value, nil
-	}
-	value, format, err := b.jsonCallbackReceiver(n, value)
-	if err != nil {
-		return expression{}, err
 	}
 	stored := sortListType(b.jsonStoredType(receiver))
 	if stored.Kind() != hff.ListType {
@@ -44,7 +40,7 @@ func (b *builder) jsonExtreme(n hff.Node, minimum bool) (expression, error) {
 		callback, _ := n.Child(1)
 		var computed expression
 		var projected hff.Type
-		from, ordinal, _, _, computed, projected, _, err = b.jsonCallbackRows(n, value, format, callback, stored.Element(), false)
+		from, ordinal, _, _, computed, projected, _, err = b.jsonCallbackRows(n, value, format, callback, stored.Element(), false, keys)
 		if err != nil {
 			return expression{}, err
 		}

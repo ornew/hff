@@ -72,13 +72,24 @@ func TestPostgreSQLJSONItemUniquenessMatchLocal(t *testing.T) {
 	runPostgreSQLJSONItemRoleSources(t, itemUniqueSources)
 }
 
-func runPostgreSQLJSONItemRoleSources(t *testing.T, sources func(itemRoleFixture) []string) {
+func TestPostgreSQLJSONItemKeysMatchLocal(t *testing.T) {
+	runPostgreSQLJSONItemRoleSources(t, itemKeySources)
+}
+
+func TestPostgreSQLJSONItemKeysWithoutMetadata(t *testing.T) {
+	runPostgreSQLJSONItemRoleSources(t, itemKeyOnlySources, keyOnlyValueFixtures()...)
+}
+
+func runPostgreSQLJSONItemRoleSources(t *testing.T, sources func(itemRoleFixture) []string, fixtures ...itemRoleFixture) {
 	t.Helper()
 	container := os.Getenv("HFF_POSTGRES_CONTAINER")
 	if container == "" {
 		t.Fatal("integration tests require HFF_POSTGRES_CONTAINER")
 	}
-	for _, tc := range itemRoleFixtures() {
+	if len(fixtures) == 0 {
+		fixtures = itemRoleFixtures()
+	}
+	for _, tc := range fixtures {
 		for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
 			t.Run(tc.name+"/"+string(format), func(t *testing.T) {
 				ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
@@ -114,9 +125,10 @@ func runPostgreSQLJSONItemRoleSources(t *testing.T, sources func(itemRoleFixture
 				if strings.HasSuffix(tc.name, "/map") {
 					pairs = append(pairs, [2]hff.Value{hff.Object(map[string]hff.Value{"YQ==": tc.first, "あ": tc.second, "": hff.Null()}), hff.Object(map[string]hff.Value{"YQ==": tc.first, "あ": tc.first, "": hff.Null()})})
 				}
-				if tc.metadata {
+				if tc.typ.Kind() == hff.AnyType {
 					pairs = append(pairs, [2]hff.Value{hff.Int(1), hff.String("app")}, [2]hff.Value{hff.String("app"), hff.Int(1)})
 				}
+				pairs = append(pairs, tc.extraPairs...)
 				var script strings.Builder
 				fmt.Fprintf(&script, "CREATE TEMP TABLE records(id integer,labels %s,other %s,items_json text,first_json text,keys_json text,filtered_json text,found_json text,values_json text,labels_meta jsonb,other_meta jsonb);\n", format, format)
 				records := make([]hff.Value, len(pairs))
