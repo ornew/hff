@@ -50,6 +50,25 @@ func (b *builder) jsonDeferredInputFold(n hff.Node, name string) (expression, bo
 	memo := b.itemRoleMemo
 	*b = prepared
 	b.itemRoleMemo = memo
+	prune, err := b.unusedDeferredFoldInput(n, name)
+	if err != nil {
+		return expression{}, true, err
+	}
+	if prune {
+		// Validate the complete original packet, seed and callback path in
+		// receiver-first order before omitting an unobserved payload. Keep
+		// nested folds on their original validation path as well.
+		probe := b.validationBuilder()
+		probe.disableDeferredFoldPruning = true
+		if _, _, err := probe.jsonDeferredFoldPlan(n, name, plan, false); err != nil {
+			return expression{}, true, err
+		}
+	}
+	return b.jsonDeferredFoldPlan(n, name, plan, prune)
+}
+
+func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferredList, prune bool) (expression, bool, error) {
+	receiver, _ := n.Child(0)
 	if len(plan.arms) == 0 {
 		// An always-empty/null stream still validates its callback, without
 		// introducing a runtime row or changing its null/presence state.
@@ -65,7 +84,11 @@ func (b *builder) jsonDeferredInputFold(n hff.Node, name string) (expression, bo
 		var packet jsonDeferredPacket
 		steps, _, err := b.inDeferredArm(arm, hff.Node{}, func() error {
 			var err error
-			packet, err = b.packDeferredValue(n, deferredLeaf(arm.value))
+			if prune {
+				packet = unusedDeferredFoldPacket(arm.value.typ)
+			} else {
+				packet, err = b.packDeferredValue(n, deferredLeaf(arm.value))
+			}
 			return err
 		})
 		if err != nil {

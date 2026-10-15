@@ -395,6 +395,22 @@ for source workloads, parity coverage, and limits. The fold matrix contains
 17,216 PostgreSQL/local results on both baseline and candidate; it includes
 Map-to-Struct widening and Float-format controls.
 
+### Omit unused input payloads from deferred folds
+
+For eligible packet-based folds, PostgreSQL can omit carrying the input item
+payload when the callback does not reference its item binding anywhere in the
+callback body, including nested callbacks. Source evaluation, fold order,
+seed/result semantics, null/presence, first failure, and validation remain
+unchanged. The added validation probe reuses the prepared source plan. Captures
+of other bindings are allowed; a nested capture of the item or a custom
+extension in the source, seed, or callback body keeps ordinary lowering.
+Existing native and safe identity-fold paths remain preferred. The change omits
+only the deferred packet payload and decode; it does not replace the fold with
+a count, project unobserved fields, or prune accumulator state. See [unused
+fold inputs](../../optimizations/061-postgresql-unused-fold-inputs.md) for the
+bounded SQL-shape observations and current verification scope. No runtime-speed
+claim follows.
+
 ### Lower homogeneous scalar membership directly
 
 For eligible same-type scalar membership, the translator can use SQL

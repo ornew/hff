@@ -1731,6 +1731,17 @@ null callback result becomes the next accumulator, while no-value stops the
 fold and propagates. A null or non-list receiver returns ordinary null before
 the seed or callback is evaluated.
 
+For eligible deferred PostgreSQL folds, the backend can avoid carrying an
+unused item payload when the callback never references its item binding
+anywhere in the callback body, including nested callbacks. The added validation
+probe reuses the prepared source plan; source rows, filters, and order remain
+unchanged. The fold also retains its seed, result, null/presence, and
+first-failure behavior. Captures of other bindings remain available. A nested
+callback that captures the item, or a custom extension in the source, seed, or
+callback body, keeps the ordinary lowering path. Existing native and safe
+identity-fold paths remain preferred; this bounded case does not replace the
+fold with a count or prune accumulator state.
+
 For eligible deferred `items()` streams, fold callbacks can inspect each
 input value using its recovered per-key schema without first materializing the
 mixed input list as ordinary JSON. The accumulator still follows the normal
