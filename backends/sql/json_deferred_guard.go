@@ -27,6 +27,9 @@ func (b *builder) deferredMatches(n hff.Node, value *jsonDeferredValue, target h
 	if err := checkContext(b.ctx); err != nil {
 		return "", err
 	}
+	if value.runtime != nil {
+		return b.runtimeMatches(n, value.runtime.code, target)
+	}
 	if value.selection != nil {
 		result, err := b.resolveDeferredSelection(n, value, hff.BoolType, func(child *jsonDeferredValue) (expression, error) {
 			test, err := b.deferredMatches(n, child, target)
@@ -138,6 +141,15 @@ func (b *builder) narrowDeferredValue(n hff.Node, value *jsonDeferredValue, targ
 	}
 	copy := *value
 	copy.present = both(value.present, "COALESCE("+test+",FALSE)")
+	if value.runtime != nil {
+		copy.typ = intersectItemType(value.typ, target)
+		if target.Kind() != hff.AnyType {
+			// SQL may evaluate projections from a filtered/inactive branch.
+			// A failed guard must not expose its payload to a narrowed cast.
+			copy.runtime = &jsonRuntimeValue{code: "(CASE WHEN COALESCE(" + test + ",FALSE) THEN " + value.runtime.code + " ELSE " + runtimeNull + " END)", lossy: value.runtime.lossy}
+		}
+		return &copy, nil
+	}
 	if target.Kind() == hff.AnyType {
 		return &copy, nil
 	}

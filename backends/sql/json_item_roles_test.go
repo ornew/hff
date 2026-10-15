@@ -342,7 +342,7 @@ func TestJSONItemFoldQueriesBuild(t *testing.T) {
 	}
 }
 
-func TestJSONItemRolesRejectAmbiguousOrigins(t *testing.T) {
+func TestJSONItemRolesRequireRecoverableOrigins(t *testing.T) {
 	ctx := context.Background()
 	for _, tc := range itemRoleFixtures() {
 		if !strings.HasSuffix(tc.name, "/map") {
@@ -352,14 +352,18 @@ func TestJSONItemRolesRejectAmbiguousOrigins(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, source := range []string{
-			`[left:items[0],right:items[0]]:map(p=>p[1]:type):contains("string")`,
-			`[left:items[0],right:items[0]]:json!:exists`,
-			`left:items:concat(right:items):json!:exists`,
-			`left:items:foldl(right:items[0],(a,p)=>p)[1]:type="bytes"`,
-			`left:items:foldl(right:items,(a,p)=>[p]):json!:exists`,
-			`left:items:foldl([], (a,p)=>a:concat([p,right:items[0]])):json!:exists`,
+		for _, query := range []struct {
+			source    string
+			typedFold bool
+		}{
+			{`[left:items[0],right:items[0]]:map(p=>p[1]:type):contains("string")`, false},
+			{`[left:items[0],right:items[0]]:json!:exists`, false},
+			{`left:items:concat(right:items):json!:exists`, false},
+			{`left:items:foldl(right:items[0],(a,p)=>p)[1]:type="bytes"`, true},
+			{`left:items:foldl(right:items,(a,p)=>[p]):json!:exists`, true},
+			{`left:items:foldl([], (a,p)=>a:concat([p,right:items[0]])):json!:exists`, true},
 		} {
+			source := query.source
 			p, err := e.Compile(ctx, source)
 			if err != nil {
 				t.Fatal(err)
@@ -372,8 +376,8 @@ func TestJSONItemRolesRejectAmbiguousOrigins(t *testing.T) {
 				_, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(
 					hffsql.BindJSON(hff.Path{"left"}, hffsql.Column("lhs"), format),
 					hffsql.BindJSON(hff.Path{"right"}, hffsql.Column("rhs"), format, options...)))
-				if err == nil {
-					t.Error(tc.name, format, "accepted ambiguous pair origins", source)
+				if (err == nil) != query.typedFold {
+					t.Error(tc.name, format, "unexpected origin recovery result", source, err)
 				}
 			}
 		}

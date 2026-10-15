@@ -52,6 +52,8 @@ func TestPostgreSQLDeferredCollectionValuesPrepare(t *testing.T) {
 		sources = append(sources, deferredInputFoldSources(fixture)...)
 		sources = append(sources, deferredZeroInputFoldSources(fixture)...)
 		sources = append(sources, deferredFoldAccumulatorRoleSources(fixture)...)
+		sources = append(sources, runtimeFoldSources(fixture)...)
+		sources = append(sources, runtimeNestedFoldSources(fixture)...)
 		for _, source := range sources {
 			p, err := e.Compile(ctx, source)
 			if err != nil {

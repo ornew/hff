@@ -374,22 +374,30 @@ invariant retain the general representation path.
 
 ### Fold over deferred item values
 
-Fold callbacks can inspect the recovered type of each `items()` value while
-building an ordinary, recoverable accumulator. With `labels` and the four
-records above, these examples return type names or a String summary:
+Fold callbacks can retain recovered `items()` values inside constructed
+accumulators, then inspect or serialize them later. With `labels` and the four
+records above, the first query grows a list of mixed tagged values and observes
+their types after the fold. The second keeps the latest value in an object
+field:
 
 ```hff
-labels:items:map(pair=>pair[1]):foldl([], (types,value)=>types:concat([value:type])):json=["string","bytes","duration","timestamp"]:json
-labels:items:map(pair=>pair[1]):foldr("",(value,types)=>value:type:concat(types))="stringbytesdurationtimestamp"
-labels:items:map(pair=>pair[1]):foldl("",(last,value)=>value:type)="timestamp"
+labels:items:map(pair=>pair[1]):foldl([], (values,value)=>values:concat([value])):map(value=>value:type):json=["string","bytes","duration","timestamp"]:json
+labels:items:map(pair=>pair[1]):foldl({}, (acc,value)=>{"previous":acc,"value":value}).value:type="timestamp"
 ```
 
-The first two queries match rows 1 and 2. The third matches rows 1–3; row 4's
-last value is null. A null value is passed to the callback rather than skipped.
-An empty list returns its seed, and a null receiver returns null before the
-seed or callback is evaluated. Guard-produced no-value propagates through the
-whole fold. The accumulator must still have a recoverable ordinary type; this
-does not make arbitrary ambiguous tagged unions safe to retain.
+The list query matches rows 1 and 2. The object query matches rows 1–3; row 4's
+last value is null. The PostgreSQL backend keeps the source schema with these
+constructed accumulator values, so later maps and field access can recover
+Bytes, Duration, and Timestamp instead of treating every stored string alike.
+A null value is passed to the callback rather than skipped. An empty list
+returns its seed, and a null receiver returns null before the seed or callback
+is evaluated. Guard-produced no-value propagates through the whole fold.
+
+This support does not make every ambiguous value safe to materialize.
+Unguarded structural comparisons, `contains()`, and sorting may still need an
+explicit type guard or fail `Build` when the value type cannot be recovered.
+Native JSON strings do not imply tagged identity, and JSONB still needs numeric
+metadata when storage erased a distinction the operation depends on.
 
 ### Fold pair and pair-list accumulators
 

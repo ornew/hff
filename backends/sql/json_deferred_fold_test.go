@@ -100,7 +100,7 @@ func TestDeferredInputFoldPreservesFloatLoss(t *testing.T) {
 	}
 }
 
-func TestDeferredInputFoldRejectsAmbiguousAccumulator(t *testing.T) {
+func TestDeferredInputFoldPreservesAmbiguousAccumulator(t *testing.T) {
 	var tc itemRoleFixture
 	for _, candidate := range deferredValueFixtures() {
 		if candidate.name == "bytes/mixed" {
@@ -117,7 +117,9 @@ func TestDeferredInputFoldRejectsAmbiguousAccumulator(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(itemRoleBindings(hffsql.JSON, false)...))
-	requireCode(t, err, hff.BackendError)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestDeferredInputFoldCancellation(t *testing.T) {

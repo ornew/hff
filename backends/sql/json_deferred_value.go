@@ -17,6 +17,7 @@ type jsonDeferredValue struct {
 	object    *[]jsonDeferredField
 	choices   []jsonDeferredChoice
 	selection *jsonDeferredSelection
+	runtime   *jsonRuntimeValue
 }
 
 type jsonDeferredField struct {
@@ -59,6 +60,9 @@ func deferredValueParameter(value *jsonDeferredValue) jsonParameter {
 }
 
 func deferredValueLoss(value *jsonDeferredValue) bool {
+	if value.runtime != nil {
+		return value.runtime.lossy && deferredTypeMayFloat(value.typ)
+	}
 	if value.selection != nil {
 		for _, arm := range value.selection.arms {
 			if deferredValueLoss(deferredLeaf(arm.value)) {
@@ -183,6 +187,15 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 		return result, true, err
 	}
 	if method, ok := n.Method(); ok {
+		if !b.runtimeFoldProbe && (builtinListCall(n, "foldl") || builtinListCall(n, "foldr")) {
+			if b.jsonItemRoles(n) != nil || b.jsonItemsRoles(n) != nil {
+				// Existing positional proofs have specialized access and callback
+				// lowering. A generic leaf must not erase their per-slot types.
+				return nil, false, nil
+			}
+			value, err := b.runtimeFoldDescriptor(n, method.Name())
+			return value, true, err
+		}
 		switch method.Name() {
 		case "get", "map", "filter", "flatmap", "concat":
 		default:
@@ -242,6 +255,9 @@ func (b *builder) containsDeferredReference(n hff.Node) bool {
 }
 
 func (b *builder) deferredValueList(n hff.Node, value *jsonDeferredValue) (jsonDeferredList, error) {
+	if value.runtime != nil {
+		return b.runtimeValueList(n, value), checkContext(b.ctx)
+	}
 	if value.selection != nil {
 		return b.deferredSelectionList(n, value)
 	}

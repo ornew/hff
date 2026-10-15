@@ -1522,19 +1522,33 @@ the seed or callback is evaluated.
 For eligible deferred `items()` streams, fold callbacks can inspect each
 input value using its recovered per-key schema without first materializing the
 mixed input list as ordinary JSON. The accumulator still follows the normal
-inferred-schema and normalization rules; ambiguous tagged values retained in
-an accumulator remain unsupported when their type cannot be recovered.
+inferred-schema rules. A private typed tree can also retain recoverable values
+through list and object constructors, growing `concat()`, replacement, and
+`foldl()`/`foldr()` results. Later maps, filters, `flatmap()`, indexes, field
+access, explicit type guards, and type/exists/truthiness/JSON/String observers
+can consume those values when PostgreSQL has retained their recovered types in
+its private runtime tree. This does not change the public value or capability
+model.
+
+PostgreSQL expresses a fold as recursive SQL that carries the accumulator
+between iterations. Growing list or nested-object state can therefore require
+carrying and copying increasingly large values. Prefer `map()` for ordinary
+per-item projections; use a fold when the result depends on accumulated state.
+
+The tree does not make every ambiguous value safe to materialize. Operations
+such as unguarded structural comparison, `contains()`, or sorting may still
+need an explicit guard or fail `Build` when the value's type cannot be
+recovered. Native JSON strings never imply Bytes, Duration, or Timestamp
+identity, and JSONB Float-loss and metadata requirements remain unchanged.
 
 A callback that ignores an ambiguous JSONB item and returns a known type, such
 as `foldl(0,(acc,item)=>acc+1)`, does not need metadata for that item's numeric
 subtype. When a callback retains an `Any` or ambiguous value in the accumulator,
 JSONB needs metadata if its storage erased a numeric distinction the result
-depends on; normalization itself preserves the recovered value. Native JSON
-retains JSON-native types. Type guards such as `item!` and access through a
-constructor, `get()`, field, or index preserve recovered types. JSON
-constructors inside a callback also normalize their represented children
-before the result is retained, so a list or object literal does not hide a lost
-JSONB subtype.
+depends on. Native JSON retains JSON-native types. Type guards such as `item!`
+and access through a constructor, `get()`, field, or index preserve recovered
+types. JSON constructors inside a callback retain those recovered child types;
+they do not restore a JSONB subtype that storage already erased.
 
 When a fold's seed and callback result normalize compatibly to its inferred
 accumulator schema, PostgreSQL can reuse the normalized predecessor inside

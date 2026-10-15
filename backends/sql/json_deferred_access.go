@@ -122,6 +122,9 @@ func (b *builder) accessDeferredIndex(n hff.Node, value *jsonDeferredValue, inde
 	if err := checkContext(b.ctx); err != nil {
 		return nil, err
 	}
+	if value.runtime != nil {
+		return b.accessRuntimeValue(n, value, index)
+	}
 	if value.selection != nil {
 		if !index.knownKey && (!index.knownPosition || index.node.Kind() != hff.LiteralNode) {
 			if _, err := b.lowerDeferredIndex(index); err != nil {
@@ -286,6 +289,9 @@ func (b *builder) accessDeferredIndex(n hff.Node, value *jsonDeferredValue, inde
 func (b *builder) materializeDeferredValue(n hff.Node, value *jsonDeferredValue) (expression, error) {
 	if err := checkContext(b.ctx); err != nil {
 		return expression{}, err
+	}
+	if value.runtime != nil {
+		return b.materializeRuntimeValue(n, value)
 	}
 	if value.selection != nil {
 		return b.materializeDeferredSelection(n, value)

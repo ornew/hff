@@ -219,7 +219,7 @@ func TestPostgreSQLItemPairsPreserveDifferentValueFamilies(t *testing.T) {
 	if container == "" {
 		t.Fatal("integration tests require HFF_POSTGRES_CONTAINER")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	var script strings.Builder
 	var expected []bool
@@ -245,6 +245,9 @@ func TestPostgreSQLItemPairsPreserveDifferentValueFamilies(t *testing.T) {
 				`left:items:[list[list[string|` + left.tag + `|null]]]:concat(right:items:[list[list[string|null]]]):map(p=>p[1]:type):json:exists`,
 				`{"app":"auth","z":left.app}:items[0]:[list[string]][1]:len=4`,
 				`{"app":"auth","z":left.app}:items[1]:[list[string]][1]:exists`,
+				`left:items:foldl(right:items[0],(a,p)=>p)[1]:type="` + left.tag + `"`,
+				`left:items:foldr(right:items[0],(p,a)=>p)[1]:type=left.app:type`,
+				`left:items:foldl(right:items,(a,p)=>a:concat([p])):map(q=>q[1]:type):json:exists`,
 			} {
 				p, err := e.Compile(ctx, source)
 				if err != nil {

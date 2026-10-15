@@ -41,6 +41,7 @@ type builder struct {
 	literalConversions    map[hff.Node]literalConversion
 	identityAliases       map[hff.Node]bool
 	operationKeys         map[hff.Node]string
+	runtimeFoldProbe      bool
 }
 
 // present tracks HFF's internal no-value separately from SQL NULL.

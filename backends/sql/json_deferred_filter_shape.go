@@ -113,6 +113,9 @@ func (b *builder) deferredListCategoryTest(n hff.Node, value *jsonDeferredValue)
 	if err := checkContext(b.ctx); err != nil {
 		return "", err
 	}
+	if value.runtime != nil {
+		return "(" + value.runtime.code + "->>0='list')", nil
+	}
 	if value.selection != nil {
 		result, err := b.resolveDeferredSelection(n, value, hff.BoolType, func(child *jsonDeferredValue) (expression, error) {
 			test, err := b.deferredListCategory(n, child)

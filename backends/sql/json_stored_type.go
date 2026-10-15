@@ -71,8 +71,10 @@ func (b *builder) jsonStoredType(n hff.Node) hff.Type {
 			return jsonStoredMemberType(sortListType(b.jsonStoredType(receiver)), "", false, true)
 		case "foldl", "foldr":
 			// Successfully lowered folds have normalized JSON-native state.
-			typ, _ := b.jsonFoldType(n, n.Type())
-			return typ
+			if typ, err := b.jsonFoldType(n, n.Type()); err == nil {
+				return typ
+			}
+			return n.Type()
 		case "map", "flatmap":
 			receiver, _ := n.Child(0)
 			callback, _ := n.Child(1)

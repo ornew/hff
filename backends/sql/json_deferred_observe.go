@@ -28,6 +28,9 @@ func (b *builder) observeDeferredValue(n hff.Node, value *jsonDeferredValue, nam
 	if err := checkContext(b.ctx); err != nil {
 		return expression{}, err
 	}
+	if value.runtime != nil {
+		return b.observeRuntimeValue(n, value, name)
+	}
 	if value.selection != nil {
 		return b.observeDeferredSelection(n, value, name)
 	}
@@ -164,7 +167,7 @@ func (b *builder) deferredLeafSize(value expression, format JSONFormat, name str
 }
 
 func (b *builder) serializeDeferredValue(n hff.Node, value *jsonDeferredValue) (string, error) {
-	if value.leaf != nil || value.choices != nil || value.selection != nil {
+	if value.leaf != nil || value.choices != nil || value.selection != nil || value.runtime != nil {
 		result, err := b.observeDeferredValue(n, value, "json")
 		return result.code, err
 	}
