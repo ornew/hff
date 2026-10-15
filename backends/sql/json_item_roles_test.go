@@ -353,11 +353,11 @@ func TestJSONItemRolesRequireRecoverableOrigins(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, query := range []struct {
-			source    string
-			typedFold bool
+			source      string
+			recoverable bool
 		}{
-			{`[left:items[0],right:items[0]]:map(p=>p[1]:type):contains("string")`, false},
-			{`[left:items[0],right:items[0]]:json!:exists`, false},
+			{`[left:items[0],right:items[0]]:map(p=>p[1]:type):contains("string")`, true},
+			{`[left:items[0],right:items[0]]:json!:exists`, true},
 			{`left:items:concat(right:items):json!:exists`, false},
 			{`left:items:foldl(right:items[0],(a,p)=>p)[1]:type="bytes"`, true},
 			{`left:items:foldl(right:items,(a,p)=>[p]):json!:exists`, true},
@@ -376,7 +376,7 @@ func TestJSONItemRolesRequireRecoverableOrigins(t *testing.T) {
 				_, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(
 					hffsql.BindJSON(hff.Path{"left"}, hffsql.Column("lhs"), format),
 					hffsql.BindJSON(hff.Path{"right"}, hffsql.Column("rhs"), format, options...)))
-				if (err == nil) != query.typedFold {
+				if (err == nil) != query.recoverable {
 					t.Error(tc.name, format, "unexpected origin recovery result", source, err)
 				}
 			}

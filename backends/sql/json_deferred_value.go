@@ -164,9 +164,19 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 			return parameter.deferred, true, nil
 		}
 	}
-	if (n.Kind() == hff.ListNode || n.Kind() == hff.ObjectNode) && (b.keepDeferredValues || b.containsDeferredReference(n) || b.hasDeferredValueSource(n)) {
-		value, err := b.constructDeferredValue(n)
-		return value, true, err
+	if n.Kind() == hff.ListNode || n.Kind() == hff.ObjectNode {
+		needed := b.keepDeferredValues || b.containsDeferredReference(n)
+		if !needed {
+			var err error
+			needed, err = b.hasDeferredValueSource(n)
+			if err != nil {
+				return nil, true, err
+			}
+		}
+		if needed {
+			value, err := b.constructDeferredValue(n)
+			return value, true, err
+		}
 	}
 	switch n.Kind() {
 	case hff.FieldNode, hff.IndexNode:
@@ -187,12 +197,23 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 		return result, true, err
 	}
 	if method, ok := n.Method(); ok {
+		typedSource := b.keepDeferredValues
+		switch method.Name() {
+		case "sum", "avg", "min", "max", "find", "sort", "distinct":
+			if !typedSource {
+				var err error
+				typedSource, err = b.hasDeferredValueSource(n)
+				if err != nil {
+					return nil, true, err
+				}
+			}
+		}
 		for _, name := range []string{"sum", "avg", "min", "max"} {
 			if !builtinListCall(n, name) {
 				continue
 			}
 			receiver, _ := n.Child(0)
-			if b.keepDeferredValues || b.hasDeferredValueSource(n) || computedDeferredSource(receiver) {
+			if typedSource || computedDeferredSource(receiver) {
 				callback, _ := n.Child(1)
 				if _, _, keys := itemKeySource(receiver, callback); callback.Valid() && keys {
 					// Key-only aggregates do not need to recover the value slot.
@@ -204,7 +225,7 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 		}
 		if builtinListCall(n, "find") {
 			receiver, _ := n.Child(0)
-			needed := b.keepDeferredValues || b.hasDeferredValueSource(n) || computedDeferredSource(receiver)
+			needed := typedSource || computedDeferredSource(receiver)
 			if needed && b.jsonItemRoles(n) == nil && b.jsonItemsRoles(n) == nil {
 				value, err := b.deferredFindDescriptor(n)
 				return value, true, err
@@ -212,13 +233,13 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 		}
 		if builtinListCall(n, "sort") {
 			receiver, _ := n.Child(0)
-			needed := b.keepDeferredValues || b.hasDeferredValueSource(n) || computedDeferredSource(receiver)
+			needed := typedSource || computedDeferredSource(receiver)
 			if needed {
 				value, err := b.runtimeSortDescriptor(n)
 				return value, true, err
 			}
 		}
-		if builtinListCall(n, "distinct") && (b.keepDeferredValues || b.hasDeferredValueSource(n)) {
+		if builtinListCall(n, "distinct") && typedSource {
 			if b.jsonItemRoles(n) != nil || b.jsonItemsRoles(n) != nil {
 				return nil, false, nil
 			}
@@ -244,6 +265,12 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 				needed, err := b.needsDeferredFlatmap(n)
 				if err != nil {
 					return nil, true, err
+				}
+				if !needed && !b.keepDeferredValues {
+					needed, err = b.hasDeferredConstructor(n)
+					if err != nil {
+						return nil, true, err
+					}
 				}
 				if needed || b.keepDeferredValues {
 					plan, err := b.deferredList(n)

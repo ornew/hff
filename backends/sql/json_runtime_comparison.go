@@ -19,8 +19,8 @@ func (b *builder) deferredComparison(n hff.Node) (expression, bool, error) {
 	default:
 		return expression{}, false, nil
 	}
-	if !b.hasDeferredValueSource(n) {
-		return expression{}, false, nil
+	if needed, err := b.hasDeferredValueSource(n); !needed || err != nil {
+		return expression{}, err != nil, err
 	}
 	// Keep established native and recoverable-document comparisons when the
 	// complete existing lowering succeeds. Typed carriers are a fallback for
@@ -107,24 +107,27 @@ func (b *builder) deferredComparison(n hff.Node) (expression, bool, error) {
 }
 
 // Avoid cloning builder state when there is no deferred value source. Row
-// parameters and folds are the sources that can carry a lexical typed value.
-func (b *builder) hasDeferredValueSource(n hff.Node) bool {
+// parameters, folds and explicit constructors can carry lexical typed values.
+func (b *builder) hasDeferredValueSource(n hff.Node) (bool, error) {
+	if needed, err := b.deferredConstructorRoot(n); needed || err != nil {
+		return needed, err
+	}
 	if binding, ok := n.Binding(); ok {
 		p := b.parameters[binding.ID()]
 		if p.deferred != nil || p.itemSlot != nil {
-			return true
+			return true, nil
 		}
 	}
 	if builtinListCall(n, "foldl") || builtinListCall(n, "foldr") {
-		return true
+		return true, nil
 	}
 	for i := 0; i < n.ChildCount(); i++ {
 		child, _ := n.Child(i)
-		if b.hasDeferredValueSource(child) {
-			return true
+		if needed, err := b.hasDeferredValueSource(child); needed || err != nil {
+			return needed, err
 		}
 	}
-	return false
+	return false, nil
 }
 
 func (b *builder) typedValueDescriptor(n hff.Node) (*jsonDeferredValue, bool, error) {

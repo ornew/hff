@@ -168,6 +168,9 @@ INSERT INTO events(id,labels) VALUES
 		`labels:items:map(pair=>{"key":pair[0],"value":pair[1]}):foldl([], (acc,item)=>acc:concat([item])):avg(item=>item.key:len)=5.75`,
 		`labels:items:map(pair=>{"key":pair[0],"value":pair[1]}):foldl([], (acc,item)=>acc:concat([item])):min(item=>item.key:len)=3`,
 		`labels:items:map(pair=>{"key":pair[0],"value":pair[1]}):foldl([], (acc,item)=>acc:concat([item])):max(item=>item.key:len)=8`,
+		`[labels.asset,labels.elapsed][0]:type="bytes"`,
+		`[labels.asset,labels.elapsed]:map(value=>value:type):json=["bytes","duration"]:json`,
+		`labels.asset:exists [labels.asset,labels.elapsed]:contains(labels.asset)`,
 	} {
 		p, err := e.Compile(ctx, source)
 		if err != nil {
@@ -178,7 +181,7 @@ INSERT INTO events(id,labels) VALUES
 			t.Fatal(source, err)
 		}
 		appendAggregateProfileQuery(t, &script, q, "events ORDER BY id", i)
-		if i < 5 {
+		if i < 5 || i >= 31 {
 			expected = append(expected, true, true, false, false)
 		} else if i == 21 || i == 23 || i == 25 {
 			expected = append(expected, true, false, false, false)

@@ -110,7 +110,8 @@ func TestJSONBytesRecoveryBoundaries(t *testing.T) {
 		sources     []string
 		recoverable bool
 	}{
-		{schema.ListOf(schema.BytesType), []string{`data=other`, `other=data`, `other:contains(data)`, `data:in(other)`, `[data[0],"AA=="]:size>0`}, false},
+		{schema.ListOf(schema.BytesType), []string{`data=other`, `other=data`, `other:contains(data)`, `data:in(other)`}, false},
+		{schema.ListOf(schema.BytesType), []string{`[data[0],"AA=="]:size>0`}, true},
 		{schema.ListOf(schema.Union(schema.Struct(schema.Bytes("v")), schema.Struct(schema.String("v")))), []string{`data:[list[map[string]]]:exists`, `data:[list[map[bytes]]]:exists`}, false},
 		{schema.ListOf(schema.Union(schema.BytesType, schema.StringType)), []string{`data:json`, `data:sort:json`, `data:unique`}, false},
 		{schema.MapOf(schema.BytesType), []string{`data:items:json`}, true},

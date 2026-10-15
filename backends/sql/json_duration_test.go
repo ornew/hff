@@ -51,7 +51,7 @@ func TestJSONDurationBuildsFromKnownSchema(t *testing.T) {
 	}
 }
 
-func TestJSONDurationRejectsAmbiguousConstructedList(t *testing.T) {
+func TestJSONDurationPreservesConstructedListTypes(t *testing.T) {
 	ctx := context.Background()
 	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Duration("elapsed"))), engine.WithCapabilities(capabilities.Standard()))
 	if err != nil {
@@ -65,7 +65,9 @@ func TestJSONDurationRejectsAmbiguousConstructedList(t *testing.T) {
 		_, err = hffsql.Build(ctx, program, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(
 			hffsql.BindJSON(hff.Path{"elapsed"}, hffsql.Column("elapsed"), hffsql.JSON),
 		))
-		requireCode(t, err, hff.BackendError)
+		if err != nil {
+			t.Fatal(source, err)
+		}
 	}
 }
 

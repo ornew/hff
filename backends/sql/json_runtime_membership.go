@@ -9,7 +9,7 @@ import (
 
 func (b *builder) deferredMembership(n hff.Node) (expression, bool, error) {
 	method, ok := n.Method()
-	if !ok || !b.hasDeferredValueSource(n) {
+	if !ok {
 		return expression{}, false, nil
 	}
 	name := method.Name()
@@ -20,6 +20,9 @@ func (b *builder) deferredMembership(n hff.Node) (expression, bool, error) {
 		if _, custom := signature.Declaration(); custom {
 			return expression{}, false, nil
 		}
+	}
+	if needed, err := b.hasDeferredValueSource(n); !needed || err != nil {
+		return expression{}, err != nil, err
 	}
 	normal := b.validationBuilder()
 	normal.keepDeferredValues = false

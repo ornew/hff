@@ -1562,6 +1562,14 @@ can consume those values when PostgreSQL has retained their recovered types in
 its private runtime tree. This does not change the public value or capability
 model.
 
+An explicit list or object constructor can also retain a different declared
+type for each child. Consumers such as indexing, `type()`, `map()`, membership,
+distinctness, and equality can then use the child's schema without merging its
+identity with another position; the child still has to be individually
+recoverable. This does not infer tagged types from a native JSON `Any` string
+or make an ambiguous stored union recoverable. Other constructor consumers may
+still require an explicit guard or be rejected by `Build`.
+
 PostgreSQL expresses a fold as recursive SQL that carries the accumulator
 between iterations. Growing list or nested-object state can therefore require
 carrying and copying increasingly large values. Prefer `map()` for ordinary

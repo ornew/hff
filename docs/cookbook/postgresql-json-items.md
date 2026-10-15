@@ -174,6 +174,24 @@ Bytes; row 4's null field does not match. An `Any` string does not
 acquire Bytes, Duration, or Timestamp identity from its spelling; identity
 comes from the separate field's schema.
 
+### Preserve types in explicit constructor children
+
+An explicit list constructor keeps the declared type of each child at its
+position. These queries combine the Bytes `asset` and Duration `elapsed`
+fields, then inspect, map, or search the constructed list:
+
+```hff
+[labels.asset,labels.elapsed][0]:type="bytes"
+[labels.asset,labels.elapsed]:map(value=>value:type):json=["bytes","duration"]:json
+labels.asset:exists [labels.asset,labels.elapsed]:contains(labels.asset)
+```
+
+All three match rows 1 and 2, where `asset` is non-null Bytes and `elapsed` is
+Duration. Rows 3 and 4 have a null `asset` and do not match. The types come
+from the two declared fields, not from their JSON string spellings. This
+bounded support does not infer tagged identity from an `Any` string or make an
+ambiguous stored union recoverable.
+
 ## Continue a selected slot through a map chain
 
 A direct map/filter sequence can retain each selected value's field identity
