@@ -230,6 +230,9 @@ func (b *builder) rememberPath(key string, value expression) {
 }
 
 func (b *builder) lower(n hff.Node) (expression, error) {
+	if value, handled, err := b.deferredExpression(n); handled || err != nil {
+		return value, err
+	}
 	if column, kind, native := b.directPhysicalScalarColumn(n); native {
 		return expression{code: column, present: "TRUE", kind: kind}, nil
 	}

@@ -278,6 +278,10 @@ func (b *builder) jsonIndex(n hff.Node) (expression, error) {
 		return expression{}, err
 	}
 	present := ordinaryPresence([]expression{value, index})
+	return b.jsonIndexOperands(n, value, index, format, present, b.jsonStoredType(n))
+}
+
+func (b *builder) jsonIndexOperands(n hff.Node, value, index expression, format JSONFormat, present string, stored hff.Type) (expression, error) {
 	if index.kind == hff.AnyType {
 		return b.jsonDynamicIndex(n, value, index, format, present)
 	}
@@ -309,7 +313,7 @@ func (b *builder) jsonIndex(n hff.Node) (expression, error) {
 	default:
 		return expression{}, b.failure(n, "JSON indexing requires a list or object")
 	}
-	return b.jsonDecode(n, code, format, b.jsonStoredType(n), present)
+	return b.jsonDecode(n, code, format, stored, present)
 }
 func validJSONIndex(index expression) string {
 	test := "(" + index.code + " BETWEEN -2147483648 AND 2147483647)"

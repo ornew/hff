@@ -250,6 +250,7 @@ func (b *builder) jsonCallbackParameters(callback hff.Node, types []hff.Type, ro
 		value := old[i]
 		value.typ = types[i]
 		value.direct, value.itemSlot = nil, nil
+		value.deferred = nil
 		value.itemRoles, value.itemListRoles = nil, nil
 		if len(lists) > 0 && i < len(lists[0]) {
 			value.itemListRoles = lists[0][i]

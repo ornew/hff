@@ -704,10 +704,17 @@ materialization that can recover the result type. `size()` and zero-argument
 must return a list: a non-list result produces null, while guarded no-value
 propagates no-value. The first invalid callback result determines the result;
 later callbacks, including ones returning an empty list, do not replace it.
-Maps that wrap unresolved slots in collections before a later `flatmap()` (for
-example, `map(v=>[v])`), list-value guards or indexing, and unrelated
-materialization boundaries still require ordinary JSON recovery and are outside
-this support.
+Typed item slots can also pass through constructed list and object values in
+eligible pipelines. For example, `map(v=>[v])` can feed a later `flatmap()`;
+literal-list indexing and guards, object field or `get()` access, and `type()`,
+`json()`, `string()`, and `size()` can observe the retained value. Its declared
+type, ordinary null, and guarded no-value remain distinct through these
+wrappers.
+
+This does not recover arbitrary materialized row plans. Indexing or guarding a
+collection whose member origins are ambiguous, general folds, and unrelated
+materialization boundaries still require ordinary JSON recovery and remain
+outside this support.
 
 For eligible `items()` pipelines, PostgreSQL can place row-dependent built-in
 callback work behind a filter's row gate when it depends on the current item;

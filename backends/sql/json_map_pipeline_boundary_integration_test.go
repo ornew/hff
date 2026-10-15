@@ -41,6 +41,10 @@ func TestPostgreSQLItemMapPipelineFloatBoundaries(t *testing.T) {
 			want   bool
 		}{
 			{`labels:items:map(p=>p[1]):flatmap(v=>[v]):map(v=>v:[float]):map(v=>v:type):contains("null")`, false, invalid},
+			{`labels:items:map(p=>p[1]):map(v=>[v]):map(xs=>xs:[list[float]]):map(xs=>xs[0]:type):contains("null")`, false, invalid},
+			{`labels:items:map(p=>p[1]):map(v=>[v]):map(xs=>xs:[list[float]]):map(xs=>xs:[list[float]]):filter(xs=>false):all(xs=>true)`, false, !invalid},
+			{`labels:items:map(p=>p[1]):map(v=>{"payload":[v]}):map(o=>o:[map[list[float]]]):map(o=>o.payload[0]:type):contains("null")`, false, invalid},
+			{`labels:items:map(p=>p[1]):map(v=>{"payload":[v]}):map(o=>o:[map[list[float]]]):map(o=>o:[map[list[float]]]):filter(o=>false):all(o=>true)`, false, !invalid},
 			{`labels:items:map(p=>p[1]):flatmap(v=>[v:[float]]):map(v=>v:type):contains("null")`, false, invalid},
 			{`labels:items:map(p=>p[1]):flatmap(v=>[v:[float]!]):filter(v=>false):all(v=>true)`, false, !invalid},
 			{`labels:items:map(p=>p[1]):flatmap(v=>[v:[float]]):filter(v=>false):all(v=>true)`, false, true},

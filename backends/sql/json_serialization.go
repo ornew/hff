@@ -7,17 +7,24 @@ import (
 )
 
 func (b *builder) serialize(n hff.Node, value expression, name string) (expression, error) {
+	receiver, _ := n.Child(0)
+	return b.serializeStoredValue(n, value, name, b.jsonStoredType(receiver), b.losesFloat(receiver, nil), b.jsonItemsRoles(receiver) != nil || b.jsonItemRoles(receiver) != nil)
+}
+
+func (b *builder) serializeStoredValue(n hff.Node, value expression, name string, stored hff.Type, lossy, roles bool) (expression, error) {
 	var code string
 	if format, ok := b.jsonValues[value.code]; ok {
-		receiver, _ := n.Child(0)
-		if b.losesFloat(receiver, nil) {
+		if lossy {
 			return expression{}, b.failure(n, "JSONB cannot preserve signed zero for float serialization")
 		}
 		var err error
-		stored := b.jsonStoredType(receiver)
-		if needsDynamicJSONEquality(stored) || b.jsonItemsRoles(receiver) != nil || b.jsonItemRoles(receiver) != nil {
+		if needsDynamicJSONEquality(stored) || roles {
 			var normalized string
-			normalized, err = b.comparisonDocument(receiver, value.code, format, stored)
+			if roles && format == JSON {
+				normalized, err = "COALESCE("+value.code+",'null'::json)", checkContext(b.ctx)
+			} else {
+				normalized, err = b.comparisonDocument(n, value.code, format, stored)
+			}
 			if err == nil {
 				code = b.canonicalJSON(b.project(normalized))
 			}
@@ -37,13 +44,18 @@ func (b *builder) serialize(n hff.Node, value expression, name string) (expressi
 		case hff.BoolType, hff.IntType:
 			code = "COALESCE(" + value.code + "::text,'null')"
 		case hff.FloatType:
-			receiver, _ := n.Child(0)
-			if b.losesFloat(receiver, nil) {
+			if lossy {
 				return expression{}, b.failure(n, "JSONB cannot preserve signed zero for float serialization")
 			}
 			code = b.floatText(value.code)
 		case hff.DurationType:
 			code = b.durationText(value.code)
+			if name == "json" {
+				code = "to_json(" + code + ")::text"
+			}
+			code = "COALESCE(" + code + ",'null')"
+		case hff.TimestampType:
+			code = b.timestampUTCStringInline(value.code)
 			if name == "json" {
 				code = "to_json(" + code + ")::text"
 			}

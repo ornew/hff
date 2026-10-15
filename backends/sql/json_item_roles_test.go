@@ -148,8 +148,7 @@ func TestJSONItemRolesDoNotBlessUnprovenPairs(t *testing.T) {
 	}
 	for _, source := range []string{`labels:items:contains(raw)`, `labels:items[0]=raw`, `raw:json!="[]"`,
 		`labels:items:flatmap(p=>[p,raw]):json!:exists`,
-		`labels:items:map(p=>raw):json!:exists`,
-		`labels:items:map(p=>[p[0],p[1]]):json!:exists`} {
+		`labels:items:map(p=>raw):json!:exists`} {
 		p, err := e.Compile(ctx, source)
 		if err != nil {
 			t.Fatal(source, err)
@@ -160,6 +159,18 @@ func TestJSONItemRolesDoNotBlessUnprovenPairs(t *testing.T) {
 		if err == nil {
 			t.Error("accepted unrecoverable/unproven input", source)
 		}
+	}
+	// Explicit construction retains the two child descriptors. Serialization
+	// can now observe them without assigning object-item provenance to an
+	// arbitrary list or recovering Bytes from the stored spelling alone.
+	p, err := e.Compile(ctx, `labels:items:map(p=>[p[0],p[1]]):json!:exists`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(
+		hffsql.BindJSON(hff.Path{"labels"}, hffsql.Column("records", "labels"), hffsql.JSONB),
+		hffsql.BindJSON(hff.Path{"raw"}, hffsql.Column("records", "raw"), hffsql.JSONB))); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 type jsonDeferredList struct {
 	null, present string
 	arms          []jsonDeferredArm
+	literal       bool
 }
 
 type jsonDeferredArm struct {
@@ -50,8 +51,21 @@ func (b *builder) needsDeferredFlatmap(n hff.Node) (bool, error) {
 			return err
 		}
 		flatmap = flatmap || builtinListCall(node, "flatmap")
+		if builtinListCall(node, "map") {
+			callback, _ := node.Child(1)
+			body, _ := callback.Child(0)
+			bindings, _ := callback.Parameters()
+			constructed, err := b.callbackConstructsParameter(body, bindings)
+			if err != nil {
+				return err
+			}
+			flatmap = flatmap || constructed
+		}
 		if binding, ok := node.Binding(); ok && b.parameters[binding.ID()].itemSlot != nil {
 			slot = true
+		}
+		if binding, ok := node.Binding(); ok && b.parameters[binding.ID()].deferred != nil {
+			flatmap, slot = true, true
 		}
 		if node.Kind() == hff.IndexNode {
 			parent, _ := node.Child(0)
@@ -84,7 +98,35 @@ func (b *builder) needsDeferredFlatmap(n hff.Node) (bool, error) {
 	return flatmap && slot, err
 }
 
+func (b *builder) callbackConstructsParameter(n hff.Node, parameters []hff.Binding) (bool, error) {
+	var visit func(hff.Node, bool) (bool, error)
+	visit = func(node hff.Node, inside bool) (bool, error) {
+		if err := checkContext(b.ctx); err != nil {
+			return false, err
+		}
+		inside = inside || node.Kind() == hff.ListNode || node.Kind() == hff.ObjectNode
+		if binding, ok := node.Binding(); ok && inside {
+			for _, parameter := range parameters {
+				if binding.ID() == parameter.ID() {
+					return true, nil
+				}
+			}
+		}
+		for i := 0; i < node.ChildCount(); i++ {
+			child, _ := node.Child(i)
+			if found, err := visit(child, inside); found || err != nil {
+				return found, err
+			}
+		}
+		return false, nil
+	}
+	return visit(n, false)
+}
+
 func deferredParameterPresence(value jsonParameter) string {
+	if value.deferred != nil {
+		return value.deferred.present
+	}
 	if value.itemSlot != nil {
 		return value.itemSlot.present
 	}
@@ -136,6 +178,13 @@ func (b *builder) inDeferredArm(arm jsonDeferredArm, callback hff.Node, work fun
 }
 
 func (b *builder) deferredValue(n hff.Node) (jsonParameter, error) {
+	if n.Kind() == hff.ListNode || n.Kind() == hff.ObjectNode {
+		value, err := b.constructDeferredValue(n)
+		return deferredValueParameter(value), err
+	}
+	if value, handled, err := b.deferredDescriptor(n); handled || err != nil {
+		return deferredValueParameter(value), err
+	}
 	if builtinListCall(n, "size") || builtinListCall(n, "count") && n.ChildCount() == 1 {
 		receiver, _ := n.Child(0)
 		plan, err := b.deferredList(receiver)
@@ -184,6 +233,11 @@ func (b *builder) deferredValue(n hff.Node) (jsonParameter, error) {
 		if err != nil {
 			return jsonParameter{}, err
 		}
+	} else if (n.Kind() == hff.LiteralNode || b.literalConversions[n].handled) && value.kind != hff.NullType {
+		// Constructor children can later be inspected only for their family.
+		// Keep a bound literal named in this scope even if a subsequent
+		// inapplicable operation returns null without reading its payload.
+		value.code = b.project(value.code)
 	}
 	return jsonParameter{typ: stored, direct: &value, format: b.jsonValues[value.code], lossy: b.losesFloat(n, nil), itemRoles: b.jsonItemRoles(n), itemListRoles: b.jsonItemsRoles(n)}, nil
 }
@@ -193,7 +247,7 @@ func (b *builder) deferredList(n hff.Node) (jsonDeferredList, error) {
 		return jsonDeferredList{}, err
 	}
 	if n.Kind() == hff.ListNode {
-		plan := jsonDeferredList{null: "FALSE", present: "TRUE"}
+		plan := jsonDeferredList{null: "FALSE", present: "TRUE", literal: true}
 		if n.ChildCount() == 0 {
 			// Keep a typed, zero-row scope so subsequent callbacks still pass
 			// through ordinary Build validation. Its output type cannot occur
@@ -238,12 +292,18 @@ func (b *builder) deferredList(n hff.Node) (jsonDeferredList, error) {
 			}
 			r.arms[i].ordinal = append([]string{"1"}, r.arms[i].ordinal...)
 		}
-		return jsonDeferredList{null: "(" + l.null + " OR " + r.null + ")", present: both(l.present, "("+l.null+" OR "+r.present+")"), arms: append(l.arms, r.arms...)}, nil
+		return jsonDeferredList{null: "(" + l.null + " OR " + r.null + ")", present: both(l.present, "("+l.null+" OR "+r.present+")"), arms: append(l.arms, r.arms...), literal: l.literal && r.literal}, nil
 	}
 	for _, name := range []string{"map", "filter", "flatmap"} {
 		if builtinListCall(n, name) {
 			return b.deferredListTransform(n, name)
 		}
+	}
+	if value, handled, err := b.deferredDescriptor(n); handled || err != nil {
+		if err != nil {
+			return jsonDeferredList{}, err
+		}
+		return b.deferredValueList(n, value)
 	}
 	if slot, handled, err := b.jsonItemSlot(n); handled || err != nil {
 		if err != nil {
@@ -324,20 +384,9 @@ func (b *builder) deferredListTransform(n hff.Node, name string) (jsonDeferredLi
 				return err
 			}
 			if name == "filter" {
-				var predicate expression
-				if slot, handled, err := b.jsonItemSlot(body); handled || err != nil {
-					if err != nil {
-						return err
-					}
-					predicate, err = b.jsonItemSlotTruth(body, slot)
-					if err != nil {
-						return err
-					}
-				} else {
-					predicate, err = b.expression(body)
-					if err != nil {
-						return err
-					}
+				predicate, err := b.deferredPredicate(body)
+				if err != nil {
+					return err
 				}
 				selected = both(selected, b.truth(body, predicate))
 				return nil
@@ -418,17 +467,12 @@ func (b *builder) jsonFlatmapPipeline(n hff.Node, name string) (expression, bool
 		var raw, present string
 		steps, _, err := b.inDeferredArm(arm, callback, func() error {
 			if name != "map" {
-				if slot, handled, err := b.jsonItemSlot(body); handled || err != nil {
-					if err != nil {
-						return err
-					}
-					value, err := b.jsonItemSlotTruth(body, slot)
-					if err != nil {
-						return err
-					}
-					raw, present = b.truth(body, value), value.present
-					return nil
+				value, err := b.deferredPredicate(body)
+				if err != nil {
+					return err
 				}
+				raw, present = b.truth(body, value), value.present
+				return nil
 			}
 			value, err := b.expression(body)
 			if err != nil {
@@ -520,6 +564,11 @@ func (b *builder) materializeDeferredFlatmap(n hff.Node) (expression, bool, erro
 	if err != nil {
 		return expression{}, true, err
 	}
+	value, err := b.materializeDeferredList(n, plan)
+	return value, true, err
+}
+
+func (b *builder) materializeDeferredList(n hff.Node, plan jsonDeferredList) (expression, error) {
 	var rows []string
 	var types []hff.Type
 	for _, arm := range plan.arms {
@@ -528,7 +577,9 @@ func (b *builder) materializeDeferredFlatmap(n hff.Node) (expression, bool, erro
 			parameter := arm.value
 			var value expression
 			var err error
-			if parameter.itemSlot != nil {
+			if parameter.deferred != nil {
+				value, err = b.materializeDeferredValue(n, parameter.deferred)
+			} else if parameter.itemSlot != nil {
 				value, err = b.jsonItemSlotValue(n, *parameter.itemSlot)
 			} else if parameter.direct != nil {
 				value = *parameter.direct
@@ -546,11 +597,11 @@ func (b *builder) materializeDeferredFlatmap(n hff.Node) (expression, bool, erro
 			return err
 		})
 		if err != nil {
-			return expression{}, true, err
+			return expression{}, err
 		}
 		arm.steps = steps
 		rows = append(rows, "SELECT "+deferredOrdinal(arm)+" AS ord,"+raw+" AS v,"+pipelineRowPresence(arm.selected, present)+" AS p,"+arm.selected+" AS keep FROM "+deferredFrom(arm))
 	}
 	value, err := b.finishDeferredList(n, "map", plan, rows, types)
-	return value, true, err
+	return value, err
 }

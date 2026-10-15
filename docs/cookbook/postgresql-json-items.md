@@ -277,6 +277,27 @@ determines the result, even if later callbacks return an empty list. Ordinary
 null inside a returned list remains data. Fold carriers and unrelated
 materialization boundaries remain outside this support.
 
+### Wrap and recover constructed values
+
+Constructed lists and objects can retain the selected value's type through
+later operations. These queries compare the wrapped result with a direct type
+observation; all four example rows match, including rows with null values:
+
+```hff
+labels:items:map(pair=>pair[1]):map(value=>[value]):flatmap(values=>values):map(value=>value:type):json=labels:items:map(pair=>pair[1]):map(value=>value:type):json
+labels:items:map(pair=>pair[1]):map(value=>{"payload":value}):map(object=>object:get("payload"):type):json=labels:items:map(pair=>pair[1]):map(value=>value:type):json
+labels:items:map(pair=>pair[1]):map(value=>{"payload":value}):map(object=>object.payload:type):json=labels:items:map(pair=>pair[1]):map(value=>value:type):json
+labels:items:map(pair=>pair[1]):map(value=>[value,value]):map(values=>values[-1]:type):json=labels:items:map(pair=>pair[1]):map(value=>value:type):json
+labels:items:map(pair=>pair[1]):map(value=>[value]):map(values=>values:[list[any]]):flatmap(values=>values):map(value=>value:type):json=labels:items:map(pair=>pair[1]):map(value=>value:type):json
+labels:items:map(pair=>pair[1]):map(value=>[value,null]):map(values=>values:size):all(size=>size=2)
+```
+
+These examples cover a list wrapper followed by `flatmap()`, object field
+access through `get()`, literal-list indexing and type guards, and the `size()`
+observer. The wrapper preserves each field's declared type, and ordinary null
+remains a value inside the constructed collection. A guard-produced no-value
+still propagates instead of being silently removed.
+
 A later filter still cannot erase a no-value produced by an earlier map:
 
 ```hff

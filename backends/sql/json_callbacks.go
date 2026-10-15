@@ -16,6 +16,7 @@ type jsonParameter struct {
 	itemKey       string
 	direct        *expression
 	itemSlot      *jsonItemSlot
+	deferred      *jsonDeferredValue
 }
 
 // Callback projections belong to their element subquery. Captures retain the

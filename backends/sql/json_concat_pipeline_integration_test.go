@@ -142,6 +142,12 @@ INSERT INTO events(id,labels) VALUES
 		joined + `:map(value=>value:[any]):concat(labels:items:map(pair=>pair[1])):map(value=>value:type)=["string","bytes","duration","timestamp","string","bytes","duration","timestamp","string","bytes","duration","timestamp"]`,
 		joined + `:filter(value=>value:type!="null"):map(value=>value:[any]):map(value=>value:type)=` + types,
 		joined + `:map(value=>value!):filter(value=>false):all(value=>true)`,
+		`labels:items:map(pair=>pair[1]):map(value=>[value]):flatmap(values=>values):map(value=>value:type):json=labels:items:map(pair=>pair[1]):map(value=>value:type):json`,
+		`labels:items:map(pair=>pair[1]):map(value=>{"payload":value}):map(object=>object:get("payload"):type):json=labels:items:map(pair=>pair[1]):map(value=>value:type):json`,
+		`labels:items:map(pair=>pair[1]):map(value=>{"payload":value}):map(object=>object.payload:type):json=labels:items:map(pair=>pair[1]):map(value=>value:type):json`,
+		`labels:items:map(pair=>pair[1]):map(value=>[value,value]):map(values=>values[-1]:type):json=labels:items:map(pair=>pair[1]):map(value=>value:type):json`,
+		`labels:items:map(pair=>pair[1]):map(value=>[value]):map(values=>values:[list[any]]):flatmap(values=>values):map(value=>value:type):json=labels:items:map(pair=>pair[1]):map(value=>value:type):json`,
+		`labels:items:map(pair=>pair[1]):map(value=>[value,null]):map(values=>values:size):all(size=>size=2)`,
 	} {
 		p, err := e.Compile(ctx, source)
 		if err != nil {
@@ -152,7 +158,11 @@ INSERT INTO events(id,labels) VALUES
 			t.Fatal(source, err)
 		}
 		appendAggregateProfileQuery(t, &script, q, "events ORDER BY id", i)
-		expected = append(expected, true, true, false, false)
+		if i < 5 {
+			expected = append(expected, true, true, false, false)
+		} else {
+			expected = append(expected, true, true, true, true)
+		}
 		for row := 1; row <= 4; row++ {
 			labels = append(labels, fmt.Sprintf("query%d row%d", i, row))
 		}
