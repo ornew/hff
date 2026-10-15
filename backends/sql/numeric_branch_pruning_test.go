@@ -150,7 +150,14 @@ func TestNumericBranchPruningKeepsRightExtensionAndArgumentOrder(t *testing.T) {
 			t.Fatalf("%s: calls=%d error=%v", source, calls, err)
 		}
 		args := q.Args()
-		if len(args) < 2 || args[0] != int64(7) || args[len(args)-1] != "tail" {
+		requireConcatArgsUsed(t, q)
+		if strings.HasPrefix(source, "data:[null]") {
+			// The extension is still validated once, but its result and
+			// arguments are discarded after the null left operand.
+			if len(args) != 1 || args[0] != "tail" {
+				t.Fatalf("%s retained discarded extension args: %#v", source, args)
+			}
+		} else if len(args) < 2 || args[0] != int64(7) || args[len(args)-1] != "tail" {
 			t.Fatalf("%s changed source argument order: %#v", source, args)
 		}
 	}

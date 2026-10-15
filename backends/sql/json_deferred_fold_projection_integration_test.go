@@ -5,8 +5,6 @@ package sql_test
 import (
 	"context"
 	"os"
-	"os/exec"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -76,8 +74,7 @@ func TestPostgreSQLUnusedDeferredFoldExactOutputs(t *testing.T) {
 	t.Logf("%d independent expected results", len(expected))
 }
 
-// The typed-parameter parity matrix above does not establish that this
-// pre-existing dead-argument boundary works with parameter types omitted.
+// Null propagation must also work when PostgreSQL infers parameter types.
 func TestPostgreSQLUnusedDeferredFoldKnownNoValueArgumentBoundary(t *testing.T) {
 	container := os.Getenv("HFF_POSTGRES_CONTAINER")
 	if container == "" {
@@ -95,14 +92,12 @@ func TestPostgreSQLUnusedDeferredFoldKnownNoValueArgumentBoundary(t *testing.T) 
 		if err != nil {
 			t.Fatal(err)
 		}
-		requireKnownNoValueArgumentBoundary(t, q)
-		statement := `SET statement_timeout=30000; PREPARE dead_fold AS SELECT 1 FROM (VALUES ('{"asset":"YQ==","name":"Alice"}'::` + string(format) + `)) records(labels) WHERE ` + q.Where() + ";\n"
-		command := exec.CommandContext(ctx, "docker", "exec", "-i", container, "psql", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-U", "postgres")
-		command.Stdin = strings.NewReader(statement)
-		output, err := command.CombinedOutput()
-		missing := strconv.Itoa(len(q.Args()) - 1)
-		if err == nil || !strings.Contains(string(output), "could not determine data type of parameter $"+missing) {
-			t.Fatal("known untyped PREPARE boundary changed", format, err, string(output))
+		requireConcatArgsUsed(t, q)
+		from := `(VALUES ('{"asset":"YQ==","name":"Alice"}'::` + string(format) + `)) records(labels)`
+		for _, typed := range []bool{false, true} {
+			var script strings.Builder
+			appendNullArgumentQuery(t, &script, q, from, 0, typed)
+			runSQLBooleanParityScript(t, ctx, container, script.String(), []bool{false}, []string{string(format) + " null fold"})
 		}
 	}
 }

@@ -3,8 +3,6 @@ package sql_test
 import (
 	"context"
 	"errors"
-	"regexp"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -59,42 +57,9 @@ func TestUnusedDeferredInputFoldsBuild(t *testing.T) {
 				if err != nil {
 					t.Fatal(tc.name, format, source, err)
 				}
-				if strings.HasSuffix(source, knownNoValueFoldSuffix) {
-					requireKnownNoValueArgumentBoundary(t, q)
-				} else {
-					requireConcatArgsUsed(t, q)
-				}
+				requireConcatArgsUsed(t, q)
 			}
 		}
-	}
-}
-
-// Pre-existing null/no-value folding can discard scalar operands after
-// binding them. Keep that isolated boundary visible while requiring all
-// constructor and packet arguments to remain live. Ordinary queries above
-// still require every argument; this exception is not a pruning guarantee.
-func requireKnownNoValueArgumentBoundary(t *testing.T, q *hffsql.Query) {
-	t.Helper()
-	used := map[int]bool{}
-	for _, match := range regexp.MustCompile(`\$(\d+)`).FindAllStringSubmatch(q.Where(), -1) {
-		index, err := strconv.Atoi(match[1])
-		if err != nil {
-			t.Fatal(err)
-		}
-		used[index-1] = true
-	}
-	args := q.Args()
-	missing := 0
-	for i, arg := range args {
-		if !used[i] {
-			missing++
-			if i != len(args)-2 || arg != int64(1) {
-				t.Fatal("unexpected unused fold argument", i, args)
-			}
-		}
-	}
-	if missing != 1 {
-		t.Fatal("known no-value argument boundary changed", missing, args)
 	}
 }
 
@@ -108,7 +73,7 @@ func TestUnusedDeferredFoldKnownNoValueArgumentBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	requireKnownNoValueArgumentBoundary(t, q)
+	requireConcatArgsUsed(t, q)
 }
 
 func unusedFoldEngine(t *testing.T, methods ...hff.MethodDeclaration) *engine.Engine {

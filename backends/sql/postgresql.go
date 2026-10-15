@@ -704,6 +704,14 @@ func (b *builder) binary(n hff.Node) (expression, error) {
 	}
 	if left.kind == hff.NullType {
 		switch op {
+		case hff.Add, hff.Subtract, hff.Multiply, hff.Divide, hff.Remainder:
+			// Null propagation ignores the RHS value and presence, but
+			// still checks its backend support without keeping dead args.
+			validation := b.validationBuilder()
+			if _, err := validation.expression(r); err != nil {
+				return expression{}, err
+			}
+			return expression{"NULL", left.present, hff.NullType}, nil
 		case hff.Equal, hff.NotEqual, hff.Less, hff.LessEqual, hff.Greater, hff.GreaterEqual:
 			// A statically null comparison is false, but its RHS still has
 			// backend validation obligations. Discard its unused bindings.
@@ -713,6 +721,13 @@ func (b *builder) binary(n hff.Node) (expression, error) {
 			}
 			return boolean("FALSE"), nil
 		}
+	}
+	if left.kind != hff.NullType && (r.Type().Kind() == hff.NullType || r.Type().Kind() == hff.NeverType) &&
+		(l.Kind() == hff.LiteralNode || b.literalConversions[l].handled || b.identityAliases[l]) {
+		// A null RHS can discard the left carrier after it was bound.
+		// Keep that parameter typed and referenced in a named projection;
+		// moving or deleting it would renumber the later operand's args.
+		left.code = b.project(left.code)
 	}
 	rightStart := len(b.args)
 	right, err := b.expression(r)

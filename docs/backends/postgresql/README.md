@@ -71,6 +71,12 @@ The predicate text is an implementation artifact, not a stable formatting
 contract. Compose it into a statement owned by the service and pass the
 parameters to the database API; do not interpolate query values into SQL text.
 
+For null-propagating binary arithmetic, this ordering contract also applies when
+lowering simplifies an operand to SQL `NULL`: discarded operand arguments do
+not remain in `Args()`, and retained typed parameters keep the placeholder
+positions required by the emitted SQL. The backend still validates discarded
+expressions, so simplification does not change source-first diagnostics.
+
 ## Supported PostgreSQL subset
 
 Choose a physical binding from the way the application stores each HFF value:
