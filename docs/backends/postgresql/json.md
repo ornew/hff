@@ -1760,6 +1760,26 @@ presence, null, and no-value behavior remain unchanged; the optimization does
 not infer types for ambiguous stored values. See the [observed fold fields](../../optimizations/062-postgresql-observed-fold-fields.md)
 record for the bounded behavior and SQL-shape evidence.
 
+When a deferred fold consumes lists constructed from item values, a callback
+can select a statically known position with a direct finite integral numeric literal
+index. Negative indexes and integral Float literals are supported. PostgreSQL
+retains the selected child's declared type and Float-loss metadata without
+re-expanding every list arm. For example, both callbacks below read a fixed
+position from each constructed list:
+
+```hff
+labels:items:map(p=>[p[1],p[1]]):foldl(0,(a,v)=>a+v[0]:string:len)>5
+labels:items:map(p=>[p[1],"middle",p[1]]):foldr(0,(v,a)=>a+v[-1]:string:len)>5
+```
+
+The original source order, null/no-value behavior, and full source, seed, and
+callback validation remain in force; repeated original arms are encoded once.
+Whole-list reads or guards, dynamic indexes, and fractional indexes keep the
+ordinary lowering path. This private fold transport does not change the public
+binding format, and custom translators in the source, seed, or callback body
+remain outside this path. See the [fixed-list fold transport record](../../optimizations/063-postgresql-fixed-list-fold-transport.md)
+for the bounded applicability and SQL-shape observations.
+
 For eligible deferred `items()` streams, fold callbacks can inspect each
 input value using its recovered per-key schema without first materializing the
 mixed input list as ordinary JSON. The accumulator still follows the normal

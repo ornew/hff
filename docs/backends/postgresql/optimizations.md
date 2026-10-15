@@ -100,6 +100,16 @@ packet lowering. See
 for the bounded rules and SQL-shape evidence. SQL-shape observations are not
 runtime-speed claims.
 
+### Preserve fixed-list positions in deferred folds
+
+When a deferred item pipeline constructs a fixed list and the fold callback
+reads a direct finite integral numeric literal index, PostgreSQL can transport
+the selected child with its declared type instead of re-expanding every list
+arm. Full source, seed, and callback validation remain in force; whole-list
+reads or guards, dynamic or fractional indexes, and custom translators retain
+ordinary lowering. See the [fixed-list fold transport record](../../optimizations/063-postgresql-fixed-list-fold-transport.md)
+for its bounded proof and SQL-shape evidence. No runtime-speed claim follows.
+
 ### Compare native Timestamp bindings by their physical columns
 
 For eligible native `BindTimestamp` filter comparisons against a Timestamp
