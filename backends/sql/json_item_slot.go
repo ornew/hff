@@ -68,9 +68,9 @@ func (b *builder) normalizeItemSlotGuard(n hff.Node, slot *jsonItemSlot, target 
 	if !needed {
 		return nil
 	}
-	raw, err := b.jsonItemSlotOperation(n, *slot, "'null'::json", func(source hff.Type) (string, error) {
+	raw, err := b.jsonItemSlotUniformOperation(n, *slot, "'null'::json", func(probe *builder, source hff.Type) (string, error) {
 		typ := intersectItemType(source, target)
-		return b.normalizedComparisonDocument(n, slot.raw, slot.format, typ)
+		return probe.normalizedComparisonDocument(n, slot.raw, slot.format, typ)
 	})
 	if err != nil {
 		return err
@@ -220,9 +220,43 @@ func (b *builder) jsonItemSlotTest(n hff.Node, slot jsonItemSlot, target hff.Typ
 	if acceptsKind(target, hff.NullType) {
 		nullResult = "TRUE"
 	}
-	return b.jsonItemSlotOperation(n, slot, nullResult, func(source hff.Type) (string, error) {
-		return b.jsonMatches(n, slot.raw, slot.format, source, target)
+	return b.jsonItemSlotUniformOperation(n, slot, nullResult, func(probe *builder, source hff.Type) (string, error) {
+		return probe.jsonMatches(n, slot.raw, slot.format, source, target)
 	})
+}
+
+// Only guard matching and guard normalization opt into uniform dispatch.
+// General serializers and observers keep their existing operation path.
+func (b *builder) jsonItemSlotUniformOperation(n hff.Node, slot jsonItemSlot, nullResult string, operation func(*builder, hff.Type) (string, error)) (string, error) {
+	match := func(probe *builder, source hff.Type) (string, error) {
+		for _, constraint := range slot.constraints {
+			source = intersectItemType(source, constraint)
+		}
+		return operation(probe, source)
+	}
+	key, value := nullResult, nullResult
+	var err error
+	if slot.key != "FALSE" {
+		key, err = match(b, itemKeyType(slot.roles))
+		if err != nil {
+			return "", err
+		}
+	}
+	if slot.value != "FALSE" {
+		// Snapshot after matching the key so a reused value predicate keeps
+		// every dependency needed by the earlier key branch.
+		value, err = b.jsonItemUniformValueOperation(n, slot.pair, slot.roles, match)
+		if err != nil {
+			return "", err
+		}
+	}
+	if slot.key == "TRUE" {
+		return key, nil
+	}
+	if slot.value == "TRUE" {
+		return value, nil
+	}
+	return "(CASE WHEN " + slot.key + " THEN " + key + " WHEN " + slot.value + " THEN " + value + " ELSE " + nullResult + " END)", nil
 }
 
 // Preserve the recovered alternatives before inference absorbs Any. Literal

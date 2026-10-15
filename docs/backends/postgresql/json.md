@@ -696,11 +696,13 @@ does not change general carrier recovery. A narrow `json()` path can serialize
 the selected values after eligible guarded item pipelines; the next section
 describes that support.
 
-If full validation proves that every per-key payload matcher is literal false,
-PostgreSQL can omit the per-key matcher `CASE` and its arguments. It still
-validates keys at Build time and preserves pair/list null checks and
-empty-list behavior. Mixed, `Any`, and data-dependent matchers keep their
-normal path. Identical nonconstant null-test matchers are not collapsed.
+After validating every per-key guard expression, PostgreSQL can reuse the
+fallback when all generated SQL—including the fallback—is identical. This
+applies to both matcher predicates and slot guard-normalization expressions,
+including identical nonconstant checks such as a null test repeated for
+different keys. Literal-false matchers keep their existing simplification.
+When expressions differ, PostgreSQL retains per-key dispatch. Pair/list
+checks, Build-time key validation, and empty-list behavior are unchanged.
 
 ### Serialize guarded per-key item values
 

@@ -38,6 +38,14 @@ unproven inputs retain normal normalization. See [guard normalization
 reuse](../../optimizations/057-postgresql-guard-normalization.md) for the
 bounded rules and SQL-shape observations; no runtime-speed claim follows.
 
+For item-pair and scalar item-slot guards, PostgreSQL can also reuse the
+fallback when every fully validated per-key matcher or slot
+guard-normalization expression, including the fallback, has identical SQL
+text. This includes identical nonconstant checks; nonuniform expressions
+retain their dispatch. Pair/list checks and Build diagnostics remain in force.
+See [uniform item guards](../../optimizations/058-postgresql-uniform-item-guards.md)
+for the measured SQL-shape scope; no runtime-speed claim follows.
+
 ### Avoid rebuilding guarded payloads for root observers
 
 After one numeric-containing List/Map type guard, immediate root `type()`,

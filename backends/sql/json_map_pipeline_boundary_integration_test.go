@@ -133,5 +133,40 @@ func TestPostgreSQLItemMapPipelineFloatBoundaries(t *testing.T) {
 			labels = append(labels, fmt.Sprintf("%s %s", token, tc.source))
 		}
 	}
+	// A keyed uniform matcher must observe the normalized payload, including
+	// null introduced by failed Float decoding, without removing pair guards.
+	keyed, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("labels", schema.Struct(schema.Float("a"), schema.Float("z"))))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, token := range []string{"1e-400", "-1e-400", "1e400", "1.0"} {
+		for _, tc := range []struct {
+			source         string
+			matchesInvalid bool
+		}{
+			{`labels:items:any(p=>p:[list[string|null]]:exists)`, true},
+			{`labels:items:any(p=>p:[list[string|null]][1]=null)`, true},
+			{`labels:items[0]:[list[string|null]]:exists`, true},
+			// A recovered null passes the nullable guard, but exists() is false.
+			{`labels:items:any(p=>p[1]:[string|null]:exists)`, false},
+			{`labels:items:any(p=>p[1]:[null]=null)`, true},
+			{`labels:items:any(p=>p[1]:[float|null]:[string|null]:exists)`, false},
+			{`labels:items:any(p=>p[1]:[string|null]:type="null")`, true},
+			{`labels:items:any(p=>p[1]:[float|null]:[string|null]=null)`, true},
+		} {
+			p, err := keyed.Compile(ctx, tc.source)
+			if err != nil {
+				t.Fatal(err)
+			}
+			q, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindJSON(hff.Path{"labels"}, hffsql.Column("records", "labels"), hffsql.JSON)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			raw := `{"a":` + token + `,"z":` + token + `}`
+			appendAggregateProfileQuery(t, &script, q, "(VALUES ("+sqlFixtureString(raw)+"::json)) records(labels)", len(expected))
+			expected = append(expected, tc.matchesInvalid && token != "1.0")
+			labels = append(labels, token+" "+tc.source)
+		}
+	}
 	runSQLBooleanParityScript(t, ctx, container, script.String(), expected, labels)
 }

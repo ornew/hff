@@ -177,20 +177,46 @@ func (b *builder) jsonItemValueMatches(n hff.Node, code string, format JSONForma
 		return "TRUE", nil
 	}
 	value := "(" + code + " -> 1)"
+	return b.jsonItemUniformValueOperation(n, code, roles, func(probe *builder, source hff.Type) (string, error) {
+		return probe.jsonMatches(n, value, format, source, target)
+	})
+}
+
+// jsonItemValueOperation visits the unknown-key fallback first. Preserve its
+// completed SQL state separately: identical branch text can reuse that state,
+// but cannot refer to aliases or parameters created by discarded branches.
+func (b *builder) jsonItemUniformValueOperation(n hff.Node, code string, roles *jsonItemRoles, match func(*builder, hff.Type) (string, error)) (string, error) {
 	probe := b.validationBuilder()
-	alwaysFalse := true
+	var fallback builder
+	var fallbackSQL string
+	first, uniform := true, true
 	result, err := probe.jsonItemValueOperation(n, code, roles, func(source hff.Type) (string, error) {
-		test, err := probe.jsonMatches(n, value, format, source, target)
-		alwaysFalse = alwaysFalse && test == "FALSE"
-		return test, err
+		if err := checkContext(probe.ctx); err != nil {
+			return "", err
+		}
+		test, err := match(&probe, source)
+		if err != nil {
+			return "", err
+		}
+		if first {
+			fallbackSQL, fallback = test, probe.validationBuilder()
+			first = false
+		} else {
+			uniform = uniform && test == fallbackSQL
+		}
+		return test, nil
 	})
 	if err != nil {
 		return "", err
 	}
-	// The complete operation still validates every source branch and key.
-	// Discard its SQL state only when even the fallback is literally FALSE.
-	if alwaysFalse {
-		return "FALSE", nil
+	if err := checkContext(probe.ctx); err != nil {
+		return "", err
+	}
+	// All branches and keys have been validated in their original order.
+	// Reuse only exact SQL text, with the dependencies of that same fallback.
+	if uniform {
+		b.adoptDeferredProbe(fallback)
+		return fallbackSQL, nil
 	}
 	b.adoptDeferredProbe(probe)
 	return result, nil
