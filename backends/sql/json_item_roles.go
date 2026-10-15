@@ -47,10 +47,10 @@ func (b *builder) jsonItemsRolesUncached(n hff.Node) *jsonItemRoles {
 				}
 				return nil
 			}
-			if proof != nil && jsonTaggedStringStateAmbiguous(proof.object, roles.object) {
+			if !b.runtimeRoleAnalysis && proof != nil && jsonTaggedStringStateAmbiguous(proof.object, roles.object) {
 				return nil
 			}
-			proof = mergeItemRoles(proof, roles)
+			proof = mergeItemRoles(proof, roles, b.runtimeRoleAnalysis)
 		}
 		return proof
 	}
@@ -71,7 +71,7 @@ func (b *builder) jsonItemsRolesUncached(n hff.Node) *jsonItemRoles {
 		if left == nil && !neutralItemState(b.jsonStoredType(receiver), true) || right == nil && !neutralItemState(b.jsonStoredType(argument), true) {
 			return nil
 		}
-		return mergeItemRoles(left, right)
+		return mergeItemRoles(left, right, b.runtimeRoleAnalysis)
 	case "map":
 		callback, _ := n.Child(1)
 		return b.jsonCallbackItemProvenance(callback, receiver).pair

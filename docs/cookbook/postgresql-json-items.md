@@ -623,6 +623,24 @@ A null value is passed to the callback rather than skipped. An empty list
 returns its seed, and a null receiver returns null before the seed or callback
 is evaluated. Guard-produced no-value propagates through the whole fold.
 
+### Enumerate a folded object's fields
+
+The same typed values can be retained in an object and enumerated afterward.
+Using `typed_events` and its four rows above, these queries keep the `asset`
+Bytes value in a field named `v`:
+
+```hff
+labels:items:filter(pair=>pair[0]="asset"):foldl({"v":null},(acc,pair)=>{"v":pair[1]}):values:map(value=>value:type):json=["bytes"]:json
+labels:items:filter(pair=>pair[0]="asset"):foldr({"v":null},(pair,acc)=>{"v":pair[1]}):items:map(pair=>pair[1]:type):json=["bytes"]:json
+labels:items:filter(pair=>pair[0]="asset"):foldl({},(acc,pair)=>{"v":pair[1]}):keys:json=["v"]:json
+```
+
+All three queries match rows 1 and 2. Rows 3 and 4 have non-object roots, so the
+`items()` receiver returns null and the fold and later enumeration return null.
+The private fold result retains the Bytes type for `values()` and
+`items()`; `keys()` only observes the fixed field name. This does not infer a
+tagged type from an ambiguous stored JSON string.
+
 Typed-tree `in()`, list `contains()`, `unique()`, and `distinct()` can use the
 same recovered value identities as these comparisons. Bounded sorting of
 recovered typed trees is shown in

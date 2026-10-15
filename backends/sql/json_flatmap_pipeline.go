@@ -453,7 +453,11 @@ func (b *builder) deferredListTransform(n hff.Node, name string) (jsonDeferredLi
 
 func (b *builder) jsonFlatmapPipeline(n hff.Node, name string) (expression, bool, error) {
 	receiver, _ := n.Child(0)
-	if b.jsonItemsRoles(receiver) != nil {
+	runtimeEnumeration, err := b.needsRuntimeObjectEnumeration(receiver)
+	if err != nil {
+		return expression{}, true, err
+	}
+	if !runtimeEnumeration && b.jsonItemsRoles(receiver) != nil {
 		return expression{}, false, nil
 	}
 	needed, err := b.needsDeferredFlatmap(receiver)
@@ -462,6 +466,7 @@ func (b *builder) jsonFlatmapPipeline(n hff.Node, name string) (expression, bool
 		// a flatmap or an already-bound deferred callback parameter.
 		needed, err = b.hasDeferredStructSource(receiver)
 	}
+	needed = needed || runtimeEnumeration
 	if err != nil || !needed {
 		return expression{}, needed || err != nil, err
 	}

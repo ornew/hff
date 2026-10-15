@@ -63,7 +63,7 @@ func (b *builder) jsonFoldItemProvenanceUncached(n hff.Node) jsonItemProvenance 
 		successor := jsonItemProvenance{pair: b.jsonItemRoles(body), list: b.jsonItemsRoles(body)}
 		bodyType := b.jsonStoredType(body)
 		restore()
-		next := mergeItemState(seedRoles, seedType, successor, bodyType)
+		next := mergeItemState(seedRoles, seedType, successor, bodyType, b.runtimeRoleAnalysis)
 		if next.pair == nil && next.list == nil {
 			return next
 		}
@@ -79,17 +79,17 @@ func neutralItemState(typ hff.Type, list bool) bool {
 	return typ.Kind() == hff.NullType || list && typ.Kind() == hff.ListType && typ.Element().Kind() == hff.NeverType
 }
 
-func mergeItemState(seed jsonItemProvenance, seedType hff.Type, body jsonItemProvenance, bodyType hff.Type) jsonItemProvenance {
+func mergeItemState(seed jsonItemProvenance, seedType hff.Type, body jsonItemProvenance, bodyType hff.Type, runtime bool) jsonItemProvenance {
 	if (seed.pair != nil || neutralItemState(seedType, false)) && (body.pair != nil || neutralItemState(bodyType, false)) {
-		return jsonItemProvenance{pair: mergeItemRoles(seed.pair, body.pair)}
+		return jsonItemProvenance{pair: mergeItemRoles(seed.pair, body.pair, runtime)}
 	}
 	if (seed.list != nil || neutralItemState(seedType, true)) && (body.list != nil || neutralItemState(bodyType, true)) {
-		return jsonItemProvenance{list: mergeItemRoles(seed.list, body.list)}
+		return jsonItemProvenance{list: mergeItemRoles(seed.list, body.list, runtime)}
 	}
 	return jsonItemProvenance{}
 }
 
-func mergeItemRoles(left, right *jsonItemRoles) *jsonItemRoles {
+func mergeItemRoles(left, right *jsonItemRoles, runtime bool) *jsonItemRoles {
 	if left == nil {
 		return right
 	}
@@ -102,7 +102,7 @@ func mergeItemRoles(left, right *jsonItemRoles) *jsonItemRoles {
 	if itemKeyType(right).Kind() == hff.NeverType || right.value.Kind() == hff.NeverType {
 		return left
 	}
-	if jsonTaggedStringStateAmbiguous(left.object, right.object) {
+	if !runtime && jsonTaggedStringStateAmbiguous(left.object, right.object) {
 		return nil
 	}
 	object := hff.NewUnionType(left.object, right.object)

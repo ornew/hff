@@ -157,7 +157,9 @@ func (b *builder) narrowDeferredValue(n hff.Node, value *jsonDeferredValue, targ
 		if target.Kind() != hff.AnyType {
 			// SQL may evaluate projections from a filtered/inactive branch.
 			// A failed guard must not expose its payload to a narrowed cast.
-			copy.runtime = &jsonRuntimeValue{code: "(CASE WHEN COALESCE(" + test + ",FALSE) THEN " + value.runtime.code + " ELSE " + runtimeNull + " END)", lossy: value.runtime.lossy}
+			runtime := *value.runtime
+			runtime.code = "(CASE WHEN COALESCE(" + test + ",FALSE) THEN " + value.runtime.code + " ELSE " + runtimeNull + " END)"
+			copy.runtime = &runtime
 		}
 		return &copy, nil
 	}

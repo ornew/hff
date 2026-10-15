@@ -185,6 +185,11 @@ func (b *builder) runtimeDistinctDescriptor(n hff.Node) (*jsonDeferredValue, err
 	payload := "(" + cte + " SELECT COALESCE(json_agg(" + l + ".value ORDER BY " + l + ".ord),'[]'::json) FROM " + rows + " AS " + l + " WHERE NOT EXISTS(SELECT 1 FROM " + rows + " AS " + r + " WHERE " + r + ".ord<" + l + ".ord AND " + equal + "))"
 	output := "(CASE WHEN " + code + "->>0='list' THEN " + runtimeNode("list", payload) + " ELSE " + runtimeNull + " END)"
 	resultValue := runtimeValue(probe.project(output), n.Type(), value.present, deferredValueLoss(value))
+	provenance, err := b.runtimeItemProvenance(n)
+	if err != nil {
+		return nil, err
+	}
+	resultValue.runtime.itemListRoles = provenance.list
 	b.adoptDeferredProbe(probe)
 	return resultValue, nil
 }

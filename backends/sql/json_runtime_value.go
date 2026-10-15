@@ -13,6 +13,9 @@ import (
 type jsonRuntimeValue struct {
 	code  string
 	lossy bool
+	// Positional types of a private pair; never a raw-JSON carrier proof.
+	itemRoles     *jsonItemRoles
+	itemListRoles *jsonItemRoles
 }
 
 const runtimeNull = `'["null",null]'::json`
@@ -278,6 +281,7 @@ func (b *builder) runtimeValueList(n hff.Node, value *jsonDeferredValue) jsonDef
 	code := value.runtime.code
 	alias := b.nextAlias()
 	item := runtimeValue(alias+".value", jsonStoredMemberType(sortListType(value.typ), "", false, true), "TRUE", value.runtime.lossy)
+	item.runtime.itemRoles = value.runtime.itemListRoles
 	return jsonDeferredList{null: "(" + code + "->>0<>'list')", present: value.present, arms: []jsonDeferredArm{{
 		from:    "json_array_elements(CASE WHEN " + code + "->>0='list' THEN " + code + "->1 ELSE '[]'::json END) WITH ORDINALITY AS " + alias + "(value,ord)",
 		ordinal: []string{alias + ".ord"}, selected: "TRUE", value: deferredValueParameter(item), parameters: copyJSONParameters(b.parameters),
@@ -344,7 +348,18 @@ func (b *builder) accessRuntimeValue(n hff.Node, value *jsonDeferredValue, index
 		present = both(value.present, "("+tag+"<>'object' OR "+operand.present+")")
 	}
 	stored := jsonStoredMemberType(value.typ, index.key, index.knownKey, n.Kind() != hff.FieldNode)
-	return runtimeValue(b.project("COALESCE("+result+","+runtimeNull+")"), stored, present, value.runtime.lossy), nil
+	if roles := value.runtime.itemRoles; roles != nil && index.knownPosition {
+		position := index.position
+		if position < 0 {
+			position += 2
+		}
+		if position == 0 {
+			stored = intersectItemType(stored, hff.PrimitiveType(hff.StringType))
+		} else if position == 1 {
+			stored = intersectItemType(stored, roles.value)
+		}
+	}
+	return runtimeValue(b.project("COALESCE("+result+","+runtimeNull+")"), stored, present, value.runtime.lossy && deferredTypeMayFloat(stored)), nil
 }
 
 func (b *builder) runtimeMatches(n hff.Node, code string, target hff.Type) (string, error) {

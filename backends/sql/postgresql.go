@@ -43,6 +43,7 @@ type builder struct {
 	identityAliases       map[hff.Node]bool
 	operationKeys         map[hff.Node]string
 	runtimeFoldProbe      bool
+	runtimeRoleAnalysis   bool
 	keepDeferredValues    bool
 }
 

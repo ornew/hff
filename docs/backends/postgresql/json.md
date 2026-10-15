@@ -1381,6 +1381,15 @@ Known Map/Struct carriers also avoid a redundant receiver-category check under
 the declared storage contract. Existing JSON-null normalization preserves
 nullable and guarded-key behavior.
 
+Fold callbacks can also construct objects from recovered typed values. These
+typed fold results retain runtime type identity, so later `values()`, `items()`,
+and `keys()` enumerate the actual fields in `C` collation order without first
+materializing the object as ordinary JSON. `values()` and `items()` retain each
+field's type. `keys()` observes only field names and does not inherit unobserved
+Float-loss state. These consumers preserve the existing null/no-value and
+JSONB numeric metadata rules. This bounded path does not recover ambiguous
+same-position `String|Bytes` types from a stored JSON string.
+
 For a single or nullable schema-known heterogeneous Struct, and for an
 explicit object whose fields have recoverable schemas, `values()` enumerates
 the object's present keys in `C` collation order and retains each field's

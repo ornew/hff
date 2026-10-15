@@ -26,9 +26,12 @@ func (b *builder) packDeferredValue(n hff.Node, value *jsonDeferredValue) (jsonD
 		// Runtime nodes already use a closed recursive carrier. Move the node
 		// intact; the decoder must reference only its new lexical packet scope.
 		lossy := value.runtime.lossy
+		pair, list := value.runtime.itemRoles, value.runtime.itemListRoles
 		return jsonDeferredPacket{code: value.runtime.code, typ: typ,
 			decode: func(b *builder, n hff.Node, code string) (*jsonDeferredValue, error) {
-				return runtimeValue(code, typ, "TRUE", lossy), checkContext(b.ctx)
+				value := runtimeValue(code, typ, "TRUE", lossy)
+				value.runtime.itemRoles, value.runtime.itemListRoles = pair, list
+				return value, checkContext(b.ctx)
 			}}, nil
 	}
 	if value.selection != nil {

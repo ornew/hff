@@ -159,6 +159,9 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 	if err := checkContext(b.ctx); err != nil {
 		return nil, false, err
 	}
+	if value, handled, err := b.deferredRuntimeObjectEnumeration(n); handled || err != nil {
+		return value, handled, err
+	}
 	if value, handled, err := b.deferredStructValues(n); handled || err != nil {
 		return value, handled, err
 	}
@@ -203,6 +206,16 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 		return result, true, err
 	}
 	if method, ok := n.Method(); ok {
+		receiver, _ := n.Child(0)
+		runtimeEnumeration := false
+		switch method.Name() {
+		case "sum", "avg", "min", "max", "find", "distinct", "foldl", "foldr", "map", "filter", "flatmap", "concat":
+			var err error
+			runtimeEnumeration, err = b.needsRuntimeObjectEnumeration(receiver)
+			if err != nil {
+				return nil, true, err
+			}
+		}
 		typedSource := b.keepDeferredValues
 		switch method.Name() {
 		case "sum", "avg", "min", "max", "find", "sort", "distinct":
@@ -221,7 +234,7 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 			receiver, _ := n.Child(0)
 			if typedSource || computedDeferredSource(receiver) {
 				callback, _ := n.Child(1)
-				if _, _, keys := itemKeySource(receiver, callback); callback.Valid() && keys {
+				if _, _, keys := itemKeySource(receiver, callback); callback.Valid() && keys && !runtimeEnumeration {
 					// Key-only aggregates do not need to recover the value slot.
 					return nil, false, nil
 				}
@@ -232,7 +245,7 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 		if builtinListCall(n, "find") {
 			receiver, _ := n.Child(0)
 			needed := typedSource || computedDeferredSource(receiver)
-			if needed && b.jsonItemRoles(n) == nil && b.jsonItemsRoles(n) == nil {
+			if needed && (runtimeEnumeration || b.jsonItemRoles(n) == nil && b.jsonItemsRoles(n) == nil) {
 				value, err := b.deferredFindDescriptor(n)
 				return value, true, err
 			}
@@ -246,14 +259,14 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 			}
 		}
 		if builtinListCall(n, "distinct") && typedSource {
-			if b.jsonItemRoles(n) != nil || b.jsonItemsRoles(n) != nil {
+			if !runtimeEnumeration && (b.jsonItemRoles(n) != nil || b.jsonItemsRoles(n) != nil) {
 				return nil, false, nil
 			}
 			value, err := b.runtimeDistinctDescriptor(n)
 			return value, true, err
 		}
 		if !b.runtimeFoldProbe && (builtinListCall(n, "foldl") || builtinListCall(n, "foldr")) {
-			if b.jsonItemRoles(n) != nil || b.jsonItemsRoles(n) != nil {
+			if !runtimeEnumeration && (b.jsonItemRoles(n) != nil || b.jsonItemsRoles(n) != nil) {
 				// Existing positional proofs have specialized access and callback
 				// lowering. A generic leaf must not erase their per-slot types.
 				return nil, false, nil
@@ -267,7 +280,7 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 			return nil, false, nil
 		}
 		for _, name := range []string{"map", "filter", "flatmap", "concat"} {
-			if builtinListCall(n, name) && b.jsonItemsRoles(n) == nil {
+			if builtinListCall(n, name) && (runtimeEnumeration || b.jsonItemsRoles(n) == nil) {
 				needed, err := b.needsDeferredFlatmap(n)
 				if err != nil {
 					return nil, true, err
@@ -284,7 +297,7 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 						return nil, true, err
 					}
 				}
-				if needed || b.keepDeferredValues {
+				if needed || b.keepDeferredValues || runtimeEnumeration {
 					plan, err := b.deferredList(n)
 					if err != nil {
 						return nil, true, err
@@ -293,7 +306,6 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 				}
 			}
 		}
-		receiver, _ := n.Child(0)
 		value, handled, err := b.deferredDescriptor(receiver)
 		if !handled || err != nil {
 			return nil, handled, err

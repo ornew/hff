@@ -65,7 +65,11 @@ func (b *builder) runtimeFoldDescriptor(n hff.Node, name string) (*jsonDeferredV
 	if name == "foldr" {
 		acc, order = 1, "DESC"
 	}
-	result, steps, lossy, err := b.runtimeFoldBody(callback, parameters, acc, previous+".acc", item+".value", n.Type(), receiver, seed, receiverLoss, deferredValueLoss(deferredLeaf(initial)))
+	provenance, err := b.runtimeItemProvenance(n)
+	if err != nil {
+		return nil, err
+	}
+	result, steps, lossy, err := b.runtimeFoldBody(callback, parameters, acc, previous+".acc", item+".value", n.Type(), receiver, seed, receiverLoss, deferredValueLoss(deferredLeaf(initial)), provenance)
 	if err != nil {
 		return nil, err
 	}
@@ -77,10 +81,12 @@ func (b *builder) runtimeFoldDescriptor(n hff.Node, name string) (*jsonDeferredV
 	b.steps = append(b.steps, "("+cte+" SELECT acc,p FROM "+state+" ORDER BY pos DESC LIMIT 1 OFFSET 0) AS "+final)
 	code := "(CASE WHEN " + plan.null + " THEN " + runtimeNull + " ELSE " + final + ".acc END)"
 	present := both(plan.present, "("+plan.null+" OR "+final+".p)")
-	return runtimeValue(code, n.Type(), present, lossy), nil
+	value := runtimeValue(code, n.Type(), present, lossy)
+	value.runtime.itemRoles, value.runtime.itemListRoles = provenance.pair, provenance.list
+	return value, nil
 }
 
-func (b *builder) runtimeFoldBody(callback hff.Node, parameters []hff.Binding, acc int, previous, item string, typ hff.Type, receiver, seed hff.Node, receiverLoss, seedLoss bool) (expression, []string, bool, error) {
+func (b *builder) runtimeFoldBody(callback hff.Node, parameters []hff.Binding, acc int, previous, item string, typ hff.Type, receiver, seed hff.Node, receiverLoss, seedLoss bool, provenance jsonItemProvenance) (expression, []string, bool, error) {
 	outerSteps, outerPaths, outerParameters, outerMemo := b.steps, b.sharedPaths, b.parameters, b.itemRoleMemo
 	b.steps, b.sharedPaths, b.itemRoleMemo = nil, nil, nil
 	b.parameters = copyJSONParameters(outerParameters)
@@ -100,10 +106,16 @@ func (b *builder) runtimeFoldBody(callback hff.Node, parameters []hff.Binding, a
 		loss = loss || b.losesFloat(body, environment)
 		environment[parameters[acc].ID()] = loss
 	}
+	itemProvenance, err := b.runtimeItemProvenance(receiver)
+	if err != nil {
+		return expression{}, nil, false, err
+	}
 	for i, parameter := range parameters {
 		value := runtimeValue(item, jsonStoredMemberType(sortListType(b.jsonStoredType(receiver)), "", false, true), "TRUE", receiverLoss)
+		value.runtime.itemRoles = itemProvenance.list
 		if i == acc {
 			value = runtimeValue(previous, typ, "TRUE", loss)
+			value.runtime.itemRoles, value.runtime.itemListRoles = provenance.pair, provenance.list
 		}
 		b.parameters[parameter.ID()] = deferredValueParameter(value)
 	}
