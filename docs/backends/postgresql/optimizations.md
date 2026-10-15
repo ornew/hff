@@ -29,6 +29,15 @@ Payload-specific guards and key-only paths keep their existing lowering. See
 [unconstrained item-payload guards](../../optimizations/056-postgresql-item-any-guards.md)
 for the bounded SQL-shape observations; they do not establish runtime speed.
 
+When full validation proves every per-key payload matcher literal false,
+PostgreSQL can omit that matcher `CASE` and its arguments while retaining
+pair/list checks and Build-time key validation. Separately, a compatible
+fixed-point JSON carrier can be reused after guard normalization when its
+original producer proof establishes equivalence. Actual conversions and
+unproven inputs retain normal normalization. See [guard normalization
+reuse](../../optimizations/057-postgresql-guard-normalization.md) for the
+bounded rules and SQL-shape observations; no runtime-speed claim follows.
+
 ### Avoid rebuilding guarded payloads for root observers
 
 After one numeric-containing List/Map type guard, immediate root `type()`,

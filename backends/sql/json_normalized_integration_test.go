@@ -108,7 +108,7 @@ func TestPostgreSQLNormalizedMapJSONMatchesLocal(t *testing.T) {
 				}
 				rows = append(rows, "("+strings.Join(row, ",")+")")
 			}
-			for _, source := range sources {
+			for _, source := range append(append([]string(nil), sources...), normalizedGuardSources(fixture.name)...) {
 				p, err := e.Compile(ctx, source)
 				if err != nil {
 					t.Fatal(fixture.name, source, err)
@@ -181,6 +181,11 @@ func TestPostgreSQLNormalizedMapFloatDecodeFailure(t *testing.T) {
 		`[items:map(x=>x)]=[[null,1.0]]`,
 		`[items:map(x=>x)]:json="[[null,1.0]]"`,
 		`items:map(x=>x):map(y=>y)=[null,1.0]`,
+		`items:map(x=>x):[list[float|null]]=[null,1.0]`,
+		`items:map(x=>x):[list[float|null]]:[list[null]]:exists=false`,
+		`[items:map(x=>x):[list[float|null]]]:json="[[null,1.0]]"`,
+		`items:filter(x=>true):[list[float|null]]=[null,1.0]`,
+		`items:[list[float]]:[list[null|float]]=[null,1.0]`,
 		`[items:map(x=>items:map(y=>y))]=[[[null,1.0],[null,1.0]]]`,
 	} {
 		p, err := e.Compile(ctx, source)
@@ -215,8 +220,8 @@ func TestPostgreSQLNormalizedMapFloatDecodeFailure(t *testing.T) {
 		t.Fatalf("%v\n%s", err, out)
 	}
 	results := strings.Fields(string(out))
-	if len(results) != 24 {
-		t.Fatalf("got %d results, want 24: %s", len(results), out)
+	if len(results) != 54 {
+		t.Fatalf("got %d results, want 54: %s", len(results), out)
 	}
 	for i, result := range results {
 		if result != "t" {

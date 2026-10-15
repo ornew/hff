@@ -6,6 +6,30 @@ import (
 	"github.com/ornew/hff"
 )
 
+// A guard masks its complete input with SQL null; it does not change a value
+// that passes. Reuse an existing representation proof only after validating
+// the ordinary normalization path, including all of its source branches.
+func (b *builder) normalizeGuardedJSON(n hff.Node, input, guarded string, format JSONFormat, source, target hff.Type) (string, error) {
+	if proof, ok := b.normalizedJSONValues[input]; !ok || format != JSON || proof.format != format {
+		return b.jsonGuardResult(n, guarded, format, source, target)
+	}
+	probe := b.validationBuilder()
+	normalized, err := probe.jsonGuardResult(n, guarded, format, source, target)
+	if err != nil {
+		return "", err
+	}
+	reuse, err := b.canReuseNormalizedJSON(input, format, target)
+	if err != nil {
+		return "", err
+	}
+	if reuse {
+		b.copyNormalizedJSON(input, guarded, format)
+		return guarded, nil
+	}
+	b.adoptDeferredProbe(probe)
+	return normalized, nil
+}
+
 // Guard normalization reads only constrained positions. Any keeps its physical
 // representation and does not establish a whole-document normalization proof.
 func (b *builder) jsonGuardResult(n hff.Node, raw string, format JSONFormat, source, target hff.Type) (string, error) {

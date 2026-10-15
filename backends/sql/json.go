@@ -441,7 +441,7 @@ func (b *builder) jsonTypeGuardResult(n hff.Node, value expression, format JSONF
 	present := both(value.present, "COALESCE(("+test+"), FALSE)")
 	guarded := "CASE WHEN " + present + " THEN " + value.code + " ELSE NULL END"
 	if normalize && (target.Kind() == hff.ListType || target.Kind() == hff.MapType || target.Kind() == hff.UnionType) {
-		guarded, err = b.jsonGuardResult(n, guarded, format, source, target)
+		guarded, err = b.normalizeGuardedJSON(n, value.code, guarded, format, source, target)
 		if err != nil {
 			return expression{}, err
 		}

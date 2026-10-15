@@ -177,9 +177,23 @@ func (b *builder) jsonItemValueMatches(n hff.Node, code string, format JSONForma
 		return "TRUE", nil
 	}
 	value := "(" + code + " -> 1)"
-	return b.jsonItemValueOperation(n, code, roles, func(source hff.Type) (string, error) {
-		return b.jsonMatches(n, value, format, source, target)
+	probe := b.validationBuilder()
+	alwaysFalse := true
+	result, err := probe.jsonItemValueOperation(n, code, roles, func(source hff.Type) (string, error) {
+		test, err := probe.jsonMatches(n, value, format, source, target)
+		alwaysFalse = alwaysFalse && test == "FALSE"
+		return test, err
 	})
+	if err != nil {
+		return "", err
+	}
+	// The complete operation still validates every source branch and key.
+	// Discard its SQL state only when even the fallback is literally FALSE.
+	if alwaysFalse {
+		return "FALSE", nil
+	}
+	b.adoptDeferredProbe(probe)
+	return result, nil
 }
 
 // Each key keeps its own value contract even when the homogeneous pair type

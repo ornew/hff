@@ -25,9 +25,9 @@ func (b *builder) rememberNormalizedJSON(code string, format JSONFormat, typ hff
 	b.normalizedJSONValues[code] = normalizedJSON{format: format, typeKey: typ.Key(), stored: typ}
 }
 
-// Only ordinary value projections and SQL/JSON null normalization preserve
-// this proof. Extraction, guards and casts require their own representation
-// and type proof rather than inheriting it from a parent document.
+// Ordinary value projections, SQL/JSON null normalization and whole-value
+// guards with a separately checked fixed-point proof preserve this proof.
+// Extraction and casts cannot inherit it from a parent document.
 func (b *builder) copyNormalizedJSON(source, target string, format JSONFormat) {
 	proof, ok := b.normalizedJSONValues[source]
 	if !ok || proof.format != format {

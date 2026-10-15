@@ -696,6 +696,12 @@ does not change general carrier recovery. A narrow `json()` path can serialize
 the selected values after eligible guarded item pipelines; the next section
 describes that support.
 
+If full validation proves that every per-key payload matcher is literal false,
+PostgreSQL can omit the per-key matcher `CASE` and its arguments. It still
+validates keys at Build time and preserves pair/list null checks and
+empty-list behavior. Mixed, `Any`, and data-dependent matchers keep their
+normal path. Identical nonconstant null-test matchers are not collapsed.
+
 ### Serialize guarded per-key item values
 
 For a schema-known object whose item values have different declared types,
@@ -2051,6 +2057,23 @@ Other operations on a union are supported only when its candidates let the
 backend resolve their result; for example, an `Int|String` profile
 can be serialized with `json()`. This does not make arbitrary union method
 calls available.
+
+PostgreSQL need not rebuild a typed map/filter result when a later guard
+requires the same JSON representation. The guard still checks the values and
+preserves null, no-value, and numeric recovery behavior. This applies only
+when the produced value already has a compatible representation; matching a
+raw column's declared schema to the guard is not enough. Actual conversions
+and unproven raw JSON/JSONB inputs keep normal normalization. JSONB may
+qualify after metadata restoration and a typed map/filter establishes a
+compatible JSON result.
+
+For an `items:List<Float|null>` source, these typed pipelines produce a JSON
+carrier with the guarded representation:
+
+```hff
+items:map(x=>x):[list[float|null]]:json="[]"
+items:filter(x=>x!=null):[list[float|null]]:json="[]"
+```
 
 ### String methods on dynamic JSON values
 
