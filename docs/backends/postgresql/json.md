@@ -711,6 +711,12 @@ literal-list indexing and guards, object field or `get()` access, and `type()`,
 type, ordinary null, and guarded no-value remain distinct through these
 wrappers.
 
+An eligible deferred list can also be indexed before materialization. Its
+indices count retained rows in full ordinal order, including after filters and
+`flatmap()` expansion. Negative integral indexes count from the end; fractional
+and out-of-range indexes produce ordinary null. Selecting an earlier row does
+not hide a no-value produced by another callback in the whole-list map.
+
 This does not recover arbitrary materialized row plans. Indexing or guarding a
 collection whose member origins are ambiguous, general folds, and unrelated
 materialization boundaries still require ordinary JSON recovery and remain

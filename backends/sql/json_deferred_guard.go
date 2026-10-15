@@ -7,6 +7,9 @@ import (
 )
 
 func (b *builder) guardDeferredValue(n hff.Node, value *jsonDeferredValue) (*jsonDeferredValue, error) {
+	if value.selection != nil {
+		return b.mapDeferredSelection(n, value, func(child *jsonDeferredValue) (*jsonDeferredValue, error) { return b.guardDeferredValue(n, child) })
+	}
 	if n.Kind() == hff.GuardNode {
 		exists, err := b.observeDeferredValue(n, value, "exists")
 		if err != nil {
@@ -23,6 +26,13 @@ func (b *builder) guardDeferredValue(n hff.Node, value *jsonDeferredValue) (*jso
 func (b *builder) deferredMatches(n hff.Node, value *jsonDeferredValue, target hff.Type) (string, error) {
 	if err := checkContext(b.ctx); err != nil {
 		return "", err
+	}
+	if value.selection != nil {
+		result, err := b.resolveDeferredSelection(n, value, hff.BoolType, func(child *jsonDeferredValue) (expression, error) {
+			test, err := b.deferredMatches(n, child, target)
+			return expression{test, child.present, hff.BoolType}, err
+		})
+		return result.code, err
 	}
 	if target.Kind() == hff.AnyType {
 		return "TRUE", nil
@@ -117,6 +127,11 @@ func (b *builder) deferredMatches(n hff.Node, value *jsonDeferredValue, target h
 // Matching happens before normalization. Recovering a Float or another typed
 // leaf may produce ordinary null; subsequent guards must inspect that result.
 func (b *builder) narrowDeferredValue(n hff.Node, value *jsonDeferredValue, target hff.Type) (*jsonDeferredValue, error) {
+	if value.selection != nil {
+		return b.mapDeferredSelection(n, value, func(child *jsonDeferredValue) (*jsonDeferredValue, error) {
+			return b.narrowDeferredValue(n, child, target)
+		})
+	}
 	test, err := b.deferredMatches(n, value, target)
 	if err != nil {
 		return nil, err

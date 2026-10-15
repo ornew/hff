@@ -11,10 +11,7 @@ import (
 // An inapplicable runtime branch still undergoes backend validation. Validate
 // its argument in an isolated builder so discarded work cannot leave aliases,
 // cached expressions, or unused bound parameters in the generated statement.
-func (b *builder) validateDeferredIndex(index *deferredAccessIndex) error {
-	if index.lowered != nil || !index.node.Valid() {
-		return checkContext(b.ctx)
-	}
+func (b *builder) validationBuilder() builder {
 	probe := *b
 	probe.args = append([]any(nil), b.args...)
 	probe.steps = append([]string(nil), b.steps...)
@@ -40,6 +37,14 @@ func (b *builder) validateDeferredIndex(index *deferredAccessIndex) error {
 	probe.literalConversions = maps.Clone(b.literalConversions)
 	probe.identityAliases = maps.Clone(b.identityAliases)
 	probe.operationKeys = maps.Clone(b.operationKeys)
+	return probe
+}
+
+func (b *builder) validateDeferredIndex(index *deferredAccessIndex) error {
+	if index.lowered != nil || !index.node.Valid() {
+		return checkContext(b.ctx)
+	}
+	probe := b.validationBuilder()
 	_, err := probe.expression(index.node)
 	return err
 }
@@ -116,6 +121,16 @@ func makeDeferredChoices(choices []jsonDeferredChoice, present string) *jsonDefe
 func (b *builder) accessDeferredIndex(n hff.Node, value *jsonDeferredValue, index *deferredAccessIndex) (*jsonDeferredValue, error) {
 	if err := checkContext(b.ctx); err != nil {
 		return nil, err
+	}
+	if value.selection != nil {
+		if !index.knownKey && (!index.knownPosition || index.node.Kind() != hff.LiteralNode) {
+			if _, err := b.lowerDeferredIndex(index); err != nil {
+				return nil, err
+			}
+		}
+		return b.mapDeferredSelection(n, value, func(child *jsonDeferredValue) (*jsonDeferredValue, error) {
+			return b.accessDeferredIndex(n, child, index)
+		})
 	}
 	if value.choices != nil {
 		if len(value.choices) == 0 {
@@ -224,18 +239,9 @@ func (b *builder) accessDeferredIndex(n hff.Node, value *jsonDeferredValue, inde
 		return makeDeferredChoices(choices, both(value.present, "("+value.list.null+" OR "+operand.present+")")), nil
 	}
 	if value.list != nil {
-		carrier, err := b.materializeDeferredValue(n, value)
-		if err != nil {
-			return nil, err
-		}
-		operand, err := b.lowerDeferredIndex(index)
-		if err != nil {
-			return nil, err
-		}
-		stored := jsonStoredMemberType(value.typ, "", false, true)
-		result, err := b.jsonIndexOperands(n, carrier, operand, JSON, presenceBefore(carrier, operand.present), stored)
-		return deferredLeaf(jsonParameter{typ: stored, direct: &result, lossy: deferredValueLoss(value)}), err
+		return b.selectDeferredValue(n, value, index)
 	}
+
 	if value.leaf != nil {
 		parent, err := b.deferredLeafExpression(n, *value.leaf)
 		if err != nil {
@@ -280,6 +286,9 @@ func (b *builder) accessDeferredIndex(n hff.Node, value *jsonDeferredValue, inde
 func (b *builder) materializeDeferredValue(n hff.Node, value *jsonDeferredValue) (expression, error) {
 	if err := checkContext(b.ctx); err != nil {
 		return expression{}, err
+	}
+	if value.selection != nil {
+		return b.materializeDeferredSelection(n, value)
 	}
 	if value.leaf != nil {
 		result, err := b.deferredLeafExpression(n, *value.leaf)

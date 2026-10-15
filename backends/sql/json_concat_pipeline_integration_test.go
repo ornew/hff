@@ -148,6 +148,10 @@ INSERT INTO events(id,labels) VALUES
 		`labels:items:map(pair=>pair[1]):map(value=>[value,value]):map(values=>values[-1]:type):json=labels:items:map(pair=>pair[1]):map(value=>value:type):json`,
 		`labels:items:map(pair=>pair[1]):map(value=>[value]):map(values=>values:[list[any]]):flatmap(values=>values):map(value=>value:type):json=labels:items:map(pair=>pair[1]):map(value=>value:type):json`,
 		`labels:items:map(pair=>pair[1]):map(value=>[value,null]):map(values=>values:size):all(size=>size=2)`,
+		`labels:items:map(pair=>pair[1]):flatmap(value=>[value])[0]:type="string"`,
+		`labels:items:map(pair=>pair[1]):flatmap(value=>[value])[1]:type="bytes"`,
+		`labels:items:map(pair=>pair[1]):filter(value=>value:exists):flatmap(value=>[value])[labels:size%3-1]:type="string"`,
+		`labels:items:map(pair=>pair[1]!):flatmap(value=>[value])[0]:type="string"`,
 	} {
 		p, err := e.Compile(ctx, source)
 		if err != nil {
@@ -159,6 +163,10 @@ INSERT INTO events(id,labels) VALUES
 		}
 		appendAggregateProfileQuery(t, &script, q, "events ORDER BY id", i)
 		if i < 5 {
+			expected = append(expected, true, true, false, false)
+		} else if i == 11 || i == 13 {
+			expected = append(expected, true, true, true, false)
+		} else if i == 12 || i == 14 {
 			expected = append(expected, true, true, false, false)
 		} else {
 			expected = append(expected, true, true, true, true)

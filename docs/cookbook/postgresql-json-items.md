@@ -307,6 +307,28 @@ labels:items:map(pair=>pair[1]):concat(labels:items:map(pair=>pair[1])):map(valu
 Rows 1 and 2 match. Rows 3 and 4 have null values that make the earlier map
 produce no-value; the later always-false filter does not erase that failure.
 
+### Index deferred list results
+
+An eligible list produced by a deferred item pipeline can be indexed before
+its values are materialized. Indexes count retained outputs in full order,
+after filters and `flatmap()` expansion:
+
+```hff
+labels:items:map(pair=>pair[1]):flatmap(value=>[value])[0]:type="string"
+labels:items:map(pair=>pair[1]):flatmap(value=>[value])[1]:type="bytes"
+labels:items:map(pair=>pair[1]):filter(value=>value:exists):flatmap(value=>[value])[labels:size%3-1]:type="string"
+labels:items:map(pair=>pair[1]!):flatmap(value=>[value])[0]:type="string"
+```
+
+The first query matches rows 1–3, whose first value is the String `app` field;
+the second matches rows 1 and 2, whose second value is Bytes. The third uses a
+dynamic integral index. The object has four fields, so `labels:size%3-1` is
+zero: rows 1–3 match on their first retained String, while row 4 has no values
+after the filter. The last query matches rows 1 and 2. Rows 3 and 4 still fail
+because the whole-list map encounters null values and produces no-value, even
+though the selected index is zero. Out-of-range and fractional indexes remain
+ordinary null; a statically incompatible index remains a compile error.
+
 ## Consume object keys without reading values
 
 When an otherwise supported `items()` consumer uses only the fixed key slot,

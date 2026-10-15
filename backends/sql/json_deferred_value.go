@@ -10,12 +10,13 @@ import (
 // retain their children instead of erasing their HFF identity in JSON. Leaves
 // adapt the existing native, schema-backed JSON and item-slot carriers.
 type jsonDeferredValue struct {
-	typ     hff.Type
-	present string
-	leaf    *jsonParameter
-	list    *jsonDeferredList
-	object  *[]jsonDeferredField
-	choices []jsonDeferredChoice
+	typ       hff.Type
+	present   string
+	leaf      *jsonParameter
+	list      *jsonDeferredList
+	object    *[]jsonDeferredField
+	choices   []jsonDeferredChoice
+	selection *jsonDeferredSelection
 }
 
 type jsonDeferredField struct {
@@ -58,6 +59,14 @@ func deferredValueParameter(value *jsonDeferredValue) jsonParameter {
 }
 
 func deferredValueLoss(value *jsonDeferredValue) bool {
+	if value.selection != nil {
+		for _, arm := range value.selection.arms {
+			if deferredValueLoss(deferredLeaf(arm.value)) {
+				return true
+			}
+		}
+		return deferredValueLoss(value.selection.fallback)
+	}
 	if value.leaf != nil {
 		return value.leaf.lossy || value.leaf.format == JSONB && deferredTypeMayFloat(value.typ)
 	}
@@ -233,6 +242,9 @@ func (b *builder) containsDeferredReference(n hff.Node) bool {
 }
 
 func (b *builder) deferredValueList(n hff.Node, value *jsonDeferredValue) (jsonDeferredList, error) {
+	if value.selection != nil {
+		return b.deferredSelectionList(n, value)
+	}
 	if value.list == nil {
 		if value.choices != nil {
 			plan := jsonDeferredList{null: "TRUE", present: value.present}
@@ -317,7 +329,7 @@ func (b *builder) deferredExpression(n hff.Node) (expression, bool, error) {
 		case "type", "exists", "size", "count", "json", "string":
 			if builtin {
 				receiver, _ := n.Child(0)
-				value, handled, err := b.deferredDescriptor(receiver)
+				value, handled, err := b.deferredObserverReceiver(receiver, method.Name())
 				if handled || err != nil {
 					if err != nil {
 						return expression{}, handled, err
