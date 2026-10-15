@@ -247,6 +247,13 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		if !ok {
 			return expression{}, b.failure(n, "unbound callback parameter")
 		}
+		if parameter.itemSlot != nil {
+			return b.jsonItemSlotValue(n, *parameter.itemSlot)
+		}
+		if parameter.direct != nil {
+			b.markIdentityAlias(n)
+			return *parameter.direct, nil
+		}
 		if parameter.itemKey != "" {
 			return expression{}, b.failure(n, "key-only item parameter cannot be read as a complete pair")
 		}
@@ -310,7 +317,16 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		return expression{column, "TRUE", kind}, nil
 	case hff.BoolNode, hff.NotNode:
 		child, _ := n.Child(0)
-		value, err := b.expression(child)
+		slot, handled, err := b.jsonItemSlot(child)
+		if err != nil {
+			return expression{}, err
+		}
+		var value expression
+		if handled {
+			value, err = b.jsonItemSlotTruth(child, slot)
+		} else {
+			value, err = b.expression(child)
+		}
 		if err != nil {
 			return expression{}, err
 		}
@@ -340,7 +356,7 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		if err != nil {
 			return expression{}, err
 		}
-		if acceptsKind(child.Type(), hff.NullType) {
+		if !b.nonnullScalarInput(child, value) {
 			value.present = both(value.present, "("+value.code+" IS NOT NULL)")
 		}
 		return value, nil
@@ -356,9 +372,9 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 			return expression{}, err
 		}
 		constraint, _ := n.Constraint()
-		// A schema-compatible value already satisfies an identical constraint.
-		// Preserve its existing no-value state without rechecking its contents.
-		if child.Type().Equal(constraint) {
+		// Only an actual non-null input carrier can use static type identity.
+		// Evaluation/decoding can produce null despite a non-null static type.
+		if constraint.Kind() == hff.AnyType || child.Type().Equal(constraint) && (b.nonnullScalarInput(child, value) || b.identicalInputGuard(child)) {
 			return value, nil
 		}
 		if format, structured := b.jsonValues[value.code]; structured {
@@ -370,12 +386,12 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		if acceptNull && acceptValue {
 			test = "TRUE"
 		} else if acceptNull {
-			if acceptsKind(child.Type(), hff.NullType) {
+			if !b.nonnullScalarInput(child, value) {
 				test = "(" + value.code + " IS NULL)"
 			}
 		} else if acceptValue {
 			test = "TRUE"
-			if acceptsKind(child.Type(), hff.NullType) {
+			if !b.nonnullScalarInput(child, value) {
 				test = "(" + value.code + " IS NOT NULL)"
 			}
 		}
@@ -443,7 +459,7 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		}
 		test := " IS NULL"
 		op, _ := n.Operator()
-		if !acceptsKind(child.Type(), hff.NullType) {
+		if b.nonnullScalarInput(child, value) {
 			if op == hff.NotEqual {
 				return boolean(value.present), nil
 			}
@@ -531,13 +547,21 @@ func presenceBefore(earlier expression, later string) string {
 }
 
 func (b *builder) truth(n hff.Node, value expression) string {
+	var typ hff.Type
+	if value.kind == hff.AnyType {
+		typ = b.jsonStoredType(n)
+	}
+	return b.truthWithType(value, typ)
+}
+
+func (b *builder) truthWithType(value expression, typ hff.Type) string {
 	var test string
 	switch value.kind {
 	case hff.AnyType:
 		raw := "(" + value.code + "::json)"
 		text := "(" + raw + " #>> '{}'::text[])"
 		stringTest := text + "<>''"
-		if jsonRootHasKind(b.jsonStoredType(n), hff.DurationType) {
+		if jsonRootHasKind(typ, hff.DurationType) {
 			// Duration(0) is false even though its canonical JSON string is
 			// nonempty. A recoverable union can use the JSON string class for
 			// exactly one tagged HFF family at this position.

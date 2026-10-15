@@ -74,6 +74,11 @@ func (b *builder) jsonCallbackRows(n hff.Node, value expression, format JSONForm
 }
 
 func (b *builder) jsonTransform(n hff.Node, name string) (expression, error) {
+	if name == "map" {
+		if value, handled, err := b.jsonMapPipeline(n, name); handled {
+			return value, err
+		}
+	}
 	receiver, _ := n.Child(0)
 	var value expression
 	var format JSONFormat

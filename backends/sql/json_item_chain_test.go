@@ -60,7 +60,8 @@ func TestJSONItemGuardChainsDoNotEraseEscapingCarriers(t *testing.T) {
 		{`labels:items[0][1]:[string|bytes]:type="string"`, false},
 		{`labels:items[0][1]:[string|bytes]:exists`, false},
 		{`[labels:items[0][1]:[string|bytes]]:map(v=>v:type):size>0`, true},
-		{`labels:items:map(p=>p[1]:[string|bytes]:[any]):map(v=>v:type):size>0`, true},
+		{`labels:items:map(p=>p[1]:[string|bytes]:[any]):map(v=>v:type):size>0`, false},
+		{`labels:items:map(p=>p[1]:[string|bytes]:[any]):concat([]):map(v=>v:type):size>0`, true},
 	} {
 		p, err := e.Compile(ctx, tc.source)
 		if err != nil {

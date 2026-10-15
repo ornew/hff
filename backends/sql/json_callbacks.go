@@ -14,12 +14,17 @@ type jsonParameter struct {
 	itemRoles     *jsonItemRoles
 	itemListRoles *jsonItemRoles
 	itemKey       string
+	direct        *expression
+	itemSlot      *jsonItemSlot
 }
 
 // Callback projections belong to their element subquery. Captures retain the
 // enclosing binding IDs and can reference outer lateral projections.
 func (b *builder) jsonPredicate(n hff.Node, name string) (expression, error) {
 	if value, handled, err := b.relationPredicate(n, name); handled {
+		return value, err
+	}
+	if value, handled, err := b.jsonMapPipeline(n, name); handled {
 		return value, err
 	}
 	receiver, _ := n.Child(0)

@@ -20,6 +20,71 @@ type jsonItemSlot struct {
 
 func (b *builder) jsonItemSlot(n hff.Node) (jsonItemSlot, bool, error) {
 	n, guards := itemSlotOrigin(n)
+	slot, handled, err := b.jsonItemSlotBase(n)
+	if !handled || err != nil {
+		return slot, handled, err
+	}
+	// A pipeline parameter can have sibling observations. Each chain owns
+	// its added constraints, so one guard cannot narrow another consumer.
+	slot.constraints = append([]hff.Type(nil), slot.constraints...)
+	for i := len(guards) - 1; i >= 0; i-- {
+		guard := guards[i]
+		if guard.Kind() == hff.GuardNode {
+			slot.present = both(slot.present, "(NOT "+slot.null()+")")
+			continue
+		}
+		target, _ := guard.Constraint()
+		test, err := b.jsonItemSlotTest(guard, slot, target)
+		if err != nil {
+			return jsonItemSlot{}, true, err
+		}
+		slot.present = both(slot.present, "COALESCE("+test+",FALSE)")
+		if err := b.normalizeItemSlotGuard(guard, &slot, target); err != nil {
+			return jsonItemSlot{}, true, err
+		}
+		slot.constraints = append(slot.constraints, target)
+	}
+	return slot, true, nil
+}
+
+// A guard does not convert an HFF value, but recovering its typed SQL
+// representation can fail to ordinary null (for example an Any Float token
+// outside PostgreSQL's input range). Later guards and map stages must observe
+// that recovered value, not classify the original token again.
+func (b *builder) normalizeItemSlotGuard(n hff.Node, slot *jsonItemSlot, target hff.Type) error {
+	types := itemSlotTypes(slot.roles, slot.key != "FALSE", slot.value != "FALSE", slot.constraints)
+	needed := false
+	for _, source := range types {
+		narrowed := intersectItemType(source, target)
+		if narrowed.Kind() == hff.NeverType {
+			continue
+		}
+		stable, err := b.normalizationPreservesJSON(source, narrowed)
+		if err != nil {
+			return err
+		}
+		needed = needed || !stable
+	}
+	if !needed {
+		return nil
+	}
+	raw, err := b.jsonItemSlotOperation(n, *slot, "'null'::json", func(source hff.Type) (string, error) {
+		typ := intersectItemType(source, target)
+		return b.normalizedComparisonDocument(n, slot.raw, slot.format, typ)
+	})
+	if err != nil {
+		return err
+	}
+	slot.raw, slot.format = b.project(raw), JSON
+	return nil
+}
+
+func (b *builder) jsonItemSlotBase(n hff.Node) (jsonItemSlot, bool, error) {
+	if binding, ok := n.Binding(); ok {
+		if parameter, bound := b.parameters[binding.ID()]; bound && parameter.itemSlot != nil {
+			return *parameter.itemSlot, true, nil
+		}
+	}
 	if n.Kind() != hff.IndexNode {
 		return jsonItemSlot{}, false, nil
 	}
@@ -78,20 +143,6 @@ func (b *builder) jsonItemSlot(n hff.Node) (jsonItemSlot, bool, error) {
 			}
 		}
 		slot.raw = b.project("(" + pair.code + " -> " + position + ")")
-	}
-	for i := len(guards) - 1; i >= 0; i-- {
-		guard := guards[i]
-		if guard.Kind() == hff.GuardNode {
-			slot.present = both(slot.present, "(NOT "+slot.null()+")")
-			continue
-		}
-		target, _ := guard.Constraint()
-		test, err := b.jsonItemSlotTest(guard, slot, target)
-		if err != nil {
-			return jsonItemSlot{}, true, err
-		}
-		slot.present = both(slot.present, "COALESCE("+test+",FALSE)")
-		slot.constraints = append(slot.constraints, target)
 	}
 	return slot, true, nil
 }
@@ -180,36 +231,81 @@ func (b *builder) jsonItemSlotGuardTypes(n hff.Node) ([]hff.Type, bool) {
 	target, _ := n.Constraint()
 	child, _ := n.Child(0)
 	child, guards := itemSlotOrigin(child)
-	if child.Kind() != hff.IndexNode {
-		return nil, false
+	var roles *jsonItemRoles
+	var constraints []hff.Type
+	keyPossible, valuePossible := true, true
+	if binding, ok := child.Binding(); ok && b.parameters[binding.ID()].itemSlot != nil {
+		slot := b.parameters[binding.ID()].itemSlot
+		roles, constraints = slot.roles, slot.constraints
+		keyPossible, valuePossible = slot.key != "FALSE", slot.value != "FALSE"
+	} else {
+		if child.Kind() != hff.IndexNode {
+			return nil, false
+		}
+		parent, _ := child.Child(0)
+		roles = b.jsonItemRoles(parent)
+		if roles == nil {
+			return nil, false
+		}
+		index, _ := child.Child(1)
+		x, literal := itemLiteralIndex(index)
+		keyPossible = !literal || x == 0 || x == -2
+		valuePossible = !literal || x == 1 || x == -1
 	}
-	parent, _ := child.Child(0)
-	roles := b.jsonItemRoles(parent)
-	if roles == nil {
-		return nil, false
+	constraints = append([]hff.Type(nil), constraints...)
+	for i := len(guards) - 1; i >= 0; i-- {
+		if prior, ok := guards[i].Constraint(); ok {
+			constraints = append(constraints, prior)
+		}
 	}
-	index, _ := child.Child(1)
-	x, literal := itemLiteralIndex(index)
+	constraints = append(constraints, target)
+	return itemSlotTypes(roles, keyPossible, valuePossible, constraints), true
+}
+
+func itemSlotTypes(roles *jsonItemRoles, keyPossible, valuePossible bool, constraints []hff.Type) []hff.Type {
 	var types []hff.Type
 	narrow := func(source hff.Type) hff.Type {
-		for i := len(guards) - 1; i >= 0; i-- {
-			if prior, ok := guards[i].Constraint(); ok {
-				source = intersectItemType(source, prior)
-			}
+		for _, constraint := range constraints {
+			source = intersectItemType(source, constraint)
 		}
-		return intersectItemType(source, target)
+		return source
 	}
-	if !literal || x == 0 || x == -2 {
+	if keyPossible {
 		types = append(types, narrow(itemKeyType(roles)))
 	}
-	if !literal || x == 1 || x == -1 {
+	if valuePossible {
 		shape := makeComparisonShape(roles.object)
 		for _, key := range shape.keys {
 			types = append(types, narrow(schemaObjectValue(shape, key)))
 		}
 		types = append(types, narrow(schemaObjectFallback(shape)))
 	}
-	return types, true
+	return types
+}
+
+// Deferred pipeline values can be observed or narrowed without decoding an
+// ambiguous carrier. A general read must still recover one ordinary HFF value.
+func (b *builder) jsonItemSlotValue(n hff.Node, slot jsonItemSlot) (expression, error) {
+	types := itemSlotTypes(slot.roles, slot.key != "FALSE", slot.value != "FALSE", slot.constraints)
+	if err := b.checkJSONStringSchemas(n, hff.NewUnionType(types...)); err != nil {
+		return expression{}, err
+	}
+	typ := itemSlotGuardType(types, hff.PrimitiveType(hff.AnyType))
+	return b.jsonDecode(n, slot.raw, slot.format, typ, slot.present)
+}
+
+func (b *builder) jsonItemSlotTruth(n hff.Node, slot jsonItemSlot) (expression, error) {
+	test, err := b.jsonItemSlotOperation(n, slot, "FALSE", func(source hff.Type) (string, error) {
+		if source.Kind() == hff.NeverType {
+			return "FALSE", nil
+		}
+		value, err := b.jsonDecodeProjected(n, slot.raw, slot.format, source, "TRUE")
+		if err != nil {
+			return "", err
+		}
+		return b.truthWithType(value, source), nil
+	})
+	return boolean(both(slot.present, test)), err
 }
 
 func itemSlotGuardType(types []hff.Type, target hff.Type) hff.Type {

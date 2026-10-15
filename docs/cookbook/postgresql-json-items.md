@@ -174,6 +174,27 @@ Bytes; row 4's null field does not match. An `Any` string does not
 acquire Bytes, Duration, or Timestamp identity from its spelling; identity
 comes from the separate field's schema.
 
+## Continue a selected slot through a map chain
+
+A direct map chain can retain each selected value's field identity through a
+following map or predicate. With the schema and rows above, these queries
+inspect the type of each `items()` value:
+
+```hff
+labels:items:map(pair=>pair[1]):map(value=>value:type):contains("bytes")
+labels:items:map(pair=>pair[1]):any(value=>value:type="bytes")
+labels:items:map(pair=>pair[1]):count(value=>value:type="string")=1
+labels:items:map(pair=>pair[1]!):any(value=>true)
+```
+
+The first two match rows 1 and 2, whose `asset` values are Bytes. The count
+query matches rows 1–3, each of which has one String in its `app` field. The
+last query matches rows 1 and 2; row 3's null `asset` value makes the earlier
+map produce no-value, so the later constant-true predicate cannot hide it.
+This pipeline keeps the selected slot's schema through direct map chains only;
+an intervening filter, concat, flatmap, or fold needs its own recoverable
+carrier proof.
+
 ## Consume object keys without reading values
 
 When an otherwise supported `items()` consumer uses only the fixed key slot,
