@@ -681,9 +681,18 @@ replace the value retained by the filter. If an earlier map produces
 no-value, the entire result remains no-value even when a later filter would
 exclude that row or a later callback would ignore the argument; ordinary null
 remains data. A filter before the first map can also use item roles retained by
-its source. Between map/filter stages, `concat()`, `flatmap()`, and folds end
-this bounded transport. This path does not make an independently ambiguous
-constructed carrier recoverable.
+its source. This selected-slot transport does not pass through general
+`concat()`, `flatmap()`, or fold stages. A bounded exception accepts direct
+`List.concat()` of eligible deferred `items()` map/filter branches when the
+result is consumed immediately by `map()`, `any()`, `all()`, or
+`count(predicate)`. Recursive direct concat leaves are supported and preserve
+branch order; the terminal consumer resolves each branch using its own schema,
+key, type, and Float-loss scope. `json()` can observe the deferred slot using
+its per-key schema. A raw ambiguous value returned by the terminal map still
+fails recovery. If concat returns null, the terminal callback does not
+contribute a failure. This exception does not add general `flatmap()` or fold
+transport, or support extra map/filter stages between concat and its terminal
+consumer.
 
 For eligible `items()` pipelines, PostgreSQL can place row-dependent built-in
 callback work behind a filter's row gate when it depends on the current item;

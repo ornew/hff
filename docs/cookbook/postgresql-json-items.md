@@ -195,7 +195,8 @@ This pipeline keeps the selected slot's schema through direct map/filter
 sequences. Filters can remove rows before later maps, but their guards do not
 change the retained value's type. An earlier map's no-value remains a failure
 even if a later filter would remove that row. These bounded sequences do not
-cross `concat()`, `flatmap()`, or folds.
+cross general `concat()`, `flatmap()`, or folds; direct concat of eligible
+deferred `items()` branches has a narrower case below.
 
 For example, filtering by observed type removes null payloads before the next
 map, while retaining the original field roles:
@@ -211,6 +212,28 @@ matches row 3: filtering removes its null `asset`, and the three remaining
 values are `app`, `elapsed`, and `recorded`. The third matches rows 1 and 2,
 whose mapped values contain no nulls. For rows 3 and 4, the first map's `!`
 produces no-value; the later always-false filter cannot erase that failure.
+
+### Concatenate deferred branches for an immediate consumer
+
+Eligible item-slot branches can be directly concatenated and consumed
+immediately by `map()`, `any()`, `all()`, or `count(predicate)`. Each branch
+keeps its own key and schema while the terminal consumer resolves the selected
+value. Direct nested concat leaves preserve branch order. With the `events`
+schema and rows above, this query maps both branches to their HFF type names
+and compares the resulting ordered list:
+
+```hff
+labels:items:map(pair=>pair[1]):concat(labels:items:map(pair=>pair[1])):map(value=>value:type)=["string","bytes","duration","timestamp","string","bytes","duration","timestamp"]
+```
+
+Rows 1 and 2 match: each branch contributes `string`, `bytes`, `duration`,
+`timestamp` in object-key order, and the branches remain left-to-right. For
+deferred slots, `json()` is also an observer: it serializes each value using
+that key's schema. Returning an unresolved ambiguous value directly from the
+terminal `map()` still fails type recovery. If a concatenated operand is null,
+concat returns null and the terminal callback does not contribute a failure.
+This support does not extend to extra map/filter stages after concat, or to
+general `flatmap()` and fold transport.
 
 ## Consume object keys without reading values
 

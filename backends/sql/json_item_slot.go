@@ -333,6 +333,25 @@ func (b *builder) jsonItemSlotCall(n hff.Node, name string) (expression, bool, e
 	if name == "exists" {
 		return boolean(both(slot.present, "(NOT "+slot.null()+")")), true, nil
 	}
+	if name == "json" {
+		if b.losesFloat(child, nil) {
+			return expression{}, true, b.failure(n, "JSONB cannot preserve signed zero for float serialization")
+		}
+		code, err := b.jsonItemSlotOperation(n, slot, "'null'::text", func(source hff.Type) (string, error) {
+			if source.Kind() == hff.NeverType {
+				return "'null'::text", nil
+			}
+			if needsDynamicJSONEquality(source) {
+				raw, err := b.normalizedComparisonDocument(n, slot.raw, slot.format, source)
+				if err != nil {
+					return "", err
+				}
+				return b.canonicalJSON(b.project(raw)), nil
+			}
+			return b.serializeJSON(n, slot.raw, slot.format, source)
+		})
+		return expression{code, slot.present, hff.StringType}, true, err
+	}
 	typeName, err := b.jsonItemSlotOperation(n, slot, "'null'::text", func(source hff.Type) (string, error) {
 		return b.jsonRuntimeTypeName(n, slot.raw, slot.format, source)
 	})

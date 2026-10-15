@@ -820,7 +820,7 @@ func (b *builder) call(n hff.Node) (expression, error) {
 		}
 		return b.foldedParameter(n, value)
 	}
-	if n.ChildCount() == 1 && (name == "type" || name == "exists") {
+	if n.ChildCount() == 1 && (name == "type" || name == "exists" || name == "json") {
 		if value, handled, err := b.jsonItemSlotCall(n, name); handled {
 			return value, err
 		}
