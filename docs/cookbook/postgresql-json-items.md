@@ -43,6 +43,28 @@ go run ./examples/sql-json-items
 It prints the generated PostgreSQL predicate and arguments, then the Local
 results for the same records. Building the SQL does not connect to a database.
 
+## Guard recovered pair shapes
+
+The fixed roles also let a type guard inspect a pair without treating its two
+positions as one undifferentiated union. With the `Map<Bytes|null>` binding
+above, these guards distinguish the String key from the Bytes-or-null payload:
+
+```hff
+attachments:items[0]:[list[string]]:exists
+attachments:items[0]:[list[bytes]]:exists
+attachments:items:[list[list[string]]]:exists
+```
+
+The first guard is false for a Bytes payload and for a null payload; the second
+is false because the key is String. The outer guard is false for a nonempty
+map, since each pair contains a Bytes-or-null value, and true for an empty map.
+If the binding instead declares `Map<String|null>`, the pair guard
+`attachments:items[0]:[list[string|null]]:exists` admits a null payload, while
+`[list[string]]` does not. Guard results for null receivers follow the target
+type, and no-value remains distinct from ordinary null. These checks require
+the same recoverable source schema as pair-slot access; they do not make
+ambiguous same-category alternatives recoverable.
+
 The backend preserves this positional information when the source `items()`
 result and schema establish the key/value roles. Constant indexes `0` and
 `-2` select the String key; `1` and `-1` select the value. Identity `map()` and

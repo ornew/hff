@@ -3,30 +3,8 @@ package compiler
 import "github.com/ornew/hff/internal/core"
 
 func primitive(k core.TypeKind) core.Type { return core.PrimitiveType(k) }
-func union(types ...core.Type) core.Type {
-	var values []core.Type
-	for _, t := range types {
-		if t.Kind() == core.AnyType {
-			return t
-		}
-		if t.Kind() == core.UnionType {
-			values = append(values, t.Members()...)
-		} else if t.Kind() != core.NeverType {
-			values = append(values, t)
-		}
-	}
-	filtered := values[:0]
-	for _, t := range values {
-		if t.Kind() == core.AnyType {
-			return t
-		}
-		if t.Kind() != core.NeverType {
-			filtered = append(filtered, t)
-		}
-	}
-	return core.NewUnionType(filtered...)
-}
-func nullable(t core.Type) core.Type { return union(t, primitive(core.NullType)) }
+func union(types ...core.Type) core.Type  { return core.UnionTypes(types...) }
+func nullable(t core.Type) core.Type      { return union(t, primitive(core.NullType)) }
 func branches(t core.Type) []core.Type {
 	if t.Kind() == core.UnionType {
 		return t.Members()

@@ -93,12 +93,13 @@ func TestJSONItemUniquenessProofAvoidsPairwiseComparison(t *testing.T) {
 func TestJSONItemUniquenessDoesNotBypassReceiverRecovery(t *testing.T) {
 	ctx := context.Background()
 	for _, test := range []struct {
-		object hff.Type
-		source string
+		object    hff.Type
+		source    string
+		wantError bool
 	}{
-		{schema.MapOf(schema.Union(schema.StringType, schema.BytesType)), `labels:items:unique`},
-		{schema.MapOf(schema.BytesType), `labels:items:map(p=>p:[list]):unique`},
-		{schema.Struct(schema.String("app"), schema.Bytes("z")), `labels:items:filter(p=>p[1]!:exists):unique`},
+		{schema.MapOf(schema.Union(schema.StringType, schema.BytesType)), `labels:items:unique`, true},
+		{schema.MapOf(schema.BytesType), `labels:items:map(p=>p:[list]):unique`, false},
+		{schema.Struct(schema.String("app"), schema.Bytes("z")), `labels:items:filter(p=>p[1]!:exists):unique`, true},
 	} {
 		e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("labels", test.object))), engine.WithCapabilities(capabilities.Standard()))
 		if err != nil {
@@ -110,8 +111,8 @@ func TestJSONItemUniquenessDoesNotBypassReceiverRecovery(t *testing.T) {
 		}
 		for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
 			_, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindJSON(hff.Path{"labels"}, hffsql.Column("records", "labels"), format)))
-			if err == nil {
-				t.Error("uniqueness bypassed unrecoverable receiver", format, test.source)
+			if (err != nil) != test.wantError {
+				t.Errorf("%s %s: error=%v, wantError=%t", format, test.source, err, test.wantError)
 			}
 		}
 	}

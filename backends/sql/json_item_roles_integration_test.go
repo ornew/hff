@@ -76,6 +76,10 @@ func TestPostgreSQLJSONItemKeysMatchLocal(t *testing.T) {
 	runPostgreSQLJSONItemRoleSources(t, itemKeySources)
 }
 
+func TestPostgreSQLJSONItemGuardsMatchLocal(t *testing.T) {
+	runPostgreSQLJSONItemRoleSources(t, itemGuardSources)
+}
+
 func TestPostgreSQLJSONItemKeysWithoutMetadata(t *testing.T) {
 	runPostgreSQLJSONItemRoleSources(t, itemKeyOnlySources, keyOnlyValueFixtures()...)
 }
@@ -211,7 +215,13 @@ func TestPostgreSQLItemPairsPreserveDifferentValueFamilies(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, source := range []string{`left:items=right:items`, `left:items!=right:items`, `left:items[0]=right:items[0]`, `left:items:contains(right:items[0])`} {
+			for _, source := range []string{
+				`left:items=right:items`, `left:items!=right:items`, `left:items[0]=right:items[0]`, `left:items:contains(right:items[0])`,
+				`left:items:[list[list[string|null]]]:concat(right:items:[list[list[string|null]]]):json:exists`,
+				`left:items:[list[list[string|` + left.tag + `|null]]]:concat(right:items:[list[list[string|null]]]):map(p=>p[1]:type):json:exists`,
+				`{"app":"auth","z":left.app}:items[0]:[list[string]][1]:len=4`,
+				`{"app":"auth","z":left.app}:items[1]:[list[string]][1]:exists`,
+			} {
 				p, err := e.Compile(ctx, source)
 				if err != nil {
 					t.Fatal(err)
@@ -223,7 +233,7 @@ func TestPostgreSQLItemPairsPreserveDifferentValueFamilies(t *testing.T) {
 				for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
 					q, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindJSON(hff.Path{"left"}, hffsql.Column("records", "lhs"), format), hffsql.BindJSON(hff.Path{"right"}, hffsql.Column("records", "rhs"), format)))
 					if err != nil {
-						t.Fatal(err)
+						t.Fatal(source, err)
 					}
 					obj := func(v hff.Value) hff.Value { return hff.Object(map[string]hff.Value{"app": v}) }
 					for _, pair := range [][2]hff.Value{{obj(left.first), obj(right.first)}, {obj(hff.Null()), obj(hff.Null())}, {hff.Object(nil), hff.Object(nil)}, {hff.Null(), hff.Null()}} {

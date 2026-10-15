@@ -81,12 +81,12 @@ func (b *builder) jsonConcat(n hff.Node, values []expression, format JSONFormat)
 			continue
 		}
 		child, _ := n.Child(i)
-		schemas[i] = child.Type()
+		schemas[i] = b.jsonStoredType(child)
 		physical, ok := b.jsonValues[value.code]
 		if !ok || value.kind != hff.ListType {
 			return expression{}, b.failure(n, "list concat requires JSON list operands")
 		}
-		document, err := b.comparisonDocument(child, value.code, physical, child.Type())
+		document, err := b.comparisonDocument(child, value.code, physical, schemas[i])
 		if err != nil {
 			return expression{}, err
 		}

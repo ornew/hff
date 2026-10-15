@@ -43,8 +43,20 @@ func (b *builder) jsonStoredType(n hff.Node) hff.Type {
 		child, _ := n.Child(0)
 		return b.jsonStoredType(child)
 	}
+	if n.Kind() == hff.TypeGuardNode {
+		if roles := b.jsonItemRoles(n); roles != nil {
+			return guardedItemCarrier(n.Type(), roles, false)
+		}
+		if roles := b.jsonItemsRoles(n); roles != nil {
+			return guardedItemCarrier(n.Type(), roles, true)
+		}
+	}
 	if method, ok := n.Method(); ok {
 		switch method.Name() {
+		case "concat":
+			if roles := b.jsonItemsRoles(n); roles != nil {
+				return itemProvenanceType(jsonItemProvenance{list: roles})
+			}
 		case "filter", "distinct":
 			// Selection preserves original elements without changing their storage
 			// representation, even when the compiler widened an Any branch.

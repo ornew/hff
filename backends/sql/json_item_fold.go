@@ -1,6 +1,9 @@
 package sql
 
-import "github.com/ornew/hff"
+import (
+	"github.com/ornew/hff"
+	"github.com/ornew/hff/internal/core"
+)
 
 // A role invariant must cover the seed and every successor state. Null is
 // ordinary state; an empty list is neutral only for a list of pairs, never
@@ -93,25 +96,33 @@ func mergeItemRoles(left, right *jsonItemRoles) *jsonItemRoles {
 	if right == nil {
 		return left
 	}
+	if itemKeyType(left).Kind() == hff.NeverType || left.value.Kind() == hff.NeverType {
+		return right
+	}
+	if itemKeyType(right).Kind() == hff.NeverType || right.value.Kind() == hff.NeverType {
+		return left
+	}
 	if jsonTaggedStringStateAmbiguous(left.object, right.object) {
 		return nil
 	}
 	object := hff.NewUnionType(left.object, right.object)
-	return &jsonItemRoles{object: object, value: jsonStoredMemberType(object, "", false, false)}
+	return &jsonItemRoles{object: object,
+		key:   hff.Type(core.UnionTypes(core.Type(itemKeyType(left)), core.Type(itemKeyType(right)))),
+		value: hff.Type(core.UnionTypes(core.Type(left.value), core.Type(right.value)))}
 }
 
 func itemProvenanceKey(proof jsonItemProvenance) string {
 	if proof.pair != nil {
-		return "pair:" + proof.pair.object.Key()
+		return "pair:" + proof.pair.object.Key() + ":" + itemKeyType(proof.pair).Key() + ":" + proof.pair.value.Key()
 	}
 	if proof.list != nil {
-		return "list:" + proof.list.object.Key()
+		return "list:" + proof.list.object.Key() + ":" + itemKeyType(proof.list).Key() + ":" + proof.list.value.Key()
 	}
 	return ""
 }
 
 func itemPairType(roles *jsonItemRoles) hff.Type {
-	return hff.NewListType(hff.NewUnionType(hff.PrimitiveType(hff.StringType), roles.value))
+	return hff.NewListType(hff.Type(core.UnionTypes(core.Type(itemKeyType(roles)), core.Type(roles.value))))
 }
 
 func itemProvenanceType(proof jsonItemProvenance) hff.Type {

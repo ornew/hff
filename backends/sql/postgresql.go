@@ -377,6 +377,11 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 			}
 		}
 		value.present = both(value.present, test)
+		if value.kind == hff.NullType {
+			// A null-only value needs no carrier conversion, including a
+			// failed guard whose contextual target is a list or object.
+			return value, nil
+		}
 		kind, ok := computedScalarKind(n.Type())
 		if !ok {
 			return expression{}, b.failure(n, "SQL type guards require a supported scalar result")

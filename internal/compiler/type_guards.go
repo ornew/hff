@@ -72,49 +72,8 @@ func (c *compiler) typeExpression(expr syntax.TypeExpr) (core.Type, error) {
 	return core.Type{}, c.failure(core.TypeError, expr, "invalid type expression")
 }
 
-// intersection preserves schema information guaranteed by both contracts. Empty
-// collections remain possible even when their element contracts are disjoint.
 func intersection(actual, target core.Type) core.Type {
-	if actual.Kind() == core.AnyType {
-		return target
-	}
-	if target.Kind() == core.AnyType {
-		return actual
-	}
-	var results []core.Type
-	for _, a := range branches(actual) {
-		for _, t := range branches(target) {
-			if a.Kind() == core.ListType && t.Kind() == core.ListType {
-				results = append(results, core.NewListType(intersection(a.Element(), t.Element())))
-				continue
-			}
-			if isObject(a) && t.Kind() == core.MapType {
-				if a.Kind() == core.MapType {
-					results = append(results, core.NewMapType(intersection(a.Element(), t.Element())))
-					continue
-				}
-				var fields []core.Field
-				valid := true
-				for _, field := range a.Fields() {
-					field.Optional = field.Optional || permitsNull(field.Type)
-					field.Type = intersection(field.Type, t.Element())
-					if field.Type.Kind() == core.NeverType && !field.Optional {
-						valid = false
-						break
-					}
-					fields = append(fields, field)
-				}
-				if valid {
-					results = append(results, core.NewStructType(fields...))
-				}
-				continue
-			}
-			if a.Kind() == t.Kind() {
-				results = append(results, a)
-			}
-		}
-	}
-	return union(results...)
+	return core.IntersectTypes(actual, target)
 }
 func guardedType(actual, target core.Type) core.Type {
 	narrowed := intersection(actual, target)

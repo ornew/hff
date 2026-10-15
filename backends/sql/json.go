@@ -421,7 +421,10 @@ func nonnullJSONType(t hff.Type) hff.Type {
 func (b *builder) jsonTypeGuard(n hff.Node, value expression, format JSONFormat, source, target hff.Type) (expression, error) {
 	receiver, _ := n.Child(0)
 	source = b.jsonStoredType(receiver)
-	test, err := b.jsonMatches(n, value.code, format, source, target)
+	test, handled, err := b.jsonItemGuard(n, value.code, format, receiver, target)
+	if !handled {
+		test, err = b.jsonMatches(n, value.code, format, source, target)
+	}
 	if err != nil {
 		return expression{}, err
 	}

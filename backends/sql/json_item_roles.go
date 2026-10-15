@@ -4,6 +4,7 @@ import (
 	"math"
 
 	"github.com/ornew/hff"
+	"github.com/ornew/hff/internal/core"
 )
 
 // items() produces two-element [String key, value] lists. Keep that positional
@@ -12,6 +13,7 @@ import (
 type jsonItemRoles struct {
 	value  hff.Type
 	object hff.Type
+	key    hff.Type
 }
 
 // Only operations retaining complete source pairs may retain their roles.
@@ -25,9 +27,14 @@ func (b *builder) jsonItemsRolesUncached(n hff.Node) *jsonItemRoles {
 			return parameter.itemListRoles
 		}
 	}
-	if n.Kind() == hff.GuardNode || n.Kind() == hff.TypeGuardNode {
+	if n.Kind() == hff.GuardNode {
 		child, _ := n.Child(0)
 		return b.jsonItemsRoles(child)
+	}
+	if n.Kind() == hff.TypeGuardNode {
+		child, _ := n.Child(0)
+		constraint, _ := n.Constraint()
+		return narrowItemRoles(b.jsonItemsRoles(child), itemGuardElement(constraint))
 	}
 	if n.Kind() == hff.ListNode && n.ChildCount() > 0 {
 		var proof *jsonItemRoles
@@ -88,9 +95,13 @@ func (b *builder) jsonItemRolesUncached(n hff.Node) *jsonItemRoles {
 		}
 	}
 	switch n.Kind() {
-	case hff.GuardNode, hff.TypeGuardNode:
+	case hff.GuardNode:
 		child, _ := n.Child(0)
 		return b.jsonItemRoles(child)
+	case hff.TypeGuardNode:
+		child, _ := n.Child(0)
+		constraint, _ := n.Constraint()
+		return narrowItemRoles(b.jsonItemRoles(child), constraint)
 	case hff.IndexNode:
 		parent, _ := n.Child(0)
 		return b.jsonItemsRoles(parent)
@@ -123,9 +134,9 @@ func (b *builder) jsonItemSlotType(parent, index hff.Node) (hff.Type, bool) {
 	}
 	switch x {
 	case 0:
-		return hff.NewUnionType(hff.PrimitiveType(hff.StringType), null), true
+		return hff.Type(core.UnionTypes(core.Type(itemKeyType(roles)), core.Type(null))), true
 	case 1:
-		return hff.NewUnionType(roles.value, null), true
+		return hff.Type(core.UnionTypes(core.Type(roles.value), core.Type(null))), true
 	default:
 		return null, true
 	}

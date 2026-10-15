@@ -609,9 +609,19 @@ String, and the backend can use each actual key for per-field equality and
 serialization. Extracting slot `[1]` from the combined pairs loses that
 key-dependent dispatch: if its possible values include both String and tagged
 types such as Bytes, Duration, or Timestamp, value-slot extraction may be
-rejected. A type guard on the whole pair or list also uses the generic inferred
-list shape and may be rejected for tagged element unions. The ordinary null
-guard `!` remains supported.
+rejected. Guards on recovered pairs and pair lists use the declared key/value
+roles. For example, a `Map<Bytes|null>` pair matches `[list[string|null]]`
+only when its payload is null. A Bytes payload does not match that guard.
+Neither payload matches `[list[string]]`, and no pair matches `[list[bytes]]`
+because its key is String. An outer `[list[list[string]]]`
+guard checks every pair and therefore passes for an empty pair list. Null
+receivers follow the guard's target type, while guard-produced no-value remains
+distinct from ordinary null. The ordinary null guard `!` remains supported.
+
+Role-aware guards still require a source whose element identity is recoverable
+from its schema and stored representation. Same-category alternatives such as
+String versus Bytes without a distinguishing representation remain
+unsupported, as can dynamic tuple slots and unguarded mixed payload extraction.
 
 The [runnable items example](https://github.com/ornew/hff/tree/main/examples/sql-json-items)
 uses a `Map<Bytes|null>` to select a named nonempty attachment. Its key and
