@@ -283,7 +283,7 @@ func (b *builder) jsonIndex(n hff.Node) (expression, error) {
 
 func (b *builder) jsonIndexOperands(n hff.Node, value, index expression, format JSONFormat, present string, stored hff.Type) (expression, error) {
 	if index.kind == hff.AnyType {
-		return b.jsonDynamicIndex(n, value, index, format, present)
+		return b.jsonDynamicIndex(n, value, index, format, present, stored)
 	}
 	var code string
 	switch value.kind {

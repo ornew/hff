@@ -265,7 +265,7 @@ func (b *builder) accessDeferredIndex(n hff.Node, value *jsonDeferredValue, inde
 					return nil, err
 				}
 				if needed {
-					return b.accessDeferredStruct(n, value, parent, format, typ, index)
+					return b.accessDeferredStructRoot(n, value, parent, format, typ, index)
 				}
 			}
 		}

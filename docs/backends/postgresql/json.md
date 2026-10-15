@@ -1391,6 +1391,20 @@ from string contents, and overlapping Struct unions or same-position
 alternatives remain unsupported when their stored representations are
 ambiguous.
 
+A category-disjoint root union can also retain field types when one alternative
+is a schema-known Struct and the other alternatives have distinct JSON
+categories, such as `Struct|Int|List<Bytes>|Null`. PostgreSQL selects the
+object branch from the stored root category, so `values()` and dynamic
+`get(key)` can preserve the selected field's declared type without decoding
+unrelated root alternatives. Non-object roots return null for these object
+operations, and `get()` does not evaluate its key for those roots. Dynamic
+bracket access also supports list alternatives and uses the declared element
+type; it evaluates the index for every non-null root. An incompatible root, a
+null index, or a wrong-family index produces ordinary null, while a no-value
+index remains no-value. This does not make same-position `String|Bytes`
+fields, overlapping Struct alternatives, or tagged identities inside `Any`
+recoverable.
+
 `items()` also normalizes the complete source object before constructing pairs,
 but PostgreSQL retains the String key and each value's declared role in the
 produced native JSON. That provenance supports per-key equality and

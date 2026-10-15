@@ -136,6 +136,72 @@ its declared String type. The shape checks do not make `opaque` recoverable,
 and an `Any` string still does not imply Bytes. Operations that require
 numeric distinctions lost by JSONB still need type metadata.
 
+## Preserve field types in an object alternative
+
+A schema-known object branch can retain each field's type even when the root
+JSON value may instead be an integer, a byte list, or null:
+
+```sql
+CREATE TABLE typed_events (
+    id integer PRIMARY KEY,
+    labels jsonb
+);
+
+INSERT INTO typed_events VALUES
+    (1, '{"app":"auth","asset":"YQ=="}'),
+    (2, '{"app":"billing","asset":"Yg=="}'),
+    (3, '0'),
+    (4, '["YQ=="]');
+```
+
+Declare the alternatives by their JSON categories:
+
+```go
+objectType := schema.Struct(
+	schema.String("app"),
+	schema.Bytes("asset"),
+)
+labelsType := schema.NullableType(schema.Union(
+	objectType,
+	schema.IntType,
+	schema.ListOf(schema.BytesType),
+))
+
+e, err := engine.New(
+	engine.WithSchema(schema.Struct(schema.Field("labels", labelsType))),
+	engine.WithCapabilities(capabilities.Standard()),
+)
+if err != nil {
+	return err
+}
+```
+
+Compile and build each query with `labels` bound to
+`hffsql.Column("typed_events", "labels")` using `hffsql.BindJSON` and the
+`hffsql.JSONB` format. These queries match rows 1 and 2:
+
+```hff
+labels:values:map(value=>value:type):json=["string","bytes"]:json
+["app","asset"]:map(key=>labels:get(key)):map(value=>value:type):json=["string","bytes"]:json
+```
+
+The first enumerates the two declared fields. The second looks up fields with
+keys produced at runtime and preserves each selected field's declared type.
+Rows 3 and 4 have non-object roots, so the object operations return null and do
+not match. A dynamic numeric index can also select a list alternative; this
+query matches row 4 only:
+
+```hff
+[0]:any(key=>labels[key]:[bytes]:base64="YQ==")
+```
+
+The index expression is evaluated for every non-null root. An incompatible
+root, a null index, or a wrong-family index returns ordinary null; an index
+expression that produces no-value remains no-value. In contrast,
+`get()` skips its key expression when the root is not an object. This relies on
+the declared, category-disjoint alternatives and does not recover an
+ambiguous field or infer a tagged type from a string inside `Any`.
+
 ## Guard recovered pair shapes
 
 The fixed roles also let a type guard inspect a pair without treating its two

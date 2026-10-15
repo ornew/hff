@@ -2,10 +2,11 @@ package sql
 
 import "github.com/ornew/hff"
 
-// Only a single declared Struct (optionally nullable) identifies each key's
-// schema. A union of overlapping Structs or a homogeneous Map needs a separate
-// discriminator and cannot acquire one from the spelling of its JSON values.
+// A single declared Struct identifies each object's keys even when disjoint
+// JSON root categories are also allowed. Overlapping object alternatives and
+// Any cannot acquire a discriminator from the spelling of their JSON values.
 func deferredStructType(typ hff.Type) (hff.Type, bool) {
+	typ = jsonObjectType(typ)
 	if typ.Kind() == hff.StructType {
 		return typ, true
 	}
@@ -23,6 +24,45 @@ func deferredStructType(typ hff.Type) (hff.Type, bool) {
 		result = member
 	}
 	return result, result.Kind() == hff.StructType
+}
+
+// Mixed roots retain separate object and list schemas. In particular, an Any
+// bracket key may select either a Struct field or a numeric List position;
+// object.get instead skips its key when the receiver is not an object.
+func (b *builder) accessDeferredStructRoot(n hff.Node, value *jsonDeferredValue, parent expression, format JSONFormat, typ hff.Type, index *deferredAccessIndex) (*jsonDeferredValue, error) {
+	if parent.kind == hff.StructType {
+		return b.accessDeferredStruct(n, value, parent, format, typ, index)
+	}
+	operand, err := b.lowerDeferredIndex(index)
+	if err != nil {
+		return nil, err
+	}
+	class := string(format) + "_typeof(" + parent.code + ")"
+	object := "(" + class + "='object')"
+	objectParent := expression{code: "(CASE WHEN " + object + " THEN " + parent.code + " ELSE NULL::" + string(format) + " END)", present: parent.present, kind: hff.StructType}
+	fields, err := b.accessDeferredStruct(n, value, objectParent, format, typ, index)
+	if err != nil {
+		return nil, err
+	}
+	choices := []jsonDeferredChoice{{object, fields}}
+	present := parent.present
+	method, call := n.Method()
+	if !call || method.Name() != "get" {
+		present = presenceBefore(parent, operand.present)
+		list := containsListType(value.typ)
+		numericKey := operand.kind == hff.AnyType || operand.kind == hff.IntType || operand.kind == hff.FloatType
+		if numericKey && makeComparisonShape(list).list {
+			array := "(" + class + "='array')"
+			arrayParent := expression{code: "(CASE WHEN " + array + " THEN " + parent.code + " ELSE NULL::" + string(format) + " END)", present: parent.present, kind: hff.AnyType}
+			stored := jsonStoredMemberType(list, "", false, true)
+			selected, err := b.jsonIndexOperands(n, arrayParent, operand, format, presenceBefore(arrayParent, operand.present), stored)
+			if err != nil {
+				return nil, err
+			}
+			choices = append(choices, jsonDeferredChoice{array, deferredLeaf(jsonParameter{typ: stored, direct: &selected, format: format, lossy: value.leaf.lossy && jsonHasFloat(stored)})})
+		}
+	}
+	return makeDeferredChoices(choices, present), nil
 }
 
 func (b *builder) deferredStructAlternatives(typ hff.Type) (bool, error) {

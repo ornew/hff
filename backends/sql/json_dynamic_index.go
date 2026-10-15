@@ -5,7 +5,7 @@ import "github.com/ornew/hff"
 // Dynamic index arguments retain their declared numeric/string identity.
 // Incompatible runtime values return ordinary null; explicit guards retain
 // their separate no-value presence. Numeric casts remain within their family.
-func (b *builder) jsonDynamicIndex(n hff.Node, receiver, index expression, format JSONFormat, present string) (expression, error) {
+func (b *builder) jsonDynamicIndex(n hff.Node, receiver, index expression, format JSONFormat, present string, stored hff.Type) (expression, error) {
 	argument, _ := n.Child(1)
 	raw, physical, err := b.jsonRepresentation(argument, index)
 	if err != nil {
@@ -32,5 +32,5 @@ func (b *builder) jsonDynamicIndex(n hff.Node, receiver, index expression, forma
 	}
 	key := "(" + raw + " #>> '{}'::text[])"
 	code += " WHEN " + both(class+"='object'", b.jsonStringMatch(argument, raw, physical)) + " THEN " + receiver.code + " -> " + key + "::text ELSE NULL::" + string(format) + " END"
-	return b.jsonDecode(n, "("+code+")", format, b.jsonStoredType(n), present)
+	return b.jsonDecode(n, "("+code+")", format, stored, present)
 }
