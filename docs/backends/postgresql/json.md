@@ -682,19 +682,20 @@ no-value, the entire result remains no-value even when a later filter would
 exclude that row or a later callback would ignore the argument; ordinary null
 remains data. A filter before the first map can also use item roles retained by
 its source. A bounded path accepts direct list `concat()` calls on eligible
-deferred `items()` branches followed by an elementwise `map()`/`filter()` chain
-and a terminal `map()`, `any()`, `all()`, or `count(predicate)`. This includes
-concatenating complete item pairs and selecting their slot in a later map.
-Recursive direct concat leaves preserve branch order, and each arm retains its
-own schema, key, type, and Float-loss scope. `json()` can observe a deferred
-slot using its per-key schema; an unresolved ambiguous value returned by the
-terminal map still fails recovery. An already-recovered inner map pipeline can
-also be a concat input; an unresolved inner result still fails recovery. A
-no-value from an input map remains a failure even when a later filter excludes
-that row. A null concat result masks failures from all post-concat maps;
-filters do not narrow retained values, and ordinary null remains data. This
-path does not add general `flatmap()` or fold transport, or support other
-materialization boundaries.
+deferred `items()` branches, with elementwise `map()`/`filter()` stages between
+concat levels and a terminal `map()`, `any()`, `all()`, or `count(predicate)`.
+This includes concatenating complete item pairs and selecting their slot in a
+later map. Recursive concat leaves preserve branch order, and each arm retains
+its own schema, key, type, and Float-loss scope. Intermediate slot values may
+remain deferred within this tree; an unresolved value returned by the terminal
+map still fails recovery. An already-recovered inner map pipeline can also be
+a concat input, while an unresolved inner result must be recovered by the
+surrounding tree. A no-value from an input map remains a failure even if a
+later filter excludes that row or a later concat operand is null. A null
+concat result masks failures from maps after that concat. Filters do not
+narrow retained values, and ordinary null remains data. This path does not
+add general `flatmap()` or fold transport, or support other materialization
+boundaries.
 
 For eligible `items()` pipelines, PostgreSQL can place row-dependent built-in
 callback work behind a filter's row gate when it depends on the current item;

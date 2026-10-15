@@ -138,6 +138,7 @@ INSERT INTO events(id,labels) VALUES
 	var labels []string
 	for i, source := range []string{
 		joined + `:map(value=>value:type)=` + types,
+		joined + `:map(value=>value:[any]):concat(labels:items:map(pair=>pair[1])):map(value=>value:type)=["string","bytes","duration","timestamp","string","bytes","duration","timestamp","string","bytes","duration","timestamp"]`,
 		joined + `:filter(value=>value:type!="null"):map(value=>value:[any]):map(value=>value:type)=` + types,
 		joined + `:map(value=>value!):filter(value=>false):all(value=>true)`,
 	} {

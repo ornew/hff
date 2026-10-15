@@ -40,6 +40,10 @@ func (b *builder) jsonConcatMapPipeline(n hff.Node, name string) (expression, bo
 		arms = append(arms, jsonPipelineArm{source, stages})
 	}
 	collect(receiver)
+	tree, nested := jsonConcatTree(receiver)
+	if nested {
+		arms = tree.arms(nil)
+	}
 	for i := range arms {
 		arms[i].stages = append(arms[i].stages, shared...)
 	}
@@ -55,24 +59,40 @@ func (b *builder) jsonConcatMapPipeline(n hff.Node, name string) (expression, bo
 	streams := make([]jsonPipelineRows, len(arms))
 	var stored []hff.Type
 	var definitions, unions, nulls []string
-	for i, arm := range arms {
-		streams[i].boundary = len(arm.stages) - len(shared)
-		if _, err := b.jsonMapPipelineFrom(n, name, arm.source, arm.stages, &streams[i]); err != nil {
+	if nested {
+		tree.stages = shared
+		if err := tree.prepare(b, n, name, arms, streams); err != nil {
 			return expression{}, true, err
 		}
-	}
-	for stage := 0; stage <= len(shared); stage++ {
-		for i := range streams {
-			if streams[i].advance != nil {
-				if err := streams[i].advance(); err != nil {
-					return expression{}, true, err
+	} else {
+		for i, arm := range arms {
+			streams[i].boundary = len(arm.stages) - len(shared)
+			if _, err := b.jsonMapPipelineFrom(n, name, arm.source, arm.stages, &streams[i]); err != nil {
+				return expression{}, true, err
+			}
+		}
+		for stage := 0; stage < len(shared); stage++ {
+			for i := range streams {
+				if streams[i].advance != nil {
+					if err := streams[i].advance(); err != nil {
+						return expression{}, true, err
+					}
 				}
 			}
 		}
 	}
 	for i := range streams {
+		if streams[i].advance != nil {
+			if err := streams[i].advance(); err != nil {
+				return expression{}, true, err
+			}
+		}
+	}
+	rowAliases := make([]string, len(streams))
+	for i := range streams {
 		input := &streams[i]
 		rows := b.nextAlias()
+		rowAliases[i] = rows
 		if input.query == "" {
 			carrier := "NULL::boolean"
 			if name == "map" {
@@ -89,10 +109,15 @@ func (b *builder) jsonConcatMapPipeline(n hff.Node, name string) (expression, bo
 		nulls = append(nulls, "("+input.value.code+" IS NULL)")
 	}
 	inputNull := "(" + strings.Join(nulls, " OR ") + ")"
+	inputPresent := ordinaryPresence(inputs)
+	if nested {
+		state := tree.state(b, streams, rowAliases, &definitions)
+		inputNull, inputPresent = state.null, state.present
+	}
 	joined, output := b.nextAlias(), b.nextAlias()
 	definitions = append(definitions, joined+" AS MATERIALIZED ("+strings.Join(unions, " UNION ALL ")+")")
 	terminalPresent := "(SELECT COALESCE(bool_and(p),TRUE) FROM " + joined + ")"
-	present := both(ordinaryPresence(inputs), "("+inputNull+" OR "+terminalPresent+")")
+	present := both(inputPresent, "("+inputNull+" OR "+terminalPresent+")")
 	var code string
 	kind := hff.BoolType
 	switch name {

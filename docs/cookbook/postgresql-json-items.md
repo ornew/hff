@@ -248,6 +248,17 @@ a failure even if later filtering excludes that row. If concat returns null,
 it masks failures from all later maps; filters do not narrow their retained
 values, and ordinary null remains data.
 
+A map may also appear between two concat levels. The inner mapped values remain
+recoverable within the enclosing tree, while the final map emits ordinary type
+names:
+
+```hff
+labels:items:map(pair=>pair[1]):concat(labels:items:map(pair=>pair[1])):map(value=>value:[any]):concat(labels:items:map(pair=>pair[1])):map(value=>value:type)=["string","bytes","duration","timestamp","string","bytes","duration","timestamp","string","bytes","duration","timestamp"]
+```
+
+Rows 1 and 2 match. The values from the first concat level stay ahead of the
+third deferred branch, and each branch keeps its own item-slot schema.
+
 This map/filter transport does not extend to general `flatmap()` or fold
 carriers, or other materialization boundaries. A later filter cannot erase a
 no-value produced by an earlier map:

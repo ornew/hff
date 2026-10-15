@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/ornew/hff"
@@ -26,11 +27,13 @@ func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, er
 // input state excludes callbacks after concat: a null concat operand prevents
 // those callbacks from running, but must not erase an input map's no-value.
 type jsonPipelineRows struct {
-	query    string
-	advance  func() error
-	boundary int
-	value    expression
-	stored   hff.Type
+	query      string
+	tracked    bool
+	checkpoint func() string
+	advance    func() error
+	boundary   int
+	value      expression
+	stored     hff.Type
 }
 
 func (b *builder) jsonMapPipelineFrom(n hff.Node, name string, source hff.Node, stages []hff.Node, input *jsonPipelineRows) (expression, error) {
@@ -69,6 +72,15 @@ func (b *builder) jsonMapPipelineFrom(n hff.Node, name string, source hff.Node, 
 		lossy: b.losesFloat(source, nil), itemRoles: b.jsonItemsRoles(source)}
 	valid, selected := "TRUE", "TRUE"
 	inputValid := "TRUE"
+	var checkpoints []string
+	if input != nil {
+		input.checkpoint = func() string {
+			column := "p" + fmt.Sprint(len(checkpoints))
+			checkpoints = append(checkpoints, valid+" AS "+column)
+			valid = "TRUE"
+			return column
+		}
+	}
 	var result expression
 	var body hff.Node
 	terminalRaw := ""
@@ -77,6 +89,30 @@ func (b *builder) jsonMapPipelineFrom(n hff.Node, name string, source hff.Node, 
 		for i := start; i < len(callbacks); i++ {
 			callback := callbacks[i]
 			if input != nil && i == stop {
+				if input.tracked {
+					// Tree checkpoints name state rather than copying ever-longer
+					// validity and selection prefixes into each ancestor's rows.
+					if valid != "TRUE" {
+						valid = b.project(valid)
+					}
+					if selected != "TRUE" {
+						selected = b.project(selected)
+					}
+					if parameter.itemSlot != nil {
+						copy := *parameter.itemSlot
+						if copy.present != "TRUE" {
+							copy.present = b.project(copy.present)
+						}
+						parameter.itemSlot = &copy
+					}
+					if parameter.direct != nil {
+						copy := *parameter.direct
+						if copy.present != "TRUE" {
+							copy.present = b.project(copy.present)
+						}
+						parameter.direct = &copy
+					}
+				}
 				// Prepare every concat input first, then advance all arms one
 				// shared callback at a time. A later stage in an early arm must
 				// not hide an earlier stage's Build failure in another arm.
@@ -223,7 +259,11 @@ func (b *builder) jsonMapPipelineFrom(n hff.Node, name string, source hff.Node, 
 			if selected != "TRUE" {
 				keep = selected
 			}
-			input.query = "SELECT " + alias + ".ord AS ord," + raw + " AS v," + valid + " AS p," + inputValid + " AS ip," + keep + " AS keep FROM " + from
+			extra := ""
+			if len(checkpoints) > 0 {
+				extra = "," + strings.Join(checkpoints, ",")
+			}
+			input.query = "SELECT " + alias + ".ord AS ord," + raw + " AS v," + valid + " AS p," + inputValid + " AS ip," + keep + " AS keep" + extra + " FROM " + from
 			input.value, input.stored = value, stored
 			input.advance = nil
 			return expression{}, nil

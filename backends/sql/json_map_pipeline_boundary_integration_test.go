@@ -42,6 +42,11 @@ func TestPostgreSQLItemMapPipelineFloatBoundaries(t *testing.T) {
 		}{
 			{`labels:items:map(p=>p[1]:[float]):filter(v=>v=null):map(v=>v:type):contains("null")`, false, invalid},
 			{`labels:items:map(p=>p[1]):concat([]):map(v=>v:[float]):filter(v=>v=null):map(v=>v:type):contains("null")`, false, invalid},
+			{`labels:items:map(p=>p[1]):concat([]):map(v=>v:[float]):concat([]):map(v=>v:type):contains("null")`, false, invalid},
+			{`labels:items:map(p=>p[1]):concat([]):map(v=>v:[float]):map(v=>v:[float]):filter(v=>false):concat(null):all(v=>true)=null`, false, !invalid},
+			{`labels:items:map(p=>p[1]):concat([]):map(v=>v:[float]):filter(v=>false):concat([]):map(v=>v!):all(v=>true)`, false, true},
+			{`labels:items:map(p=>p[1]):concat([]):map(v=>v:[float]):map(v=>v:[float]):filter(v=>false):concat([]):all(v=>true)`, false, !invalid},
+			{`labels:items:map(p=>p[1]):concat([]):map(v=>v:[list[float]]):concat([]):map(v=>v[0]:type):contains("null")`, true, invalid},
 			{`labels:items:map(p=>p[1]):concat([]):map(v=>v:[float]):map(v=>v:[float]):filter(v=>false):all(v=>true)`, false, !invalid},
 			{`labels:items:map(p=>p[1]):concat([]):map(v=>v:[float]):filter(v=>false):map(v=>v!):all(v=>true)`, false, true},
 			{`labels:items:map(p=>p[1]):concat([]):map(v=>v:[float]):map(v=>[v]):map(v=>v[0]):map(v=>v:type):contains("null")`, false, invalid},
