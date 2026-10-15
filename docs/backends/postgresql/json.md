@@ -1566,8 +1566,11 @@ literals. A null argument produces a typed JSON null, so subsequent indexing or
 list methods propagate null; no-value propagates by the ordinary HFF rules.
 For statically empty arms in supported concat pipelines, PostgreSQL lowering
 can omit the empty row stream and forward a sole surviving stream after it has
-validated every operand. This changes SQL shape only; generic deferred-list
-arms keep their existing lowering.
+validated every operand. This also applies to bounded generic deferred-list
+callback, aggregate, and fold pipelines when a statically empty branch remains
+available to a compatible consumer. Other deferred-list consumers and
+runtime-created empty streams keep their existing lowering. This changes SQL
+shape only.
 
 `map()` preserves input order and retains null callback results as elements. A
 guarded no-value result propagates to the whole method. `flatmap()` appends

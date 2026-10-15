@@ -186,7 +186,9 @@ func (b *builder) packDeferredList(n hff.Node, value *jsonDeferredValue) (jsonDe
 			return jsonDeferredPacket{}, err
 		}
 		arm.steps = steps
-		rows = append(rows, "SELECT "+deferredOrdinal(arm)+" AS ord,"+packetVariant(i, packet.code)+" AS v FROM "+deferredFrom(arm)+" WHERE "+arm.selected)
+		if !arm.empty {
+			rows = append(rows, "SELECT "+deferredOrdinal(arm)+" AS ord,"+packetVariant(i, packet.code)+" AS v FROM "+deferredFrom(arm)+" WHERE "+arm.selected)
+		}
 		packet.code = ""
 		packets, empty = append(packets, packet), append(empty, arm.empty)
 	}

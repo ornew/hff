@@ -107,6 +107,9 @@ func (b *builder) deferredMatches(n hff.Node, value *jsonDeferredValue, target h
 			if err != nil {
 				return "", err
 			}
+			if arm.empty {
+				continue
+			}
 			arm.steps = steps
 			tests = append(tests, "NOT EXISTS(SELECT 1 FROM "+deferredFrom(arm)+" WHERE "+arm.selected+" AND NOT COALESCE("+test+",FALSE))")
 		}
@@ -225,7 +228,7 @@ func (b *builder) narrowDeferredValue(n hff.Node, value *jsonDeferredValue, targ
 		var types []hff.Type
 		for i, arm := range plan.arms {
 			var child *jsonDeferredValue
-			if plan.literal && len(arm.steps) == 0 {
+			if plan.literal && len(arm.steps) == 0 && !arm.empty {
 				// A literal's children belong to this lexical scope. Keep their
 				// normalization projections here: direct indexing can select a
 				// child without entering a generated row scope.

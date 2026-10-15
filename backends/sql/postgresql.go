@@ -699,6 +699,18 @@ func (b *builder) binary(n hff.Node) (expression, error) {
 	if err != nil {
 		return expression{}, err
 	}
+	if left.kind == hff.NullType {
+		switch op {
+		case hff.Equal, hff.NotEqual, hff.Less, hff.LessEqual, hff.Greater, hff.GreaterEqual:
+			// A statically null comparison is false, but its RHS still has
+			// backend validation obligations. Discard its unused bindings.
+			validation := b.validationBuilder()
+			if _, err := validation.expression(r); err != nil {
+				return expression{}, err
+			}
+			return boolean("FALSE"), nil
+		}
+	}
 	rightStart := len(b.args)
 	right, err := b.expression(r)
 	if err != nil {

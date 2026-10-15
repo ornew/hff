@@ -59,6 +59,7 @@ func (b *builder) jsonDeferredInputFold(n hff.Node, name string) (expression, bo
 			ordinal: []string{"0"}, selected: "TRUE", value: jsonParameter{typ: hff.PrimitiveType(hff.NeverType), direct: &null}, parameters: copyJSONParameters(b.parameters)}}
 	}
 	var packets []jsonDeferredPacket
+	var empty []bool
 	var rows []string
 	for i, arm := range plan.arms {
 		var packet jsonDeferredPacket
@@ -71,11 +72,11 @@ func (b *builder) jsonDeferredInputFold(n hff.Node, name string) (expression, bo
 			return expression{}, true, err
 		}
 		arm.steps = steps
-		rows = append(rows, "SELECT "+strconv.Itoa(i)+" AS arm,"+deferredOrdinal(arm)+" AS ord,"+packet.code+" AS value FROM "+deferredFrom(arm)+" WHERE "+arm.selected)
+		if !arm.empty {
+			rows = append(rows, "SELECT "+strconv.Itoa(i)+" AS arm,"+deferredOrdinal(arm)+" AS ord,"+packet.code+" AS value FROM "+deferredFrom(arm)+" WHERE "+arm.selected)
+		}
 		packets = append(packets, packet)
-	}
-	if len(rows) == 0 {
-		rows = append(rows, "SELECT 0 AS arm,'{}'::bigint[] AS ord,'null'::json AS value WHERE FALSE")
+		empty = append(empty, arm.empty)
 	}
 	seed, _ := n.Child(1)
 	initial, err := b.expression(seed)
@@ -105,15 +106,24 @@ func (b *builder) jsonDeferredInputFold(n hff.Node, name string) (expression, bo
 	var successors []string
 	for i, packet := range packets {
 		gate := b.nextAlias()
-		value, steps, _, err := b.jsonFoldBodyInput(callback, parameters, acc, previous, item, accumulatorType, seedType, receiver, seed, JSON, proof, func() (jsonParameter, error) {
-			descriptor, err := packet.decode(b, n, gate+".value")
-			if err != nil {
-				return jsonParameter{}, err
-			}
-			return deferredValueParameter(descriptor), nil
+		var value expression
+		var steps []string
+		err := b.validateEmptyDeferredWork(empty[i], func() error {
+			var err error
+			value, steps, _, err = b.jsonFoldBodyInput(callback, parameters, acc, previous, item, accumulatorType, seedType, receiver, seed, JSON, proof, func() (jsonParameter, error) {
+				descriptor, err := packet.decode(b, n, gate+".value")
+				if err != nil {
+					return jsonParameter{}, err
+				}
+				return deferredValueParameter(descriptor), nil
+			})
+			return err
 		})
 		if err != nil {
 			return expression{}, true, err
+		}
+		if empty[i] {
+			continue
 		}
 		raw := value.code
 		from := "(SELECT " + item + ".value WHERE " + item + ".arm=" + strconv.Itoa(i) + " OFFSET 0) AS " + gate
@@ -122,8 +132,15 @@ func (b *builder) jsonDeferredInputFold(n hff.Node, name string) (expression, bo
 		}
 		successors = append(successors, "SELECT "+raw+" AS v,"+value.present+" AS p FROM "+from)
 	}
-	if len(successors) == 0 {
-		successors = append(successors, "SELECT 'null'::json AS v,TRUE AS p WHERE FALSE")
+	if len(rows) == 0 {
+		resultType, err := b.jsonFoldType(n, n.Type())
+		if err != nil {
+			return expression{}, true, err
+		}
+		code := "(CASE WHEN " + plan.null + " THEN NULL ELSE " + rawSeed + " END)"
+		present := both(plan.present, "("+plan.null+" OR "+initial.present+")")
+		value, err := b.jsonDecode(n, code, JSON, resultType, present)
+		return value, true, err
 	}
 	order := "ASC"
 	if name == "foldr" {

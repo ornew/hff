@@ -48,10 +48,15 @@ func (b *builder) selectDeferredValue(n hff.Node, value *jsonDeferredValue, inde
 		if err := checkContext(b.ctx); err != nil {
 			return nil, err
 		}
+		if arm.empty {
+			continue
+		}
 		rows = append(rows, "SELECT "+strconv.Itoa(i)+" AS arm,"+deferredOrdinal(arm)+" AS ord FROM "+deferredFrom(arm)+" WHERE "+arm.selected)
 	}
 	if len(rows) == 0 {
-		rows = append(rows, "SELECT 0 AS arm,'{}'::bigint[] AS ord WHERE FALSE")
+		selection := &jsonDeferredSelection{arms: append([]jsonDeferredArm(nil), plan.arms...), fallback: deferredNull()}
+		present := both(value.present, "("+plan.null+" OR "+operand.present+")")
+		return b.finishDeferredSelection(n, selection, present)
 	}
 	source, ranked, seed, picked, chosen := b.nextAlias(), b.nextAlias(), b.nextAlias(), b.nextAlias(), b.nextAlias()
 	cte := "WITH " + source + " AS MATERIALIZED (" + strings.Join(rows, " UNION ALL ") + ")," + ranked + " AS (SELECT arm,ord,row_number() OVER(ORDER BY ord)-1 AS pos,count(*) OVER() AS n FROM " + source + ")"
@@ -74,13 +79,16 @@ func (b *builder) finishDeferredSelection(n hff.Node, selection *jsonDeferredSel
 		if err := checkContext(b.ctx); err != nil {
 			return nil, err
 		}
+		if arm.empty {
+			continue
+		}
 		rows = append(rows, "SELECT "+deferredParameterPresence(arm.value)+" AS p FROM "+deferredFrom(arm)+" WHERE "+arm.selected)
 		if !arm.empty {
 			types = append(types, arm.value.typ)
 		}
 	}
 	if len(rows) == 0 {
-		rows = append(rows, "SELECT TRUE AS p WHERE FALSE")
+		return &jsonDeferredValue{typ: selection.fallback.typ, present: both(present, selection.fallback.present), selection: selection}, nil
 	}
 	state := b.nextAlias()
 	valid := "(WITH " + state + " AS MATERIALIZED (" + strings.Join(rows, " UNION ALL ") + ") SELECT CASE WHEN EXISTS(SELECT 1 FROM " + state + ") THEN COALESCE((SELECT p FROM " + state + " LIMIT 1),FALSE) ELSE " + selection.fallback.present + " END)"
@@ -125,6 +133,9 @@ func (b *builder) resolveDeferredSelection(n hff.Node, value *jsonDeferredValue,
 		if err != nil {
 			return expression{}, err
 		}
+		if arm.empty {
+			continue
+		}
 		arm.steps = steps
 		rows = append(rows, "SELECT "+result.code+" AS v,"+result.present+" AS p FROM "+deferredFrom(arm)+" WHERE "+arm.selected)
 	}
@@ -133,7 +144,9 @@ func (b *builder) resolveDeferredSelection(n hff.Node, value *jsonDeferredValue,
 		return expression{}, err
 	}
 	if len(rows) == 0 {
-		rows = append(rows, "SELECT "+fallback.code+" AS v,TRUE AS p WHERE FALSE")
+		fallback.present = both(value.present, fallback.present)
+		fallback.kind = kind
+		return fallback, nil
 	}
 	rowsName, output := b.nextAlias(), b.nextAlias()
 	matched := "EXISTS(SELECT 1 FROM " + rowsName + ")"

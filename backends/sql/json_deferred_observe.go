@@ -69,6 +69,9 @@ func (b *builder) observeDeferredValue(n hff.Node, value *jsonDeferredValue, nam
 				if err := checkContext(b.ctx); err != nil {
 					return expression{}, err
 				}
+				if arm.empty {
+					continue
+				}
 				counts = append(counts, "(SELECT count(*)::numeric FROM "+deferredFrom(arm)+" WHERE "+arm.selected+")")
 			}
 			if len(counts) > 0 {
@@ -207,6 +210,9 @@ func (b *builder) serializeDeferredValue(n hff.Node, value *jsonDeferredValue) (
 				return "", err
 			}
 			arm.steps = steps
+			if arm.empty {
+				continue
+			}
 			rows = append(rows, "SELECT "+deferredOrdinal(arm)+" AS ord,"+code+" AS v FROM "+deferredFrom(arm)+" WHERE "+arm.selected)
 		}
 		if len(rows) == 0 {

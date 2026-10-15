@@ -40,10 +40,10 @@ func (b *builder) runtimeFoldDescriptor(n hff.Node, name string) (*jsonDeferredV
 			return nil, err
 		}
 		arm.steps = steps
+		if arm.empty {
+			continue
+		}
 		rows = append(rows, "SELECT "+deferredOrdinal(arm)+" AS ord,"+code+" AS value FROM "+deferredFrom(arm)+" WHERE "+arm.selected)
-	}
-	if len(rows) == 0 {
-		rows = append(rows, "SELECT '{}'::bigint[] AS ord,"+runtimeNull+" AS value WHERE FALSE")
 	}
 	seed, _ := n.Child(1)
 	initial, err := b.deferredValue(seed)
@@ -69,9 +69,23 @@ func (b *builder) runtimeFoldDescriptor(n hff.Node, name string) (*jsonDeferredV
 	if err != nil {
 		return nil, err
 	}
-	result, steps, lossy, err := b.runtimeFoldBody(callback, parameters, acc, previous+".acc", item+".value", n.Type(), receiver, seed, receiverLoss, deferredValueLoss(deferredLeaf(initial)), provenance)
+	var result expression
+	var steps []string
+	var lossy bool
+	err = b.validateEmptyDeferredWork(len(rows) == 0, func() error {
+		var err error
+		result, steps, lossy, err = b.runtimeFoldBody(callback, parameters, acc, previous+".acc", item+".value", n.Type(), receiver, seed, receiverLoss, deferredValueLoss(deferredLeaf(initial)), provenance)
+		return err
+	})
 	if err != nil {
 		return nil, err
+	}
+	if len(rows) == 0 {
+		code := "(CASE WHEN " + plan.null + " THEN " + runtimeNull + " ELSE " + rawSeed + " END)"
+		present := both(plan.present, "("+plan.null+" OR "+deferredParameterPresence(initial)+")")
+		value := runtimeValue(code, n.Type(), present, deferredValueLoss(deferredLeaf(initial)))
+		value.runtime.itemRoles, value.runtime.itemListRoles = provenance.pair, provenance.list
+		return value, nil
 	}
 	from := state + " AS " + previous + " JOIN " + items + " AS " + item + " ON " + item + ".pos=" + previous + ".pos+1"
 	if len(steps) > 0 {

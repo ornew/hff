@@ -94,6 +94,9 @@ func (b *builder) encodeRuntimeValue(n hff.Node, value *jsonDeferredValue) (stri
 				return "", err
 			}
 			arm.steps = steps
+			if arm.empty {
+				continue
+			}
 			rows = append(rows, "SELECT "+deferredOrdinal(arm)+" AS ord,"+code+" AS value FROM "+deferredFrom(arm)+" WHERE "+arm.selected)
 		}
 		payload := "'[]'::json"

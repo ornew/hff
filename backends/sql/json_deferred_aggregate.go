@@ -198,11 +198,18 @@ func (b *builder) aggregateDeferredRows(n hff.Node, name string, plan jsonDeferr
 			return nil, err
 		}
 		arm.steps = steps
+		if arm.empty {
+			continue
+		}
 		rows = append(rows, "SELECT "+code+" AS value,"+deferredOrdinal(arm)+" AS ord FROM "+deferredFrom(arm)+" WHERE "+both(arm.selected, value.present))
 		lossy = lossy || !arm.empty && deferredValueLoss(value)
 	}
 	if len(rows) == 0 {
-		rows = append(rows, "SELECT "+runtimeNull+" AS value,'{}'::bigint[] AS ord WHERE FALSE")
+		output := runtimeNull
+		if name == "sum" {
+			output = runtimeNode("int", "0::bigint")
+		}
+		return runtimeValue("(CASE WHEN "+plan.null+" THEN "+runtimeNull+" ELSE "+output+" END)", n.Type(), plan.present, false), nil
 	}
 	source, decoded := b.nextAlias(), b.nextAlias()
 	item, tag := source+".value", "("+source+".value->>0)"

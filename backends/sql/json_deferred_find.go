@@ -71,7 +71,13 @@ func (b *builder) findDeferredValue(n hff.Node, plan jsonDeferredList) (*jsonDef
 		}
 		arm.steps, arm.parameters, arm.selected = steps, parameters, selected
 		selection.arms[i] = arm
+		if arm.empty {
+			continue
+		}
 		rows = append(rows, "SELECT "+strconv.Itoa(i)+" AS arm,"+deferredOrdinal(arm)+" AS ord FROM "+deferredFrom(arm)+" WHERE "+selected)
+	}
+	if len(rows) == 0 {
+		return b.finishDeferredSelection(n, selection, plan.present)
 	}
 	source, seed, picked, chosen := b.nextAlias(), b.nextAlias(), b.nextAlias(), b.nextAlias()
 	active := both(plan.present, "(NOT "+plan.null+")")

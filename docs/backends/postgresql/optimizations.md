@@ -11,10 +11,12 @@ other schemas and data.
 ### Prune statically empty list-concat arms
 
 For eligible PostgreSQL JSON/JSONB list concatenations, the builder can omit
-an arm proven empty after lowering and validating the full expression. When
-one stream remains, it can forward that stream while preserving its order and
-outer presence/null state. This is a SQL-shape change; generic deferred-list
-arms retain their existing lowering. See [empty concat
+an arm proven empty after lowering and validating the full expression. The
+proof also passes through bounded generic deferred-list callback, aggregate,
+and fold pipelines when the empty branch remains available to a compatible
+consumer. When one stream remains, it can forward that stream while preserving
+its order and outer presence/null state. Runtime-created empty streams and
+other deferred-list consumers retain their existing lowering. See [empty concat
 arms](../../optimizations/055-postgresql-empty-concat-arms.md) for the bounded
 proof, parity scope, and plan observations. No runtime-speed claim follows.
 

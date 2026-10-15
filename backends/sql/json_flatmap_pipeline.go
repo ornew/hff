@@ -162,6 +162,14 @@ func copyJSONParameters(parameters map[hff.BindingID]jsonParameter) map[hff.Bind
 }
 
 func (b *builder) inDeferredArm(arm jsonDeferredArm, callback hff.Node, work func() error) ([]string, map[hff.BindingID]jsonParameter, error) {
+	// Empty descriptors still validate downstream callbacks. Swap the same
+	// builder pointer so indirect closures use the isolated environment too.
+	// Restore the complete builder after the lexical arm scope is restored.
+	if arm.empty {
+		outer := *b
+		*b = b.validationBuilder()
+		defer func() { *b = outer }()
+	}
 	if err := checkContext(b.ctx); err != nil {
 		return nil, nil, err
 	}
@@ -198,7 +206,9 @@ func (b *builder) deferredValue(n hff.Node) (jsonParameter, error) {
 		}
 		var counts []string
 		for _, arm := range plan.arms {
-			counts = append(counts, "(SELECT count(*) FROM "+deferredFrom(arm)+" WHERE "+arm.selected+")")
+			if !arm.empty {
+				counts = append(counts, "(SELECT count(*) FROM "+deferredFrom(arm)+" WHERE "+arm.selected+")")
+			}
 		}
 		count := "0::bigint"
 		if len(counts) == 1 {
@@ -405,7 +415,9 @@ func (b *builder) deferredListTransform(n hff.Node, name string) (jsonDeferredLi
 		prepared := arm
 		prepared.steps, prepared.parameters = steps, parameters
 		if name == "flatmap" {
-			sentinels = append(sentinels, "SELECT "+deferredOrdinal(arm)+" AS ord,"+child.present+" AS p,"+child.null+" AS n FROM "+deferredFrom(prepared)+" WHERE "+arm.selected)
+			if !arm.empty {
+				sentinels = append(sentinels, "SELECT "+deferredOrdinal(arm)+" AS ord,"+child.present+" AS p,"+child.null+" AS n FROM "+deferredFrom(prepared)+" WHERE "+arm.selected)
+			}
 			if arm.empty && len(child.arms) == 0 {
 				// The callback is never invoked, so even a non-list callback
 				// result leaves an empty list. Preserve a validation scope for
@@ -427,7 +439,7 @@ func (b *builder) deferredListTransform(n hff.Node, name string) (jsonDeferredLi
 		} else {
 			prepared.value, prepared.selected = value, selected
 			output.arms = append(output.arms, prepared)
-			if name == "map" {
+			if name == "map" && !arm.empty {
 				sentinels = append(sentinels, "SELECT "+pipelineRowPresence(arm.selected, deferredParameterPresence(value))+" AS p FROM "+deferredFrom(prepared))
 			}
 		}
@@ -508,6 +520,9 @@ func (b *builder) jsonFlatmapPipeline(n hff.Node, name string) (expression, bool
 		if err != nil {
 			return expression{}, true, err
 		}
+		if arm.empty {
+			continue
+		}
 		arm.steps = steps
 		rows = append(rows, "SELECT "+deferredOrdinal(arm)+" AS ord,"+raw+" AS v,"+pipelineRowPresence(arm.selected, present)+" AS p,"+arm.selected+" AS keep FROM "+deferredFrom(arm))
 	}
@@ -516,13 +531,6 @@ func (b *builder) jsonFlatmapPipeline(n hff.Node, name string) (expression, bool
 }
 
 func (b *builder) finishDeferredList(n hff.Node, name string, plan jsonDeferredList, rows []string, types []hff.Type) (expression, error) {
-	if len(rows) == 0 {
-		carrier := "NULL::boolean"
-		if name == "map" {
-			carrier = "NULL::json"
-		}
-		rows = append(rows, "SELECT '{}'::bigint[] AS ord,"+carrier+" AS v,TRUE AS p,TRUE AS keep WHERE FALSE")
-	}
 	joined, output := b.nextAlias(), b.nextAlias()
 	var aggregate string
 	kind, present := hff.BoolType, plan.present
@@ -555,6 +563,25 @@ func (b *builder) finishDeferredList(n hff.Node, name string, plan jsonDeferredL
 		aggregate = "(SELECT count(*) FROM " + joined + " WHERE keep AND v)"
 	default:
 		return expression{}, b.failure(n, "unsupported flatmap pipeline consumer")
+	}
+	if len(rows) == 0 {
+		switch name {
+		case "map":
+			aggregate = "'[]'::json"
+		case "any":
+			aggregate = "FALSE"
+		case "all":
+			aggregate = "TRUE"
+		case "count":
+			aggregate = "0::bigint"
+		}
+		present = plan.present
+		code := "(CASE WHEN " + plan.null + " THEN NULL ELSE " + aggregate + " END)"
+		if name == "map" {
+			b.jsonValues[code] = JSON
+			b.rememberNormalizedJSON(code, JSON, hff.NewListType(hff.PrimitiveType(hff.NeverType)))
+		}
+		return expression{code, present, kind}, nil
 	}
 	code := "(CASE WHEN " + plan.null + " THEN NULL ELSE " + aggregate + " END)"
 	b.steps = append(b.steps, "(WITH "+joined+" AS MATERIALIZED ("+strings.Join(rows, " UNION ALL ")+") SELECT "+code+" AS v,"+present+" AS p OFFSET 0) AS "+output)
@@ -613,6 +640,9 @@ func (b *builder) materializeDeferredList(n hff.Node, plan jsonDeferredList) (ex
 		})
 		if err != nil {
 			return expression{}, err
+		}
+		if arm.empty {
+			continue
 		}
 		arm.steps = steps
 		rows = append(rows, "SELECT "+deferredOrdinal(arm)+" AS ord,"+raw+" AS v,"+pipelineRowPresence(arm.selected, present)+" AS p,"+arm.selected+" AS keep FROM "+deferredFrom(arm))
