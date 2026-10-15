@@ -372,6 +372,27 @@ proofs retain type information through duplication but do not imply
 uniqueness. Folds or other callback results without a complete pair-role
 invariant retain the general representation path.
 
+### Fold over deferred item values
+
+Fold callbacks can inspect the recovered type of each `items()` value while
+building an ordinary, recoverable accumulator. With `labels` and the four
+records above, these examples return type names or a String summary:
+
+```hff
+labels:items:map(pair=>pair[1]):foldl([], (types,value)=>types:concat([value:type])):json=["string","bytes","duration","timestamp"]:json
+labels:items:map(pair=>pair[1]):foldr("",(value,types)=>value:type:concat(types))="stringbytesdurationtimestamp"
+labels:items:map(pair=>pair[1]):foldl("",(last,value)=>value:type)="timestamp"
+```
+
+The first two queries match rows 1 and 2. The third matches rows 1–3; row 4's
+last value is null. A null value is passed to the callback rather than skipped.
+An empty list returns its seed, and a null receiver returns null before the
+seed or callback is evaluated. Guard-produced no-value propagates through the
+whole fold. The accumulator must still have a recoverable ordinary type; this
+does not make arbitrary ambiguous tagged unions safe to retain.
+
+### Fold pair and pair-list accumulators
+
 Folds can retain the same pair roles when the seed and every possible
 accumulator result maintain one compatible pair or pair-list shape:
 

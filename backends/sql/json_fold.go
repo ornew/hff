@@ -9,6 +9,13 @@ import (
 // Recursive SQL carries the accumulator as JSON and no-value as a separate
 // boolean. A null accumulator is data and continues to the next callback.
 func (b *builder) jsonFold(n hff.Node, name string) (expression, error) {
+	if value, handled, err := b.jsonDeferredInputFold(n, name); handled || err != nil {
+		return value, err
+	}
+	return b.jsonOrdinaryFold(n, name)
+}
+
+func (b *builder) jsonOrdinaryFold(n hff.Node, name string) (expression, error) {
 	receiver, _ := n.Child(0)
 	value, err := b.expression(receiver)
 	if err != nil {
@@ -151,6 +158,10 @@ func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accu
 	if len(proofs) > 0 {
 		proof = proofs[0]
 	}
+	return b.jsonFoldBodyInput(callback, parameters, accumulatorIndex, previous, item, accumulatorType, seedType, receiver, seed, format, proof, nil)
+}
+
+func (b *builder) jsonFoldBodyInput(callback hff.Node, parameters []hff.Binding, accumulatorIndex int, previous, item string, accumulatorType, seedType hff.Type, receiver, seed hff.Node, format JSONFormat, proof jsonItemProvenance, input func() (jsonParameter, error)) (expression, []string, hff.Type, error) {
 	outerMemo := b.itemRoleMemo
 	b.itemRoleMemo = nil
 	outer := b.steps
@@ -191,6 +202,15 @@ func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accu
 		accumulatorLoss = next
 		lossEnvironment[parameters[accumulatorIndex].ID()] = next
 	}
+	var supplied jsonParameter
+	if input != nil {
+		var err error
+		supplied, err = input()
+		if err != nil {
+			b.steps, b.sharedPaths, b.itemRoleMemo = outer, outerPaths, outerMemo
+			return expression{}, nil, hff.Type{}, err
+		}
+	}
 	old := make([]jsonParameter, len(parameters))
 	existed := make([]bool, len(parameters))
 	for i, binding := range parameters {
@@ -199,6 +219,9 @@ func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accu
 		parameter := jsonParameter{code: item + ".value", format: format, lossy: receiverLoss,
 			typ: jsonStoredMemberType(sortListType(b.jsonStoredType(receiver)), "", false, true), itemRoles: b.jsonItemsRoles(receiver)}
 
+		if input != nil && i != accumulatorIndex {
+			parameter = supplied
+		}
 		if i == accumulatorIndex {
 			parameter.code, parameter.typ, parameter.format = previous+".acc", accumulatorType, JSON
 			parameter.lossy = accumulatorLoss
@@ -255,6 +278,17 @@ func (b *builder) jsonFoldBody(callback hff.Node, parameters []hff.Binding, accu
 	storedType := b.jsonStoredType(body)
 	if err == nil && induction && storedType.Key() != inferredType.Key() {
 		return expression{}, nil, hff.Type{}, b.failure(body, "fold callback storage type changed during lowering")
+	}
+	if err == nil && input != nil {
+		// The input decoder's aliases and normalization proofs belong to this
+		// callback scope. Finish its JSON state before restoring the caller.
+		var raw string
+		if (proof.pair != nil || proof.list != nil) && b.jsonValues[result.code] == JSON {
+			raw = "COALESCE(" + result.code + ",'null'::json)"
+		} else {
+			raw, err = b.computedJSONDocument(body, result, storedType)
+		}
+		result = expression{raw, result.present, hff.AnyType}
 	}
 	return result, b.steps, storedType, err
 }

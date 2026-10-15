@@ -48,7 +48,11 @@ func TestPostgreSQLDeferredCollectionValuesPrepare(t *testing.T) {
 	var expected []bool
 	var labels []string
 	for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
-		for _, source := range append(deferredValueSources(fixture), deferredSelectionSources(fixture)...) {
+		sources := append(deferredValueSources(fixture), deferredSelectionSources(fixture)...)
+		sources = append(sources, deferredInputFoldSources(fixture)...)
+		sources = append(sources, deferredZeroInputFoldSources(fixture)...)
+		sources = append(sources, deferredFoldAccumulatorRoleSources(fixture)...)
+		for _, source := range sources {
 			p, err := e.Compile(ctx, source)
 			if err != nil {
 				t.Fatal(source, err)

@@ -200,7 +200,7 @@ func (b *builder) losesFloat(n hff.Node, environment map[hff.BindingID]bool) boo
 // Serialize from schema types, never from the storage document's spelling or
 // object order. In particular jsonb::text is not HFF canonical JSON.
 func (b *builder) serializeJSON(n hff.Node, raw string, format JSONFormat, typ hff.Type) (string, error) {
-	if err := b.ctx.Err(); err != nil {
+	if err := checkContext(b.ctx); err != nil {
 		return "", err
 	}
 	if err := b.checkJSONStringSchemas(n, typ); err != nil {

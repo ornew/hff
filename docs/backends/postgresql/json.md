@@ -1519,6 +1519,12 @@ null callback result becomes the next accumulator, while no-value stops the
 fold and propagates. A null or non-list receiver returns ordinary null before
 the seed or callback is evaluated.
 
+For eligible deferred `items()` streams, fold callbacks can inspect each
+input value using its recovered per-key schema without first materializing the
+mixed input list as ordinary JSON. The accumulator still follows the normal
+inferred-schema and normalization rules; ambiguous tagged values retained in
+an accumulator remain unsupported when their type cannot be recovered.
+
 A callback that ignores an ambiguous JSONB item and returns a known type, such
 as `foldl(0,(acc,item)=>acc+1)`, does not need metadata for that item's numeric
 subtype. When a callback retains an `Any` or ambiguous value in the accumulator,
