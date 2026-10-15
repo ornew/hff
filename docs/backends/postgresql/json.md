@@ -1545,7 +1545,25 @@ to an empty list; a null or no-value receiver follows ordinary propagation, and
 a runtime list containing null, non-orderable values, or mixed families sorts
 to null. This does not recover identity absent from the source schema or JSONB
 metadata: a String under native JSON `Any` remains a String, and unrelated
-ambiguous materialization boundaries may still be rejected.
+ambiguous materialization boundaries may still be rejected. Bytes values are
+not orderable; mixing String with Duration or Timestamp also returns null.
+
+Sorting retains each value's declared type when an object contains an `Any`
+field beside declared tagged fields. A String stored in the `Any` field
+remains a String even when a sibling is Bytes, Duration, or Timestamp. For
+example, with `labels.app: Any` equal to `"auth"` and `labels.zone: Bytes`
+equal to `"a"`:
+
+```hff
+labels:values:sort:type="null"
+labels:values:filter(v=>v:[string]:exists):sort:json="[\"auth\"]"
+```
+
+The first query is true because String and Bytes cannot be sorted together;
+the second retains the String and sorts it. Homogeneous Duration and
+Timestamp lists still sort by their exact values, and null and no-value retain
+their ordinary propagation behavior. The native SQL sort path is unchanged
+when its input identity is already proven.
 
 Selected list callbacks are also supported for these schema-known unions:
 `any()` and `all()` with type guards, `map()` to `type()`, `string()`, or the

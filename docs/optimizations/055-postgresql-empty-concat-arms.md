@@ -103,9 +103,11 @@ collected. Eleven ordinary SQL and argument controls remained byte-identical.
 The generic deferred-list follow-up passed 20,812 outputs for 121 sources
 across 85 records plus one omitted-OID execution per source in both JSON
 formats. Its selected regression run logged 211,426 query/record outputs
-across 598 groups. That run excludes a sort-parity counterexample reproduced
-on both baseline and candidate, so it does not establish full backend parity.
-For four representative sources, the generated `WHERE` sizes were:
+across 598 groups. That earlier run excludes a sort-parity counterexample
+reproduced on both baseline and candidate. Identity-gated sorting addresses
+that case; see the [PostgreSQL JSON sorting guide](../backends/postgresql/json.md#sort-json-backed-lists).
+The recorded follow-up counts remain scoped to the selected run. For four
+representative sources, the generated `WHERE` sizes were:
 
 | Workload | Baseline `WHERE` bytes | Candidate `WHERE` bytes | Change | Uncertainty |
 |:--|--:|--:|--:|:--|

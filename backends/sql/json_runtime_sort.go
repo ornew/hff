@@ -7,25 +7,33 @@ import (
 )
 
 func (b *builder) runtimeSortDescriptor(n hff.Node) (*jsonDeferredValue, error) {
-	normal := b.validationBuilder()
-	normal.keepDeferredValues = false
-	result, err := normal.call(n)
-	if err == nil {
-		b.adoptDeferredProbe(normal)
-		return deferredLeaf(jsonParameter{typ: b.jsonStoredType(n), direct: &result, format: b.jsonValues[result.code],
-			lossy: b.losesFloat(n, nil), itemRoles: b.jsonItemRoles(n), itemListRoles: b.jsonItemsRoles(n)}), nil
-	}
-	if err := b.typedFallbackError(err); err != nil {
-		return nil, err
-	}
+	// Successful ordinary lowering alone cannot prove value identity: Any
+	// may have absorbed tagged alternatives at the same structural position.
 	probe := b.validationBuilder()
 	probe.keepDeferredValues = true
 	receiver, _ := n.Child(0)
-	parameter, err := probe.deferredValue(receiver)
+	plan, err := probe.deferredList(receiver)
 	if err != nil {
 		return nil, err
 	}
-	value := deferredLeaf(parameter)
+	value := &jsonDeferredValue{typ: probe.jsonStoredType(receiver), present: plan.present, list: &plan}
+	safe, err := probe.deferredInputIdentity(value)
+	if err != nil {
+		return nil, err
+	}
+	if safe {
+		normal := b.validationBuilder()
+		normal.keepDeferredValues = false
+		result, err := normal.call(n)
+		if err == nil {
+			b.adoptDeferredProbe(normal)
+			return deferredLeaf(jsonParameter{typ: b.jsonStoredType(n), direct: &result, format: b.jsonValues[result.code],
+				lossy: b.losesFloat(n, nil), itemRoles: b.jsonItemRoles(n), itemListRoles: b.jsonItemsRoles(n)}), nil
+		}
+		if err := b.typedFallbackError(err); err != nil {
+			return nil, err
+		}
+	}
 	code, err := probe.encodeRuntimeValue(receiver, value)
 	if err != nil {
 		return nil, err

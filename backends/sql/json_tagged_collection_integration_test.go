@@ -36,6 +36,10 @@ func taggedCollectionJSON(t testing.TB, v hff.Value) string {
 			return `"0.000000001s"`
 		case 2 * time.Nanosecond:
 			return `"0.000000002s"`
+		case 2 * time.Second:
+			return `"2s"`
+		case 10 * time.Second:
+			return `"10s"`
 		case -time.Nanosecond:
 			return `"-0.000000001s"`
 		case time.Duration(math.MinInt64):

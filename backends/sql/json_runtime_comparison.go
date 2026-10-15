@@ -124,6 +124,14 @@ func (b *builder) hasDeferredValueSource(n hff.Node) (bool, error) {
 			return true, nil
 		}
 	}
+	if builtinListCall(n, "sort") {
+		receiver, _ := n.Child(0)
+		// A computed sort may now retain runtime tags even without a fold.
+		// Its comparisons must consume that descriptor before materializing.
+		if computedDeferredSource(receiver) {
+			return true, nil
+		}
+	}
 	if builtinListCall(n, "foldl") || builtinListCall(n, "foldr") {
 		return true, nil
 	}
