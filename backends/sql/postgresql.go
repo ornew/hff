@@ -347,6 +347,9 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 	case hff.IndexNode:
 		return b.jsonIndex(n)
 	case hff.TypeGuardNode:
+		if value, handled, err := b.jsonItemSlotGuard(n); handled {
+			return value, err
+		}
 		child, _ := n.Child(0)
 		value, err := b.expression(child)
 		if err != nil {
@@ -779,6 +782,11 @@ func (b *builder) call(n hff.Node) (expression, error) {
 			return expression{}, err
 		}
 		return b.foldedParameter(n, value)
+	}
+	if n.ChildCount() == 1 && (name == "type" || name == "exists") {
+		if value, handled, err := b.jsonItemSlotCall(n, name); handled {
+			return value, err
+		}
 	}
 	if name == "timestamp" {
 		return b.timestampLiteralCall(n)

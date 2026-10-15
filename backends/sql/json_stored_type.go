@@ -44,6 +44,10 @@ func (b *builder) jsonStoredType(n hff.Node) hff.Type {
 		return b.jsonStoredType(child)
 	}
 	if n.Kind() == hff.TypeGuardNode {
+		if types, slot := b.jsonItemSlotGuardTypes(n); slot {
+			target, _ := n.Constraint()
+			return itemSlotGuardType(types, target)
+		}
 		if roles := b.jsonItemRoles(n); roles != nil {
 			return guardedItemCarrier(n.Type(), roles, false)
 		}

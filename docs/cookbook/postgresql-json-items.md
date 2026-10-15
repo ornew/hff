@@ -65,14 +65,36 @@ type, and no-value remains distinct from ordinary null. These checks require
 the same recoverable source schema as pair-slot access; they do not make
 ambiguous same-category alternatives recoverable.
 
+## Observe a pair slot with a dynamic index
+
+Pair callbacks can inspect a slot's type or existence, and can apply a type
+guard before a typed operation. This query checks the key and value positions
+using a list of valid numeric indexes:
+
+```hff
+attachments:items:any(pair=>pair[0]:type="string")
+attachments:items:any(pair=>pair[1]:[bytes]:exists)
+attachments:items:any(pair=>[0,1,-1,-2]:any(i=>pair[i]:[bytes]:len>0))
+```
+
+The first query matches rows 1–4, whose non-null maps contain String keys. The
+second matches rows 1–3, whose values are Bytes; the null value in row 4 does
+not match. The third matches rows 1 and 2 because at least one of the key/value
+indexes selects nonempty Bytes. Integer-valued Float indexes and negative
+indexes are also valid. Fractional and out-of-range numbers produce ordinary
+null, as do nonnumeric runtime values of a union or `Any` index. Statically
+incompatible index types remain compile errors. If evaluating the index
+produces guarded no-value, that state remains distinct; a null pair receiver
+masks a later index guard.
+
 The backend preserves this positional information when the source `items()`
 result and schema establish the key/value roles. Constant indexes `0` and
 `-2` select the String key; `1` and `-1` select the value. Identity `map()` and
 pair-only `flatmap()` callbacks can preserve those roles, including when they
-duplicate pairs. Dynamic indexes that need tagged-type dispatch,
-same-JSON-category alternatives whose identity cannot be recovered, and `Any`
-strings requiring Bytes identity remain unsupported. Missing keys, stored
-null, and guard-produced no-value retain their separate HFF behavior. See the
+duplicate pairs. Same-JSON-category alternatives whose identity cannot be
+recovered and `Any` strings requiring Bytes identity remain unsupported.
+Missing keys, stored null, and guard-produced no-value retain their separate
+HFF behavior. See the
 [PostgreSQL JSON guide](../backends/postgresql/json.md#bytes-in-json-documents)
 for the supported subset and its limits.
 

@@ -99,7 +99,7 @@ func TestJSONItemUniquenessDoesNotBypassReceiverRecovery(t *testing.T) {
 	}{
 		{schema.MapOf(schema.Union(schema.StringType, schema.BytesType)), `labels:items:unique`, true},
 		{schema.MapOf(schema.BytesType), `labels:items:map(p=>p:[list]):unique`, false},
-		{schema.Struct(schema.String("app"), schema.Bytes("z")), `labels:items:filter(p=>p[1]!:exists):unique`, true},
+		{schema.Struct(schema.String("app"), schema.Bytes("z")), `labels:items:filter(p=>p[1]!:exists):unique`, false},
 	} {
 		e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("labels", test.object))), engine.WithCapabilities(capabilities.Standard()))
 		if err != nil {

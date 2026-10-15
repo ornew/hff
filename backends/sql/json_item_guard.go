@@ -166,12 +166,20 @@ func (b *builder) jsonItemMatches(n hff.Node, code string, format JSONFormat, ro
 }
 
 func (b *builder) jsonItemValueMatches(n hff.Node, code string, format JSONFormat, roles *jsonItemRoles, target hff.Type) (string, error) {
-	shape := makeComparisonShape(roles.object)
 	value := "(" + code + " -> 1)"
-	match := func(source hff.Type) (string, error) {
-		return b.jsonMatches(n, value, format, intersectItemType(source, roles.value), target)
+	return b.jsonItemValueOperation(n, code, roles, func(source hff.Type) (string, error) {
+		return b.jsonMatches(n, value, format, source, target)
+	})
+}
+
+// Each key keeps its own value contract even when the homogeneous pair type
+// merges several JSON string families. Never recover a tag from its spelling.
+func (b *builder) jsonItemValueOperation(n hff.Node, code string, roles *jsonItemRoles, operation func(hff.Type) (string, error)) (string, error) {
+	shape := makeComparisonShape(roles.object)
+	apply := func(source hff.Type) (string, error) {
+		return operation(intersectItemType(source, roles.value))
 	}
-	fallback, err := match(schemaObjectFallback(shape))
+	fallback, err := apply(schemaObjectFallback(shape))
 	if err != nil {
 		return "", err
 	}
@@ -180,7 +188,7 @@ func (b *builder) jsonItemValueMatches(n hff.Node, code string, format JSONForma
 	}
 	parts := []string{"CASE"}
 	for _, field := range shape.keys {
-		test, err := match(schemaObjectValue(shape, field))
+		test, err := apply(schemaObjectValue(shape, field))
 		if err != nil {
 			return "", err
 		}

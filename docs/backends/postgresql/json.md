@@ -596,20 +596,28 @@ for the key, `1`/`-1` for a value whose type is unambiguous), callback
 extraction, serialization, structural equality, and derived list operations
 when the schema and stored JSON category recover the value identity, including
 schema-known tagged values nested in collections. Mixed Int/Float positions
-require native JSON or preserved JSONB numeric metadata. Out-of-range or
-invalid literal slots return null. A dynamic tuple slot that needs to
-distinguish tagged alternatives is not supported. `Any` remains JSON-native;
-this does not add Bytes identity to an `Any` string. Same-category alternatives
-that cannot be recovered from the declared schema and JSON representation
-remain unsupported. Missing keys, stored nulls, and guard-produced no-value
-remain distinct.
+require native JSON or preserved JSONB numeric metadata. Direct item-pair slot
+observations support `type()`, `exists()`, and explicit type guards followed by
+typed operations. The index may have a numeric, union, or `Any` type;
+integer-valued Float values and negative indexes are accepted. Fractional and
+out-of-range numbers produce ordinary null, as do nonnumeric runtime values
+of a union or `Any` index. Statically incompatible index types remain compile
+errors. A guard-produced no-value index remains
+distinct, and a null pair receiver masks a later index guard as an ordinary
+null receiver does. For a Struct with different field value types, the
+per-key schema also recovers the value at literal slots such as `[1]`.
+`Any` remains JSON-native; this does not add Bytes identity to an `Any` string.
+Same-category alternatives that cannot be recovered from the declared schema
+and JSON representation remain unsupported. Missing keys, stored nulls, and
+guard-produced no-value remain distinct.
 
 When a Struct has different field value types, the key at slot `[0]` remains
 String, and the backend can use each actual key for per-field equality and
-serialization. Extracting slot `[1]` from the combined pairs loses that
+serialization. Passing slot `[1]` as a general value can lose that
 key-dependent dispatch: if its possible values include both String and tagged
-types such as Bytes, Duration, or Timestamp, value-slot extraction may be
-rejected. Guards on recovered pairs and pair lists use the declared key/value
+types such as Bytes, Duration, or Timestamp, unguarded extraction may be
+rejected. Direct slot observations retain the per-key schema. Guards on
+recovered pairs and pair lists use the declared key/value
 roles. For example, a `Map<Bytes|null>` pair matches `[list[string|null]]`
 only when its payload is null. A Bytes payload does not match that guard.
 Neither payload matches `[list[string]]`, and no pair matches `[list[bytes]]`
@@ -618,10 +626,14 @@ guard checks every pair and therefore passes for an empty pair list. Null
 receivers follow the guard's target type, while guard-produced no-value remains
 distinct from ordinary null. The ordinary null guard `!` remains supported.
 
-Role-aware guards still require a source whose element identity is recoverable
-from its schema and stored representation. Same-category alternatives such as
-String versus Bytes without a distinguishing representation remain
-unsupported, as can dynamic tuple slots and unguarded mixed payload extraction.
+Role-aware guards and slot observations still require a source whose element
+identity is recoverable from its schema and stored representation. A guard
+does not make an unguarded carrier with ambiguous String/tagged alternatives
+recoverable; a guarded union whose inferred result still merges String and
+Bytes may also be rejected. Native JSON `Any` cannot infer tagged identity from
+a string alone. Proven item-pair roles continue through the supported
+map/flatmap/fold/concat transformations described below; broader or
+key-dependent transformations retain their existing limits.
 
 The [runnable items example](https://github.com/ornew/hff/tree/main/examples/sql-json-items)
 uses a `Map<Bytes|null>` to select a named nonempty attachment. Its key and

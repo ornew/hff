@@ -1,0 +1,209 @@
+package sql
+
+import (
+	"strings"
+
+	"github.com/ornew/hff"
+	"github.com/ornew/hff/internal/core"
+)
+
+// A slot observation retains its pair, selected numeric position and per-key
+// schema until the observer has resolved the HFF type. This is deliberately
+// local to lowering the observer: an untyped JSON string must not escape as a
+// falsely identified String after selecting a Bytes/Duration/Timestamp value.
+type jsonItemSlot struct {
+	raw, pair, key, value, present string
+	format                         JSONFormat
+	roles                          *jsonItemRoles
+}
+
+func (b *builder) jsonItemSlot(n hff.Node) (jsonItemSlot, bool, error) {
+	nonnull := false
+	for n.Kind() == hff.GuardNode {
+		nonnull = true
+		n, _ = n.Child(0)
+	}
+	if n.Kind() != hff.IndexNode {
+		return jsonItemSlot{}, false, nil
+	}
+	// A key-only traversal has no pair carrier. Its existing scalar path
+	// already knows this slot is String without observing any source values.
+	if id, key := itemKeyBinding(n); key {
+		if parameter, bound := b.parameters[id]; bound && parameter.itemKey != "" {
+			return jsonItemSlot{}, false, nil
+		}
+	}
+	parent, _ := n.Child(0)
+	roles := b.jsonItemRoles(parent)
+	if roles == nil {
+		return jsonItemSlot{}, false, nil
+	}
+	pair, err := b.expression(parent)
+	if err != nil {
+		return jsonItemSlot{}, true, err
+	}
+	slot := jsonItemSlot{raw: "NULL::json", pair: "NULL::json", key: "FALSE", value: "FALSE", present: pair.present, format: JSON, roles: roles}
+	if pair.kind != hff.NullType {
+		format, ok := b.jsonValues[pair.code]
+		if !ok || pair.kind != hff.ListType {
+			return jsonItemSlot{}, true, b.failure(n, "object item slot requires a recoverable pair")
+		}
+		slot.pair, slot.format = pair.code, format
+		child, _ := n.Child(1)
+		index, err := b.expression(child)
+		if err != nil {
+			return jsonItemSlot{}, true, err
+		}
+		slot.present = ordinaryPresence([]expression{pair, index})
+		operand, err := b.numericOperand(child, index)
+		if err != nil {
+			return jsonItemSlot{}, true, err
+		}
+		position := "NULL::integer"
+		var branches []string
+		if operand.integerPossible {
+			branches = append(branches, "WHEN "+both(operand.isInteger, validJSONIndex(operand.integer))+" THEN "+operand.integer.code+"::integer")
+		}
+		if operand.floatPossible {
+			branches = append(branches, "WHEN "+both(operand.isFloat, validJSONIndex(operand.floating))+" THEN "+operand.floating.code+"::integer")
+		}
+		if len(branches) > 0 {
+			position = b.project("(CASE " + strings.Join(branches, " ") + " ELSE NULL::integer END)")
+		}
+		slot.key, slot.value = "("+position+" IN (0,-2))", "("+position+" IN (1,-1))"
+		if x, known := itemLiteralIndex(child); known {
+			slot.key, slot.value = "FALSE", "FALSE"
+			if x == 0 || x == -2 {
+				slot.key = "TRUE"
+			}
+			if x == 1 || x == -1 {
+				slot.value = "TRUE"
+			}
+		}
+		slot.raw = b.project("(" + pair.code + " -> " + position + ")")
+	}
+	if nonnull {
+		slot.present = both(slot.present, "(NOT "+slot.null()+")")
+	}
+	return slot, true, nil
+}
+
+func (slot jsonItemSlot) null() string {
+	return "(" + slot.raw + " IS NULL OR " + string(slot.format) + "_typeof(" + slot.raw + ")='null')"
+}
+
+func (b *builder) jsonItemSlotOperation(n hff.Node, slot jsonItemSlot, nullResult string, operation func(hff.Type) (string, error)) (string, error) {
+	key, value := nullResult, nullResult
+	var err error
+	if slot.key != "FALSE" {
+		key, err = operation(itemKeyType(slot.roles))
+		if err != nil {
+			return "", err
+		}
+	}
+	if slot.value != "FALSE" {
+		value, err = b.jsonItemValueOperation(n, slot.pair, slot.roles, operation)
+		if err != nil {
+			return "", err
+		}
+	}
+	if slot.key == "TRUE" {
+		return key, nil
+	}
+	if slot.value == "TRUE" {
+		return value, nil
+	}
+	return "(CASE WHEN " + slot.key + " THEN " + key + " WHEN " + slot.value + " THEN " + value + " ELSE " + nullResult + " END)", nil
+}
+
+func (b *builder) jsonItemSlotGuard(n hff.Node) (expression, bool, error) {
+	child, _ := n.Child(0)
+	slot, handled, err := b.jsonItemSlot(child)
+	if !handled || err != nil {
+		return expression{}, handled, err
+	}
+	target, _ := n.Constraint()
+	// Validate alternatives before inference can absorb a tagged family into
+	// Any. A successful guard must still have a recoverable result carrier.
+	types, _ := b.jsonItemSlotGuardTypes(n)
+	if err := b.checkJSONStringSchemas(n, hff.NewUnionType(types...)); err != nil {
+		return expression{}, true, err
+	}
+	nullResult := "FALSE"
+	if acceptsKind(target, hff.NullType) {
+		nullResult = "TRUE"
+	}
+	test, err := b.jsonItemSlotOperation(n, slot, nullResult, func(source hff.Type) (string, error) {
+		return b.jsonMatches(n, slot.raw, slot.format, source, target)
+	})
+	if err != nil {
+		return expression{}, true, err
+	}
+	present := both(slot.present, "COALESCE("+test+",FALSE)")
+	guarded := "(CASE WHEN " + present + " THEN " + slot.raw + " ELSE NULL::" + string(slot.format) + " END)"
+	result, err := b.jsonDecode(n, guarded, slot.format, b.jsonStoredType(n), present)
+	return result, true, err
+}
+
+// Preserve the recovered alternatives before inference absorbs Any. Literal
+// positions can discard the unobserved slot; dynamic positions must keep both.
+func (b *builder) jsonItemSlotGuardTypes(n hff.Node) ([]hff.Type, bool) {
+	target, _ := n.Constraint()
+	child, _ := n.Child(0)
+	for child.Kind() == hff.GuardNode {
+		child, _ = child.Child(0)
+	}
+	if child.Kind() != hff.IndexNode {
+		return nil, false
+	}
+	parent, _ := child.Child(0)
+	roles := b.jsonItemRoles(parent)
+	if roles == nil {
+		return nil, false
+	}
+	index, _ := child.Child(1)
+	x, literal := itemLiteralIndex(index)
+	var types []hff.Type
+	if !literal || x == 0 || x == -2 {
+		types = append(types, intersectItemType(itemKeyType(roles), target))
+	}
+	if !literal || x == 1 || x == -1 {
+		shape := makeComparisonShape(roles.object)
+		for _, key := range shape.keys {
+			types = append(types, intersectItemType(intersectItemType(schemaObjectValue(shape, key), roles.value), target))
+		}
+		types = append(types, intersectItemType(intersectItemType(schemaObjectFallback(shape), roles.value), target))
+	}
+	return types, true
+}
+
+func itemSlotGuardType(types []hff.Type, target hff.Type) hff.Type {
+	var members []core.Type
+	for _, typ := range types {
+		members = append(members, core.Type(typ))
+	}
+	if acceptsKind(target, hff.NullType) {
+		members = append(members, core.PrimitiveType(core.NullType))
+	}
+	result := core.UnionTypes(members...)
+	if result.Kind() == core.NeverType {
+		// An impossible guard has no value, but still needs a SQL carrier.
+		return hff.PrimitiveType(hff.NullType)
+	}
+	return hff.Type(result)
+}
+
+func (b *builder) jsonItemSlotCall(n hff.Node, name string) (expression, bool, error) {
+	child, _ := n.Child(0)
+	slot, handled, err := b.jsonItemSlot(child)
+	if !handled || err != nil {
+		return expression{}, handled, err
+	}
+	if name == "exists" {
+		return boolean(both(slot.present, "(NOT "+slot.null()+")")), true, nil
+	}
+	typeName, err := b.jsonItemSlotOperation(n, slot, "'null'::text", func(source hff.Type) (string, error) {
+		return b.jsonRuntimeTypeName(n, slot.raw, slot.format, source)
+	})
+	return expression{typeName, slot.present, hff.StringType}, true, err
+}
