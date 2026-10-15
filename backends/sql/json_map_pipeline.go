@@ -11,18 +11,18 @@ import (
 // a String from Bytes, Duration, or Timestamp. This pipeline carries lexical
 // descriptors instead; it never changes the public JSON storage contract.
 func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, error) {
-	source, maps := mapPipelineSource(n)
-	if len(maps) == 0 {
+	source, stages := mapPipelineSource(n)
+	if len(stages) == 0 {
 		return expression{}, false, nil
 	}
-	callbacks := make([]hff.Node, 0, len(maps)+1)
-	for _, mapping := range maps {
-		callback, _ := mapping.Child(1)
+	callbacks := make([]hff.Node, 0, len(stages)+1)
+	for _, stage := range stages {
+		callback, _ := stage.Child(1)
 		callbacks = append(callbacks, callback)
 	}
 	callback, _ := n.Child(1)
 	callbacks = append(callbacks, callback)
-	if !b.mapPipelineHasItemSlot(source, callbacks[:len(callbacks)-1]) {
+	if !b.mapPipelineHasItemSlot(source, stages) {
 		return expression{}, false, nil
 	}
 	value, err := b.expression(source)
@@ -48,7 +48,7 @@ func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, er
 	parameter := jsonParameter{code: alias + ".value", format: format,
 		typ:   jsonStoredMemberType(sortListType(b.jsonStoredType(source)), "", false, true),
 		lossy: b.losesFloat(source, nil), itemRoles: b.jsonItemsRoles(source)}
-	valid := "TRUE"
+	valid, selected := "TRUE", "TRUE"
 	var result expression
 	var body hff.Node
 	for i, callback := range callbacks {
@@ -62,6 +62,19 @@ func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, er
 		// role memo cannot be reused under a new callback environment.
 		b.itemRoleMemo = nil
 		body, _ = callback.Child(0)
+		if i < len(stages) {
+			method, _ := stages[i].Method()
+			if method.Name() == "filter" {
+				predicate, err := b.expression(body)
+				if err != nil {
+					return expression{}, true, err
+				}
+				// Filtering changes which rows reach later maps, but cannot
+				// erase a failure in an earlier materialized map.
+				selected = both(selected, b.truth(body, predicate))
+				continue
+			}
+		}
 		if i < len(callbacks)-1 || name != "map" {
 			slot, handled, err := b.jsonItemSlot(body)
 			if err != nil {
@@ -75,7 +88,7 @@ func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, er
 					}
 					break
 				}
-				valid = both(valid, slot.present)
+				valid = both(valid, pipelineRowPresence(selected, slot.present))
 				parameter = jsonParameter{typ: b.jsonStoredType(body), format: slot.format,
 					lossy: b.losesFloat(body, nil), itemSlot: &slot}
 				continue
@@ -88,7 +101,7 @@ func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, er
 		if i < len(callbacks)-1 || name == "map" {
 			// A prior map must finish successfully even when the next body
 			// ignores its parameter or its predicate would match earlier.
-			valid = both(valid, result.present)
+			valid = both(valid, pipelineRowPresence(selected, result.present))
 		}
 		if i < len(callbacks)-1 {
 			// Match a materialized map's normalization boundary before the
@@ -129,7 +142,11 @@ func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, er
 		from += " CROSS JOIN LATERAL " + strings.Join(b.steps, " CROSS JOIN LATERAL ")
 	}
 	rows, output := b.nextAlias(), b.nextAlias()
-	cte := "WITH " + rows + " AS MATERIALIZED (SELECT " + alias + ".ord AS ord," + raw + " AS v," + valid + " AS p FROM " + from + ")"
+	keepColumn, keepWhere, countWhere := "", "", " WHERE v"
+	if selected != "TRUE" {
+		keepColumn, keepWhere, countWhere = ","+selected+" AS keep", " WHERE keep", " WHERE keep AND v"
+	}
+	cte := "WITH " + rows + " AS MATERIALIZED (SELECT " + alias + ".ord AS ord," + raw + " AS v," + valid + " AS p" + keepColumn + " FROM " + from + ")"
 	present := both(value.present, "("+value.code+" IS NULL OR (SELECT COALESCE(bool_and(p),TRUE) FROM "+rows+"))")
 	var aggregate string
 	kind := hff.BoolType
@@ -140,14 +157,14 @@ func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, er
 		if b.orderBlind[n] {
 			order = ""
 		}
-		aggregate = "(SELECT COALESCE(json_agg(v" + order + "),'[]'::json) FROM " + rows + ")"
+		aggregate = "(SELECT COALESCE(json_agg(v" + order + "),'[]'::json) FROM " + rows + keepWhere + ")"
 	case "any":
-		aggregate = "(SELECT COALESCE(bool_or(v),FALSE) FROM " + rows + ")"
+		aggregate = "(SELECT COALESCE(bool_or(v),FALSE) FROM " + rows + keepWhere + ")"
 	case "all":
-		aggregate = "(SELECT COALESCE(bool_and(v),TRUE) FROM " + rows + ")"
+		aggregate = "(SELECT COALESCE(bool_and(v),TRUE) FROM " + rows + keepWhere + ")"
 	case "count":
 		kind = hff.IntType
-		aggregate = "(SELECT count(*) FROM " + rows + " WHERE v)"
+		aggregate = "(SELECT count(*) FROM " + rows + countWhere + ")"
 	default:
 		return expression{}, true, b.failure(n, "unsupported map pipeline consumer")
 	}
@@ -160,14 +177,14 @@ func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, er
 	return expression{code: output + ".v", present: output + ".p", kind: kind}, true, nil
 }
 
-// Only direct built-in map stages share this row pipeline. Other operations
-// retain their own receiver validation and collection materialization rules.
+// Built-in map and filter stages share row identity. Other operations retain
+// their own receiver validation and collection materialization rules.
 func mapPipelineSource(n hff.Node) (hff.Node, []hff.Node) {
 	receiver, _ := n.Child(0)
-	var maps []hff.Node
+	var stages []hff.Node
 	for {
 		method, ok := receiver.Method()
-		if !ok || method.Name() != "map" {
+		if !ok || (method.Name() != "map" && method.Name() != "filter") {
 			break
 		}
 		for _, signature := range method.Signatures() {
@@ -175,18 +192,18 @@ func mapPipelineSource(n hff.Node) (hff.Node, []hff.Node) {
 				return receiver, nil
 			}
 		}
-		maps = append(maps, receiver)
+		stages = append(stages, receiver)
 		receiver, _ = receiver.Child(0)
 	}
-	for i, j := 0, len(maps)-1; i < j; i, j = i+1, j-1 {
-		maps[i], maps[j] = maps[j], maps[i]
+	for i, j := 0, len(stages)-1; i < j; i, j = i+1, j-1 {
+		stages[i], stages[j] = stages[j], stages[i]
 	}
-	return receiver, maps
+	return receiver, stages
 }
 
 // Ordinary chains keep the existing lowering, including its key-only row
 // optimization. Activate this path only when a value slot needs its origin.
-func (b *builder) mapPipelineHasItemSlot(source hff.Node, callbacks []hff.Node) bool {
+func (b *builder) mapPipelineHasItemSlot(source hff.Node, stages []hff.Node) bool {
 	typ := jsonStoredMemberType(sortListType(b.jsonStoredType(source)), "", false, true)
 	pair, list := b.jsonItemsRoles(source), (*jsonItemRoles)(nil)
 	var restores []func()
@@ -195,8 +212,13 @@ func (b *builder) mapPipelineHasItemSlot(source hff.Node, callbacks []hff.Node) 
 			restores[i]()
 		}
 	}()
-	for _, callback := range callbacks {
+	for _, stage := range stages {
+		callback, _ := stage.Child(1)
 		restores = append(restores, b.jsonCallbackParameters(callback, []hff.Type{typ}, []*jsonItemRoles{pair}, []*jsonItemRoles{list}))
+		method, _ := stage.Method()
+		if method.Name() == "filter" {
+			continue
+		}
 		body, _ := callback.Child(0)
 		origin, _ := itemSlotOrigin(body)
 		if origin.Kind() == hff.IndexNode {
@@ -210,4 +232,14 @@ func (b *builder) mapPipelineHasItemSlot(source hff.Node, callbacks []hff.Node) 
 		typ, pair, list = b.jsonStoredType(body), b.jsonItemRoles(body), b.jsonItemsRoles(body)
 	}
 	return false
+}
+
+// A map after a filter runs only on retained rows. Earlier map failures are
+// accumulated separately and remain observable even if a later filter drops
+// the row that caused them.
+func pipelineRowPresence(selected, present string) string {
+	if selected == "TRUE" || present == "TRUE" {
+		return present
+	}
+	return "(CASE WHEN " + selected + " THEN " + present + " ELSE TRUE END)"
 }

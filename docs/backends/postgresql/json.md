@@ -671,15 +671,19 @@ general representation path. Same-category or otherwise ambiguous origins
 such as String versus Duration cannot be made recoverable by merging into
 `Any`; operations requiring that identity may be rejected.
 
-A direct `map()` chain from `items()` can carry a selected slot's source key
-and schema into a following `map()`, `any()`, `all()`, or `count(predicate)`.
-The final mapped output must still have a recoverable type. If an earlier map
-produces no-value, the entire result is no-value even when a later callback
-would ignore that argument or `any()` could otherwise match early; ordinary
-null remains data. Between map stages, `concat()`, `filter()`, `flatmap()`,
-and folds end this bounded transport. A filter before the first map can still
-use item roles retained by its source. This path does not make an independently
-ambiguous constructed carrier recoverable.
+A direct `map()`/`filter()` sequence from `items()` can carry a selected slot's
+source key and schema into a later `map()`, `any()`, `all()`, or
+`count(predicate)`. The final mapped output must still have a recoverable type.
+A filter retains rows whose predicate converts to true. False, null, and
+no-value exclude the row. Excluded rows do not contribute later results or
+no-value failures from later maps. Its predicate guard does not narrow or
+replace the value retained by the filter. If an earlier map produces
+no-value, the entire result remains no-value even when a later filter would
+exclude that row or a later callback would ignore the argument; ordinary null
+remains data. A filter before the first map can also use item roles retained by
+its source. Between map/filter stages, `concat()`, `flatmap()`, and folds end
+this bounded transport. This path does not make an independently ambiguous
+constructed carrier recoverable.
 
 The schema-known `Bytes|Int|Float|Null` and
 `Bytes|Bool|Int|Float|Null` unions are supported for native JSON and for JSONB

@@ -74,7 +74,7 @@ func TestJSONItemMapPipelinesBuild(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, source := range itemMapPipelineSources(tc) {
+		for _, source := range append(itemMapPipelineSources(tc), itemFilteredMapPipelineSources(tc)...) {
 			p, err := e.Compile(ctx, source)
 			if err != nil {
 				t.Fatal(tc.name, source, err)
@@ -85,5 +85,37 @@ func TestJSONItemMapPipelinesBuild(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func itemFilteredMapPipelineSources(tc itemRoleFixture) []string {
+	values := `labels:items:map(p=>p[1])`
+	return []string{
+		values + `:filter(v=>v:exists):map(v=>v:type)[0]="string"`,
+		values + `:filter(v=>v:exists):map(v=>v:type):contains("` + tc.tag + `")`,
+		values + `:filter(v=>v:exists):any(v=>v:type="` + tc.tag + `")`,
+		values + `:filter(v=>v:exists):all(v=>v:exists)`,
+		values + `:filter(v=>v:exists):count(v=>v:type="` + tc.tag + `")>0`,
+		values + `:filter(v=>v!=null):any(v=>v:exists)`,
+		values + `:filter(v=>v=null):map(v=>v:type):contains("null")`,
+		values + `:filter(v=>v=null):any(v=>v:exists)`,
+		values + `:filter(v=>v:[string]:len>0):map(v=>v:type):contains("string")`,
+		values + `:filter(v=>v:[string]:exists):map(v=>v:[string]:len):exists`,
+		values + `:filter(v=>v:[null]:type="null"):all(v=>v=null)`,
+		values + `:filter(v=>v:[null]:exists | v:[string]:exists):map(v=>v:type):exists`,
+		values + `:filter(v=>true):filter(v=>false):map(v=>v!:type):exists`,
+		values + `:filter(v=>false):map(v=>v!):any(v=>true)`,
+		values + `:filter(v=>false):map(v=>v!):all(v=>false)`,
+		values + `:filter(v=>false):map(v=>v!):count(v=>true)=0`,
+		values + `:map(v=>v!):filter(v=>false):map(v=>true):exists`,
+		values + `:map(v=>v!):filter(v=>false):any(v=>true)`,
+		values + `:map(v=>v!):filter(v=>false):all(v=>true)`,
+		values + `:map(v=>v!):filter(v=>false):count(v=>true)=0`,
+		values + `:filter(v=>v:exists):map(v=>v!):filter(v=>false):map(v=>true):exists`,
+		values + `:filter(v=>v):map(v=>v!):any(v=>true)`,
+		values + `:filter(v=>other:items:any(q=>q[1]:type=v:type)):map(v=>v:type):exists`,
+		values + `:filter(v=>other:items:any(v=>v[1]:exists) v:exists):map(v=>v:type):exists`,
+		`labels:items:filter(p=>p[0]="app"):map(p=>p[1]):filter(v=>v:exists):map(v=>v:type):contains("string")`,
+		`labels:items:map(p=>p[labels:size-1]):filter(v=>v:exists):map(v=>v:type):contains("string")`,
 	}
 }

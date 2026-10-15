@@ -453,6 +453,16 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 		return value, nil
 	case hff.NullTestNode:
 		child, _ := n.Child(0)
+		if slot, handled, err := b.jsonItemSlot(child); handled || err != nil {
+			if err != nil {
+				return expression{}, err
+			}
+			test := slot.null()
+			if op, _ := n.Operator(); op == hff.NotEqual {
+				test = "(NOT " + test + ")"
+			}
+			return boolean(both(slot.present, test)), nil
+		}
 		value, err := b.expression(child)
 		if err != nil {
 			return expression{}, err

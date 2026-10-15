@@ -176,9 +176,9 @@ comes from the separate field's schema.
 
 ## Continue a selected slot through a map chain
 
-A direct map chain can retain each selected value's field identity through a
-following map or predicate. With the schema and rows above, these queries
-inspect the type of each `items()` value:
+A direct map/filter sequence can retain each selected value's field identity
+through later maps and predicates. With the schema and rows above, these
+queries inspect the type of each `items()` value:
 
 ```hff
 labels:items:map(pair=>pair[1]):map(value=>value:type):contains("bytes")
@@ -191,9 +191,26 @@ The first two match rows 1 and 2, whose `asset` values are Bytes. The count
 query matches rows 1–3, each of which has one String in its `app` field. The
 last query matches rows 1 and 2; row 3's null `asset` value makes the earlier
 map produce no-value, so the later constant-true predicate cannot hide it.
-This pipeline keeps the selected slot's schema through direct map chains only;
-an intervening filter, concat, flatmap, or fold needs its own recoverable
-carrier proof.
+This pipeline keeps the selected slot's schema through direct map/filter
+sequences. Filters can remove rows before later maps, but their guards do not
+change the retained value's type. An earlier map's no-value remains a failure
+even if a later filter would remove that row. These bounded sequences do not
+cross `concat()`, `flatmap()`, or folds.
+
+For example, filtering by observed type removes null payloads before the next
+map, while retaining the original field roles:
+
+```hff
+labels:items:map(pair=>pair[1]):filter(value=>value:type="bytes"):map(value=>value:type):contains("bytes")
+labels:items:map(pair=>pair[1]):filter(value=>value:exists):map(value=>value!):count(value=>true)=3
+labels:items:map(pair=>pair[1]!):filter(value=>false):all(value=>true)
+```
+
+The first matches rows 1 and 2, whose `asset` field is Bytes. The second
+matches row 3: filtering removes its null `asset`, and the three remaining
+values are `app`, `elapsed`, and `recorded`. The third matches rows 1 and 2,
+whose mapped values contain no nulls. For rows 3 and 4, the first map's `!`
+produces no-value; the later always-false filter cannot erase that failure.
 
 ## Consume object keys without reading values
 

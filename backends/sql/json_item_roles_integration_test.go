@@ -96,6 +96,10 @@ func TestPostgreSQLJSONItemMapPipelinesMatchLocal(t *testing.T) {
 	runPostgreSQLJSONItemRoleSources(t, itemMapPipelineSources, itemMapPipelineFixtures()...)
 }
 
+func TestPostgreSQLJSONItemFilteredMapPipelinesMatchLocal(t *testing.T) {
+	runPostgreSQLJSONItemRoleSources(t, itemFilteredMapPipelineSources, itemMapPipelineFixtures()...)
+}
+
 func TestPostgreSQLJSONItemKeyGuardChainsWithoutMetadata(t *testing.T) {
 	runPostgreSQLJSONItemRoleSources(t, itemKeyChainSources, keyOnlyValueFixtures()...)
 }
