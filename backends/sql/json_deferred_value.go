@@ -187,9 +187,17 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 		return result, true, err
 	}
 	if method, ok := n.Method(); ok {
+		if builtinListCall(n, "find") {
+			receiver, _ := n.Child(0)
+			needed := b.keepDeferredValues || b.hasDeferredValueSource(n) || computedDeferredSource(receiver)
+			if needed && b.jsonItemRoles(n) == nil && b.jsonItemsRoles(n) == nil {
+				value, err := b.deferredFindDescriptor(n)
+				return value, true, err
+			}
+		}
 		if builtinListCall(n, "sort") {
 			receiver, _ := n.Child(0)
-			needed := b.keepDeferredValues || b.hasDeferredValueSource(n) || runtimeSortComputedSource(receiver)
+			needed := b.keepDeferredValues || b.hasDeferredValueSource(n) || computedDeferredSource(receiver)
 			if needed {
 				value, err := b.runtimeSortDescriptor(n)
 				return value, true, err
@@ -416,4 +424,19 @@ func deferredCases(choices []jsonDeferredChoice, values []string, fallback strin
 		return fallback
 	}
 	return "(CASE " + strings.Join(branches, " ") + " ELSE " + fallback + " END)"
+}
+
+// Stored paths already have schema-backed lowering. Computed trees
+// can carry lexical types that a merged JSON list schema cannot recover.
+func computedDeferredSource(n hff.Node) bool {
+	if n.Kind() == hff.CallNode || n.Kind() == hff.ListNode {
+		return true
+	}
+	for i := 0; i < n.ChildCount(); i++ {
+		child, _ := n.Child(i)
+		if computedDeferredSource(child) {
+			return true
+		}
+	}
+	return false
 }

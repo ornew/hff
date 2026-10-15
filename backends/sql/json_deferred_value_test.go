@@ -187,7 +187,7 @@ func TestDeferredCollectionDispatchBuild(t *testing.T) {
 	}
 }
 
-func TestDeferredChoiceRejectsAmbiguousMaterialization(t *testing.T) {
+func TestDeferredChoicePreservesFindAndTypeObservers(t *testing.T) {
 	ctx := context.Background()
 	for _, typ := range []hff.Type{schema.BytesType, schema.DurationType, schema.TimestampType} {
 		e, err := engine.New(engine.WithSchema(schema.Struct(schema.Map("labels", typ), schema.Field("unknown", schema.AnyType), schema.Int("index"))), engine.WithCapabilities(capabilities.Standard()))
@@ -202,9 +202,8 @@ func TestDeferredChoiceRejectsAmbiguousMaterialization(t *testing.T) {
 					t.Fatal(source, err)
 				}
 				_, err = hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindJSON(hff.Path{"labels"}, hffsql.Column("records", "labels"), hffsql.JSON), hffsql.BindJSON(hff.Path{"unknown"}, hffsql.Column("records", "unknown"), hffsql.JSON), hffsql.Bind(hff.Path{"index"}, hffsql.Column("records", "idx"))))
-				reject := observer == `:find(x=>true):type="bytes"` && body != `{"a":v,"b":unknown}["a"]`
-				if (err != nil) != reject {
-					t.Errorf("%v %s reject%v: %v", typ, source, reject, err)
+				if err != nil {
+					t.Errorf("%v %s: %v", typ, source, err)
 				}
 			}
 		}

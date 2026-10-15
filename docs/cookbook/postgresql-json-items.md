@@ -463,6 +463,23 @@ domain. An empty list still sorts to an empty list. Deferred sorting preserves
 the original values and stable order; it does not enable unrelated consumers
 of every ambiguous tree.
 
+### Find the first typed deferred value
+
+`find()` can return a recovered value from a folded list. These queries select
+the first Bytes value, then the first Timestamp value, in each record's
+object-key order:
+
+```hff
+labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value])):find(value=>value:[bytes]:exists):string="YQ=="
+labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value])):find(value=>value:[timestamp]:exists):type="timestamp"
+```
+
+The first matches row 1, whose Bytes value is `YQ==`; row 2's first Bytes
+value is `Yg==`. The second matches rows 1–3, whose first Timestamp value is
+the `recorded` field. Row 4 has no matching non-null value. A guarded
+no-value predicate is false, and SQL preserves the first-match result without
+promising Local's physical callback short-circuit.
+
 ### Fold pair and pair-list accumulators
 
 Folds can retain the same pair roles when the seed and every possible

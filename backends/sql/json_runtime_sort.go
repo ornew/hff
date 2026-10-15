@@ -89,18 +89,3 @@ func runtimeSortMayContain(typ hff.Type, kind hff.TypeKind) bool {
 	}
 	return false
 }
-
-// Stored paths already use the ordinary schema-backed sort. Computed trees
-// can carry lexical types that a merged JSON list schema cannot recover.
-func runtimeSortComputedSource(n hff.Node) bool {
-	if n.Kind() == hff.CallNode || n.Kind() == hff.ListNode {
-		return true
-	}
-	for i := 0; i < n.ChildCount(); i++ {
-		child, _ := n.Child(i)
-		if runtimeSortComputedSource(child) {
-			return true
-		}
-	}
-	return false
-}

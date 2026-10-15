@@ -1577,11 +1577,18 @@ returns the first original value from each equal group in input order,
 preserving its type and observable Float representation. These operations need
 the same structural equality capabilities as their ordinary HFF forms when
 composite values may be compared. The bounded typed-tree `sort()` support is
-described in [Sort JSON-backed lists](#sort-json-backed-lists). `find()` and
-aggregates still have separate recovery requirements and may need an explicit
-guard or fail `Build`. Native JSON strings never imply Bytes, Duration, or
-Timestamp identity, and JSONB Float-loss and metadata requirements remain
-unchanged.
+described in [Sort JSON-backed lists](#sort-json-backed-lists). `find()` can
+also return the first original value from an eligible typed tree when its
+identity and output representation are recoverable. It uses ordinary predicate
+conversion, so guarded no-value is false; no match, a null receiver, or a
+matching null element returns ordinary null, while receiver or whole-source
+no-value remains no-value. The source ordinal determines the first match, and
+relation bindings still require a unique order. SQL preserves the result
+semantics but does not promise physical callback short-circuiting or local
+per-match work budgets. Aggregates retain separate recovery requirements and
+may need an explicit guard or fail `Build`. Native JSON strings never imply
+Bytes, Duration, or Timestamp identity, and JSONB Float-loss and metadata
+requirements remain unchanged.
 
 A callback that ignores an ambiguous JSONB item and returns a known type, such
 as `foldl(0,(acc,item)=>acc+1)`, does not need metadata for that item's numeric

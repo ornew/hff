@@ -59,6 +59,7 @@ func TestPostgreSQLDeferredCollectionValuesPrepare(t *testing.T) {
 		sources = append(sources, runtimeMembershipSources(fixture)...)
 		sources = append(sources, runtimeDistinctPairSources(fixture)...)
 		sources = append(sources, runtimeSortSources(fixture)...)
+		sources = append(sources, deferredFindSources(fixture)...)
 		for _, source := range sources {
 			p, err := e.Compile(ctx, source)
 			if err != nil {
