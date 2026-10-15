@@ -215,25 +215,49 @@ produces no-value; the later always-false filter cannot erase that failure.
 
 ### Concatenate deferred branches for an immediate consumer
 
-Eligible item-slot branches can be directly concatenated and consumed
-immediately by `map()`, `any()`, `all()`, or `count(predicate)`. Each branch
-keeps its own key and schema while the terminal consumer resolves the selected
-value. Direct nested concat leaves preserve branch order. With the `events`
-schema and rows above, this query maps both branches to their HFF type names
-and compares the resulting ordered list:
+Eligible deferred `items()` branches can be directly concatenated and consumed
+by `map()`, `any()`, `all()`, or `count(predicate)`. This immediate map keeps
+the branch order visible in the resulting type list:
 
 ```hff
 labels:items:map(pair=>pair[1]):concat(labels:items:map(pair=>pair[1])):map(value=>value:type)=["string","bytes","duration","timestamp","string","bytes","duration","timestamp"]
 ```
 
+Rows 1 and 2 match.
+
+### Continue a shared pipeline after concatenating deferred branches
+
+An eligible direct concat can continue through an elementwise map/filter chain
+and then a terminal `map()`, `any()`, `all()`, or `count(predicate)`. Each
+branch keeps its own key and schema while callbacks resolve the selected value,
+and nested concat leaves preserve branch order. With the `events` schema and
+rows above, this query filters nulls and maps each remaining value to its HFF
+type name:
+
+```hff
+labels:items:map(pair=>pair[1]):concat(labels:items:map(pair=>pair[1])):filter(value=>value:type!="null"):map(value=>value:[any]):map(value=>value:type)=["string","bytes","duration","timestamp","string","bytes","duration","timestamp"]
+```
+
 Rows 1 and 2 match: each branch contributes `string`, `bytes`, `duration`,
-`timestamp` in object-key order, and the branches remain left-to-right. For
-deferred slots, `json()` is also an observer: it serializes each value using
-that key's schema. Returning an unresolved ambiguous value directly from the
-terminal `map()` still fails type recovery. If a concatenated operand is null,
-concat returns null and the terminal callback does not contribute a failure.
-This support does not extend to extra map/filter stages after concat, or to
-general `flatmap()` and fold transport.
+`timestamp` in object-key order, and the branches remain left-to-right. Complete
+item pairs can also be concatenated before a later map selects a slot. For a
+deferred slot, `json()` observes and serializes each value using that key's
+schema. Returning an unresolved ambiguous value directly from the terminal
+`map()` still fails type recovery. A no-value from a map before concat remains
+a failure even if later filtering excludes that row. If concat returns null,
+it masks failures from all later maps; filters do not narrow their retained
+values, and ordinary null remains data.
+
+This map/filter transport does not extend to general `flatmap()` or fold
+carriers, or other materialization boundaries. A later filter cannot erase a
+no-value produced by an earlier map:
+
+```hff
+labels:items:map(pair=>pair[1]):concat(labels:items:map(pair=>pair[1])):map(value=>value!):filter(value=>false):all(value=>true)
+```
+
+Rows 1 and 2 match. Rows 3 and 4 have null values that make the earlier map
+produce no-value; the later always-false filter does not erase that failure.
 
 ## Consume object keys without reading values
 

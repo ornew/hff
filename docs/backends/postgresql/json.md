@@ -681,18 +681,20 @@ replace the value retained by the filter. If an earlier map produces
 no-value, the entire result remains no-value even when a later filter would
 exclude that row or a later callback would ignore the argument; ordinary null
 remains data. A filter before the first map can also use item roles retained by
-its source. This selected-slot transport does not pass through general
-`concat()`, `flatmap()`, or fold stages. A bounded exception accepts direct
-`List.concat()` of eligible deferred `items()` map/filter branches when the
-result is consumed immediately by `map()`, `any()`, `all()`, or
-`count(predicate)`. Recursive direct concat leaves are supported and preserve
-branch order; the terminal consumer resolves each branch using its own schema,
-key, type, and Float-loss scope. `json()` can observe the deferred slot using
-its per-key schema. A raw ambiguous value returned by the terminal map still
-fails recovery. If concat returns null, the terminal callback does not
-contribute a failure. This exception does not add general `flatmap()` or fold
-transport, or support extra map/filter stages between concat and its terminal
-consumer.
+its source. A bounded path accepts direct list `concat()` calls on eligible
+deferred `items()` branches followed by an elementwise `map()`/`filter()` chain
+and a terminal `map()`, `any()`, `all()`, or `count(predicate)`. This includes
+concatenating complete item pairs and selecting their slot in a later map.
+Recursive direct concat leaves preserve branch order, and each arm retains its
+own schema, key, type, and Float-loss scope. `json()` can observe a deferred
+slot using its per-key schema; an unresolved ambiguous value returned by the
+terminal map still fails recovery. An already-recovered inner map pipeline can
+also be a concat input; an unresolved inner result still fails recovery. A
+no-value from an input map remains a failure even when a later filter excludes
+that row. A null concat result masks failures from all post-concat maps;
+filters do not narrow retained values, and ordinary null remains data. This
+path does not add general `flatmap()` or fold transport, or support other
+materialization boundaries.
 
 For eligible `items()` pipelines, PostgreSQL can place row-dependent built-in
 callback work behind a filter's row gate when it depends on the current item;

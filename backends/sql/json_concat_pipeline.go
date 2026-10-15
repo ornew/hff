@@ -16,7 +16,7 @@ type jsonPipelineArm struct {
 // results. A homogeneous JSON array cannot retain String/tagged distinctions
 // that are still recoverable from the separate source objects and keys.
 func (b *builder) jsonConcatMapPipeline(n hff.Node, name string) (expression, bool, error) {
-	receiver, _ := n.Child(0)
+	receiver, shared := mapPipelineSource(n)
 	if !listConcatNode(receiver) {
 		return expression{}, false, nil
 	}
@@ -31,9 +31,18 @@ func (b *builder) jsonConcatMapPipeline(n hff.Node, name string) (expression, bo
 			return
 		}
 		source, stages := mapPipelineStages(node)
+		if listConcatNode(source) && len(stages) > 0 {
+			// An inner pipeline may already recover ordinary values. Lower
+			// that whole input in its own concat scope rather than stripping
+			// its maps and forcing the unresolved inner concat to materialize.
+			source, stages = node, nil
+		}
 		arms = append(arms, jsonPipelineArm{source, stages})
 	}
 	collect(receiver)
+	for i := range arms {
+		arms[i].stages = append(arms[i].stages, shared...)
+	}
 	needed := false
 	for _, arm := range arms {
 		needed = needed || b.mapPipelineHasItemSlot(arm.source, arm.stages)
@@ -47,17 +56,22 @@ func (b *builder) jsonConcatMapPipeline(n hff.Node, name string) (expression, bo
 	var stored []hff.Type
 	var definitions, unions, nulls []string
 	for i, arm := range arms {
+		streams[i].boundary = len(arm.stages) - len(shared)
 		if _, err := b.jsonMapPipelineFrom(n, name, arm.source, arm.stages, &streams[i]); err != nil {
 			return expression{}, true, err
 		}
 	}
-	for i := range streams {
-		input := &streams[i]
-		if input.finish != nil {
-			if err := input.finish(); err != nil {
-				return expression{}, true, err
+	for stage := 0; stage <= len(shared); stage++ {
+		for i := range streams {
+			if streams[i].advance != nil {
+				if err := streams[i].advance(); err != nil {
+					return expression{}, true, err
+				}
 			}
 		}
+	}
+	for i := range streams {
+		input := &streams[i]
 		rows := b.nextAlias()
 		if input.query == "" {
 			carrier := "NULL::boolean"

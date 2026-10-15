@@ -125,15 +125,6 @@ func TestPostgreSQLConcatPipelineCookbook(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const source = `labels:items:map(pair=>pair[1]):concat(labels:items:map(pair=>pair[1])):map(value=>value:type)=["string","bytes","duration","timestamp","string","bytes","duration","timestamp"]`
-	p, err := e.Compile(ctx, source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	q, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindJSON(hff.Path{"labels"}, hffsql.Column("events", "labels"), hffsql.JSONB, hffsql.WithTypeMetadata(hffsql.Column("events", "labels_meta")))))
-	if err != nil {
-		t.Fatal(err)
-	}
 	script := strings.Builder{}
 	script.WriteString(`CREATE TEMP TABLE events(id integer,labels jsonb,labels_meta jsonb DEFAULT '{"version":1,"types":{}}'::jsonb);
 INSERT INTO events(id,labels) VALUES
@@ -141,6 +132,28 @@ INSERT INTO events(id,labels) VALUES
 (2,'{"app":"2026-10-15T00:00:00Z","asset":"Yg==","elapsed":"1s","recorded":"2026-10-15T00:00:01Z"}'),
 (3,'{"app":"","asset":null,"elapsed":"2s","recorded":"2026-10-15T00:00:02Z"}'),
 (4,'{"app":null,"asset":null,"elapsed":null,"recorded":null}');`)
-	appendAggregateProfileQuery(t, &script, q, "events ORDER BY id", 0)
-	runSQLBooleanParityScript(t, ctx, container, script.String(), []bool{true, true, false, false}, []string{"row1", "row2", "row3", "row4"})
+	const joined = `labels:items:map(pair=>pair[1]):concat(labels:items:map(pair=>pair[1]))`
+	const types = `["string","bytes","duration","timestamp","string","bytes","duration","timestamp"]`
+	var expected []bool
+	var labels []string
+	for i, source := range []string{
+		joined + `:map(value=>value:type)=` + types,
+		joined + `:filter(value=>value:type!="null"):map(value=>value:[any]):map(value=>value:type)=` + types,
+		joined + `:map(value=>value!):filter(value=>false):all(value=>true)`,
+	} {
+		p, err := e.Compile(ctx, source)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		q, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(hffsql.BindJSON(hff.Path{"labels"}, hffsql.Column("events", "labels"), hffsql.JSONB, hffsql.WithTypeMetadata(hffsql.Column("events", "labels_meta")))))
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		appendAggregateProfileQuery(t, &script, q, "events ORDER BY id", i)
+		expected = append(expected, true, true, false, false)
+		for row := 1; row <= 4; row++ {
+			labels = append(labels, fmt.Sprintf("query%d row%d", i, row))
+		}
+	}
+	runSQLBooleanParityScript(t, ctx, container, script.String(), expected, labels)
 }

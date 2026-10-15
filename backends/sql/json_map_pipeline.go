@@ -23,13 +23,14 @@ func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, er
 }
 
 // A consumer can resolve deferred values separately in each concat arm. Its
-// input state excludes the final callback: a null concat operand prevents that
-// callback from running, but must not erase an earlier map's no-value failure.
+// input state excludes callbacks after concat: a null concat operand prevents
+// those callbacks from running, but must not erase an input map's no-value.
 type jsonPipelineRows struct {
-	query  string
-	finish func() error
-	value  expression
-	stored hff.Type
+	query    string
+	advance  func() error
+	boundary int
+	value    expression
+	stored   hff.Type
 }
 
 func (b *builder) jsonMapPipelineFrom(n hff.Node, name string, source hff.Node, stages []hff.Node, input *jsonPipelineRows) (expression, error) {
@@ -71,29 +72,29 @@ func (b *builder) jsonMapPipelineFrom(n hff.Node, name string, source hff.Node, 
 	var result expression
 	var body hff.Node
 	terminalRaw := ""
-	var lower func(int) (expression, error)
-	lower = func(start int) (expression, error) {
+	var lower func(int, int) (expression, error)
+	lower = func(start, stop int) (expression, error) {
 		for i := start; i < len(callbacks); i++ {
 			callback := callbacks[i]
-			if input != nil && input.finish == nil && i == len(callbacks)-1 {
-				// Prepare every concat input before lowering its terminal
-				// continuation. Keep deterministic receiver-first Build errors
-				// and parameter/translator ordering, as in ordinary calls.
+			if input != nil && i == stop {
+				// Prepare every concat input first, then advance all arms one
+				// shared callback at a time. A later stage in an early arm must
+				// not hide an earlier stage's Build failure in another arm.
+				if i == input.boundary {
+					inputValid = valid
+				}
 				steps, paths, parameters, memo := b.steps, b.sharedPaths, b.parameters, b.itemRoleMemo
 				input.value = value
-				input.finish = func() error {
+				input.advance = func() error {
 					outerSteps, outerPaths, outerParameters, outerMemo := b.steps, b.sharedPaths, b.parameters, b.itemRoleMemo
 					b.steps, b.sharedPaths, b.parameters, b.itemRoleMemo = steps, paths, parameters, memo
 					defer func() {
 						b.steps, b.sharedPaths, b.parameters, b.itemRoleMemo = outerSteps, outerPaths, outerParameters, outerMemo
 					}()
-					_, err := lower(i)
+					_, err := lower(i, i+1)
 					return err
 				}
 				return expression{}, nil
-			}
-			if i == len(callbacks)-1 {
-				inputValid = valid
 			}
 			parameters, ok := callback.Parameters()
 			if !ok || len(parameters) != 1 {
@@ -224,6 +225,7 @@ func (b *builder) jsonMapPipelineFrom(n hff.Node, name string, source hff.Node, 
 			}
 			input.query = "SELECT " + alias + ".ord AS ord," + raw + " AS v," + valid + " AS p," + inputValid + " AS ip," + keep + " AS keep FROM " + from
 			input.value, input.stored = value, stored
+			input.advance = nil
 			return expression{}, nil
 		}
 		rows, output := b.nextAlias(), b.nextAlias()
@@ -257,7 +259,11 @@ func (b *builder) jsonMapPipelineFrom(n hff.Node, name string, source hff.Node, 
 		}
 		return expression{code: output + ".v", present: output + ".p", kind: kind}, nil
 	}
-	return lower(0)
+	stop := len(callbacks)
+	if input != nil {
+		stop = input.boundary
+	}
+	return lower(0, stop)
 }
 
 // Built-in map and filter stages share row identity. Other operations retain
