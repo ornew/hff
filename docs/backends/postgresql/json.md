@@ -1535,11 +1535,22 @@ between iterations. Growing list or nested-object state can therefore require
 carrying and copying increasingly large values. Prefer `map()` for ordinary
 per-item projections; use a fold when the result depends on accumulated state.
 
-The tree does not make every ambiguous value safe to materialize. Operations
-such as unguarded structural comparison, `contains()`, or sorting may still
-need an explicit guard or fail `Build` when the value's type cannot be
-recovered. Native JSON strings never imply Bytes, Duration, or Timestamp
-identity, and JSONB Float-loss and metadata requirements remain unchanged.
+Eligible typed trees can be compared without first serializing them to
+ordinary JSON. This includes `=` and `!=`, explicit null tests, numeric
+comparisons (with exact mixed Int/Float comparison), and ordering between
+values of the same supported String, Timestamp, or Duration family. A
+top-level dynamic type mismatch yields null; inside a structural comparison,
+different element families are unequal, while matching null members compare
+equal. Top-level comparisons involving null or no-value remain false except
+for the explicit null-test rule, and no-value still propagates through
+ordinary consumers.
+
+This comparison support does not make every ambiguous value safe to
+materialize. `in()`/`contains()`, `unique()`/`distinct()`, sorting, and other
+consumers still follow their existing recovery requirements and may need an
+explicit guard or fail `Build` when the value's type cannot be recovered.
+Native JSON strings never imply Bytes, Duration, or Timestamp identity, and
+JSONB Float-loss and metadata requirements remain unchanged.
 
 A callback that ignores an ambiguous JSONB item and returns a known type, such
 as `foldl(0,(acc,item)=>acc+1)`, does not need metadata for that item's numeric

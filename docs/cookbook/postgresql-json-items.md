@@ -393,11 +393,31 @@ A null value is passed to the callback rather than skipped. An empty list
 returns its seed, and a null receiver returns null before the seed or callback
 is evaluated. Guard-produced no-value propagates through the whole fold.
 
-This support does not make every ambiguous value safe to materialize.
-Unguarded structural comparisons, `contains()`, and sorting may still need an
-explicit type guard or fail `Build` when the value type cannot be recovered.
+This comparison support covers typed trees whose value identities remain
+recoverable. Other consumers such as `in()`/`contains()`, `unique()`/`distinct()`,
+sorting, and aggregates retain their type-recovery requirements; they may need
+an explicit guard or fail `Build` when a value's type cannot be recovered.
 Native JSON strings do not imply tagged identity, and JSONB still needs numeric
 metadata when storage erased a distinction the operation depends on.
+
+### Compare a folded typed list
+
+A folded typed tree can be compared directly with another tree from the same
+source, without serializing either list first:
+
+```hff
+labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value]))=labels:items:map(pair=>pair[1])
+```
+
+All four `events` rows match. The lists preserve object-key order and the same
+recovered value types; the stored null members in rows 3 and 4 compare equal
+inside the lists. This is structural equality, so different element families
+are unequal and mixed Int/Float values compare by exact numeric value. A
+top-level dynamic type mismatch yields null, while comparisons involving
+top-level null or no-value are false except for an explicit `=null` test.
+Other consumers such as `contains()`, `sort()`, and aggregates retain their
+existing type-recovery requirements; this comparison support does not enable
+every operation on every ambiguous tree.
 
 ### Fold pair and pair-list accumulators
 

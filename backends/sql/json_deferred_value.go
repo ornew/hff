@@ -164,7 +164,7 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 			return parameter.deferred, true, nil
 		}
 	}
-	if (n.Kind() == hff.ListNode || n.Kind() == hff.ObjectNode) && b.containsDeferredReference(n) {
+	if (n.Kind() == hff.ListNode || n.Kind() == hff.ObjectNode) && (b.keepDeferredValues || b.containsDeferredReference(n) || b.comparisonHasDeferredSource(n)) {
 		value, err := b.constructDeferredValue(n)
 		return value, true, err
 	}
@@ -207,7 +207,7 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 				if err != nil {
 					return nil, true, err
 				}
-				if needed {
+				if needed || b.keepDeferredValues {
 					plan, err := b.deferredList(n)
 					if err != nil {
 						return nil, true, err
@@ -334,6 +334,9 @@ func (b *builder) deferredLeafExpression(n hff.Node, parameter jsonParameter) (e
 }
 
 func (b *builder) deferredExpression(n hff.Node) (expression, bool, error) {
+	if value, handled, err := b.deferredComparison(n); handled || err != nil {
+		return value, handled, err
+	}
 	if method, ok := n.Method(); ok && n.ChildCount() == 1 {
 		builtin := true
 		for _, signature := range method.Signatures() {

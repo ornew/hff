@@ -76,7 +76,7 @@ func TestRuntimeFoldRetainsFloatLoss(t *testing.T) {
 		t.Fatal(err)
 	}
 	const fold = `labels:items:map(p=>p[1]):foldl([], (acc,v)=>acc:concat([v]))`
-	for _, suffix := range []string{`:type="list"`, `:json:exists`, `:map(v=>v:type):json:exists`, `:[list[bytes]]:json:exists`} {
+	for _, suffix := range []string{`:type="list"`, `:json:exists`, `:map(v=>v:type):json:exists`, `:[list[bytes]]:json:exists`, `=[labels.app,labels.z]`} {
 		p, err := e.Compile(context.Background(), fold+suffix)
 		if err != nil {
 			t.Fatal(err)

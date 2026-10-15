@@ -157,6 +157,7 @@ INSERT INTO events(id,labels) VALUES
 		`labels:items:map(pair=>pair[1]):foldl("",(last,value)=>value:type)="timestamp"`,
 		`labels:items:map(pair=>pair[1]):foldl([], (values,value)=>values:concat([value])):map(value=>value:type):json=["string","bytes","duration","timestamp"]:json`,
 		`labels:items:map(pair=>pair[1]):foldl({}, (acc,value)=>{"previous":acc,"value":value}).value:type="timestamp"`,
+		`labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value]))=labels:items:map(pair=>pair[1])`,
 	} {
 		p, err := e.Compile(ctx, source)
 		if err != nil {
