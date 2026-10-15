@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"sort"
 	"strings"
@@ -21,7 +22,7 @@ import (
 )
 
 // Keep the storage fixture independent from SQL and Local serialization. The
-// small duration seeds have explicitly prescribed canonical spellings.
+// duration seeds and endpoints have explicitly prescribed canonical spellings.
 func taggedCollectionJSON(t testing.TB, v hff.Value) string {
 	t.Helper()
 	quote := func(s string) string { b, _ := json.Marshal(s); return string(b) }
@@ -35,6 +36,12 @@ func taggedCollectionJSON(t testing.TB, v hff.Value) string {
 			return `"0.000000001s"`
 		case 2 * time.Nanosecond:
 			return `"0.000000002s"`
+		case -time.Nanosecond:
+			return `"-0.000000001s"`
+		case time.Duration(math.MinInt64):
+			return `"-2562047h47m16.854775808s"`
+		case time.Duration(math.MaxInt64):
+			return `"2562047h47m16.854775807s"`
 		default:
 			t.Fatalf("duration fixture not prescribed: %v", d)
 		}

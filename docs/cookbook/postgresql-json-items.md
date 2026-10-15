@@ -394,7 +394,9 @@ returns its seed, and a null receiver returns null before the seed or callback
 is evaluated. Guard-produced no-value propagates through the whole fold.
 
 Typed-tree `in()`, list `contains()`, `unique()`, and `distinct()` can use the
-same recovered value identities as these comparisons. Sorting, aggregates,
+same recovered value identities as these comparisons. Bounded sorting of
+recovered typed trees is shown in
+[Sort recovered deferred values](#sort-recovered-deferred-values). Aggregates
 and other consumers still have separate type-recovery requirements; they may
 need an explicit guard or fail `Build` when a value's type cannot be recovered.
 Native JSON strings do not imply tagged identity, and JSONB still needs numeric
@@ -415,9 +417,11 @@ inside the lists. This is structural equality, so different element families
 are unequal and mixed Int/Float values compare by exact numeric value. A
 top-level dynamic type mismatch yields null, while comparisons involving
 top-level null or no-value are false except for an explicit `=null` test.
-Sorting, aggregates, and other consumers retain their own type-recovery
-requirements; supporting these comparisons does not enable every operation on
-every ambiguous tree.
+Bounded sorting of recovered typed trees is shown in
+[Sort recovered deferred values](#sort-recovered-deferred-values).
+Aggregates and other consumers retain their own type-recovery requirements;
+supporting these comparisons does not enable every operation on every
+ambiguous tree.
 
 ### Membership and distinct on folded typed values
 
@@ -437,6 +441,27 @@ These examples compare scalar values; structural list/object elements also
 require the applicable equality capabilities. See the PostgreSQL JSON guide's
 [null and no-value behavior for `contains()`](../backends/postgresql/json.md#contains-on-dynamic-strings-and-lists)
 for the difference between String and List receivers.
+
+### Sort recovered deferred values
+
+`sort()` can consume a deferred list when its values retain an orderable type.
+These queries fold each record's values into a typed list. The first retains
+String values, appends an empty String, and sorts with PostgreSQL's `C`
+collation; the second sorts the mixed list directly:
+
+```hff
+labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value])):filter(value=>value:[string]:exists):concat([""]):sort:json="[\"\",\"YQ==\"]"
+labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value])):sort:type="null"
+```
+
+The first query matches row 1: its only String value is the `app` value
+`YQ==`, and the appended empty String sorts before it. Row 2's `app` value is
+the Timestamp-looking String, which remains a String but does not match the
+expected list. The second query matches rows 1–4 because each folded list
+contains mixed value families or null and therefore has no single runtime sort
+domain. An empty list still sorts to an empty list. Deferred sorting preserves
+the original values and stable order; it does not enable unrelated consumers
+of every ambiguous tree.
 
 ### Fold pair and pair-list accumulators
 

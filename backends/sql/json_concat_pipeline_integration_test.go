@@ -160,6 +160,8 @@ INSERT INTO events(id,labels) VALUES
 		`labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value]))=labels:items:map(pair=>pair[1])`,
 		`labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value])):contains("YQ==","YQ==":frombase64)`,
 		`labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value])):concat(labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value]))):distinct:size=4`,
+		`labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value])):filter(value=>value:[string]:exists):concat([""]):sort:json="[\"\",\"YQ==\"]"`,
+		`labels:items:map(pair=>pair[1]):foldl([], (acc,value)=>acc:concat([value])):sort:type="null"`,
 	} {
 		p, err := e.Compile(ctx, source)
 		if err != nil {
@@ -172,7 +174,7 @@ INSERT INTO events(id,labels) VALUES
 		appendAggregateProfileQuery(t, &script, q, "events ORDER BY id", i)
 		if i < 5 {
 			expected = append(expected, true, true, false, false)
-		} else if i == 21 {
+		} else if i == 21 || i == 23 {
 			expected = append(expected, true, false, false, false)
 		} else if i == 11 || i == 13 || i == 17 || i == 19 || i == 22 {
 			expected = append(expected, true, true, true, false)

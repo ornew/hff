@@ -187,6 +187,14 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 		return result, true, err
 	}
 	if method, ok := n.Method(); ok {
+		if builtinListCall(n, "sort") {
+			receiver, _ := n.Child(0)
+			needed := b.keepDeferredValues || b.hasDeferredValueSource(n) || runtimeSortComputedSource(receiver)
+			if needed {
+				value, err := b.runtimeSortDescriptor(n)
+				return value, true, err
+			}
+		}
 		if builtinListCall(n, "distinct") && (b.keepDeferredValues || b.hasDeferredValueSource(n)) {
 			if b.jsonItemRoles(n) != nil || b.jsonItemsRoles(n) != nil {
 				return nil, false, nil

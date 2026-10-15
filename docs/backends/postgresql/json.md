@@ -1434,6 +1434,17 @@ value, produces ordinary null. JSONB mixed Int/Float values require numeric
 type metadata when their subtype is needed; raw JSONB mixed-subtype bindings
 remain Build errors.
 
+These rules also apply when values remain in an eligible typed tree produced by
+a fold, constructor, guard, or selection pipeline. PostgreSQL sorts recovered
+numbers by exact numeric value, Strings by `C` collation, Durations by
+nanoseconds, and Timestamps by instant, preserving source order for ties. The
+tree does not need to be serialized to ordinary JSON first. An empty list sorts
+to an empty list; a null or no-value receiver follows ordinary propagation, and
+a runtime list containing null, non-orderable values, or mixed families sorts
+to null. This does not recover identity absent from the source schema or JSONB
+metadata: a String under native JSON `Any` remains a String, and unrelated
+ambiguous materialization boundaries may still be rejected.
+
 Selected list callbacks are also supported for these schema-known unions:
 `any()` and `all()` with type guards, `map()` to `type()`, `string()`, or the
 identity value, identity `flatmap()`, and `foldl()`/`foldr()` with an Int guard.
@@ -1565,8 +1576,9 @@ argument propagates instead; see
 returns the first original value from each equal group in input order,
 preserving its type and observable Float representation. These operations need
 the same structural equality capabilities as their ordinary HFF forms when
-composite values may be compared. Sorting, `find()`, aggregates, and other
-consumers still have separate recovery requirements and may need an explicit
+composite values may be compared. The bounded typed-tree `sort()` support is
+described in [Sort JSON-backed lists](#sort-json-backed-lists). `find()` and
+aggregates still have separate recovery requirements and may need an explicit
 guard or fail `Build`. Native JSON strings never imply Bytes, Duration, or
 Timestamp identity, and JSONB Float-loss and metadata requirements remain
 unchanged.
