@@ -679,6 +679,22 @@ guard checks every pair and therefore passes for an empty pair list. Null
 receivers follow the guard's target type, while guard-produced no-value remains
 distinct from ordinary null. The ordinary null guard `!` remains supported.
 
+When a recovered item-pair guard accepts `Any` for each pair element, the
+payload test is always true. PostgreSQL can omit per-key payload dispatch while
+keeping Build-time validation that schema keys are valid PostgreSQL text, pair
+null checks, and any outer-list scan. For example, this guard accepts each
+item pair as a list without inspecting its payload type:
+
+```hff
+attachments:items:any(pair=>pair:[list]:exists)
+```
+
+With a nonempty `Map<Bytes|null>`, each item is a two-element list and the
+guard is true; an empty map has no items. A guard that inspects a specific
+payload type continues to use the ordinary per-key checks. This simplification
+does not make a mixed String/tagged payload recoverable when a later operation
+materializes it; those cases can still be rejected by `Build`.
+
 Role-aware guards and slot observations still require a source whose element
 identity is recoverable from its schema and stored representation. A guard
 does not make an unguarded carrier with ambiguous String/tagged alternatives

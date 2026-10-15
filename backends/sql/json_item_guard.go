@@ -166,6 +166,16 @@ func (b *builder) jsonItemMatches(n hff.Node, code string, format JSONFormat, ro
 }
 
 func (b *builder) jsonItemValueMatches(n hff.Node, code string, format JSONFormat, roles *jsonItemRoles, target hff.Type) (string, error) {
+	if target.Kind() == hff.AnyType {
+		// Every per-key payload test is TRUE. Keep the original key-text
+		// validation without binding keys that the predicate never reads.
+		for _, key := range makeComparisonShape(roles.object).keys {
+			if err := b.checkTextParameter(n, key); err != nil {
+				return "", err
+			}
+		}
+		return "TRUE", nil
+	}
 	value := "(" + code + " -> 1)"
 	return b.jsonItemValueOperation(n, code, roles, func(source hff.Type) (string, error) {
 		return b.jsonMatches(n, value, format, source, target)

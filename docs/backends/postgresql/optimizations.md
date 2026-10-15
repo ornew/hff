@@ -20,6 +20,15 @@ other deferred-list consumers retain their existing lowering. See [empty concat
 arms](../../optimizations/055-postgresql-empty-concat-arms.md) for the bounded
 proof, parity scope, and plan observations. No runtime-speed claim follows.
 
+### Simplify unconstrained JSON item-payload guards
+
+When a recovered object-item pair guard accepts `Any` at the value slot,
+PostgreSQL can omit redundant per-key payload dispatch while retaining
+Build-time schema-key text validation, pair null checks, and outer-list scans.
+Payload-specific guards and key-only paths keep their existing lowering. See
+[unconstrained item-payload guards](../../optimizations/056-postgresql-item-any-guards.md)
+for the bounded SQL-shape observations; they do not establish runtime speed.
+
 ### Avoid rebuilding guarded payloads for root observers
 
 After one numeric-containing List/Map type guard, immediate root `type()`,
