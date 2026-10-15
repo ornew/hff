@@ -89,10 +89,18 @@ func (b *builder) jsonConcatMapPipeline(n hff.Node, name string) (expression, bo
 		}
 	}
 	rowAliases := make([]string, len(streams))
+	active := -1
 	for i := range streams {
 		input := &streams[i]
+		if input.empty {
+			input.value = input.emptyValue
+			inputs[i] = input.value
+			nulls = append(nulls, "("+input.value.code+" IS NULL)")
+			continue
+		}
 		rows := b.nextAlias()
 		rowAliases[i] = rows
+		active = i
 		if input.query == "" {
 			carrier := "NULL::boolean"
 			if name == "map" {
@@ -114,9 +122,16 @@ func (b *builder) jsonConcatMapPipeline(n hff.Node, name string) (expression, bo
 		state := tree.state(b, streams, rowAliases, &definitions)
 		inputNull, inputPresent = state.null, state.present
 	}
-	joined, output := b.nextAlias(), b.nextAlias()
-	definitions = append(definitions, joined+" AS MATERIALIZED ("+strings.Join(unions, " UNION ALL ")+")")
-	terminalPresent := "(SELECT COALESCE(bool_and(p),TRUE) FROM " + joined + ")"
+	joined, order, terminalPresent := "", " ORDER BY segment,ord", "TRUE"
+	if len(unions) == 1 {
+		joined, order = rowAliases[active], " ORDER BY ord"
+	} else if len(unions) > 1 {
+		joined = b.nextAlias()
+		definitions = append(definitions, joined+" AS MATERIALIZED ("+strings.Join(unions, " UNION ALL ")+")")
+	}
+	if joined != "" {
+		terminalPresent = "(SELECT COALESCE(bool_and(p),TRUE) FROM " + joined + ")"
+	}
 	present := both(inputPresent, "("+inputNull+" OR "+terminalPresent+")")
 	var code string
 	kind := hff.BoolType
@@ -132,7 +147,6 @@ func (b *builder) jsonConcatMapPipeline(n hff.Node, name string) (expression, bo
 				}
 			}
 		}
-		order := " ORDER BY segment,ord"
 		if b.orderBlind[n] {
 			order = ""
 		}
@@ -147,8 +161,25 @@ func (b *builder) jsonConcatMapPipeline(n hff.Node, name string) (expression, bo
 	default:
 		return expression{}, true, b.failure(n, "unsupported concat pipeline consumer")
 	}
+	if joined == "" {
+		switch name {
+		case "map":
+			code = "'[]'::json"
+		case "any":
+			code = "FALSE"
+		case "all":
+			code = "TRUE"
+		case "count":
+			code = "0::bigint"
+		}
+	}
 	code = "(CASE WHEN " + inputNull + " THEN NULL ELSE " + code + " END)"
-	b.steps = append(b.steps, "(WITH "+strings.Join(definitions, ",")+" SELECT "+code+" AS v,"+present+" AS p OFFSET 0) AS "+output)
+	with := ""
+	if len(definitions) > 0 {
+		with = "WITH " + strings.Join(definitions, ",") + " "
+	}
+	output := b.nextAlias()
+	b.steps = append(b.steps, "("+with+"SELECT "+code+" AS v,"+present+" AS p OFFSET 0) AS "+output)
 	if name == "map" {
 		b.jsonValues[output+".v"] = JSON
 		b.rememberNormalizedJSON(output+".v", JSON, hff.NewListType(hff.NewUnionType(stored...)))

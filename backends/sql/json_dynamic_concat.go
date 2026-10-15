@@ -53,7 +53,7 @@ func (b *builder) dynamicJSONConcat(n hff.Node, values []expression) (expression
 				return expression{}, err
 			}
 			schemas[i] = containsListType(child.Type())
-			document, err := b.comparisonDocument(child, raw, physical, schemas[i])
+			document, err := b.concatOperandDocument(child, raw, physical, schemas[i])
 			if err != nil {
 				return expression{}, err
 			}

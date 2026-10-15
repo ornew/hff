@@ -8,6 +8,16 @@ other schemas and data.
 
 ## SQL translation choices
 
+### Prune statically empty list-concat arms
+
+For eligible PostgreSQL JSON/JSONB list concatenations, the builder can omit
+an arm proven empty after lowering and validating the full expression. When
+one stream remains, it can forward that stream while preserving its order and
+outer presence/null state. This is a SQL-shape change; generic deferred-list
+arms retain their existing lowering. See [empty concat
+arms](../../optimizations/055-postgresql-empty-concat-arms.md) for the bounded
+proof, parity scope, and plan observations. No runtime-speed claim follows.
+
 ### Avoid rebuilding guarded payloads for root observers
 
 After one numeric-containing List/Map type guard, immediate root `type()`,

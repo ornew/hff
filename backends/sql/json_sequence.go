@@ -86,7 +86,7 @@ func (b *builder) jsonConcat(n hff.Node, values []expression, format JSONFormat)
 		if !ok || value.kind != hff.ListType {
 			return expression{}, b.failure(n, "list concat requires JSON list operands")
 		}
-		document, err := b.comparisonDocument(child, value.code, physical, schemas[i])
+		document, err := b.concatOperandDocument(child, value.code, physical, schemas[i])
 		if err != nil {
 			return expression{}, err
 		}
@@ -120,15 +120,33 @@ func (b *builder) concatJSONLists(n hff.Node, values []expression, format JSONFo
 	if arg.kind != hff.ListType || !ok {
 		return expression{}, b.failure(n, "list concat requires a JSON list argument")
 	}
-	left, right, result := b.nextAlias(), b.nextAlias(), b.nextAlias()
-	// Converting a jsonb element to json changes its physical format only;
-	// its HFF scalar subtype remains determined by the list's schema.
-	rows := "SELECT 0 AS segment," + left + ".ord," + left + ".value::json AS value FROM " + string(format) + "_array_elements(" + r.code + ") WITH ORDINALITY AS " + left + "(value,ord) UNION ALL SELECT 1," + right + ".ord," + right + ".value::json FROM " + string(rf) + "_array_elements(" + arg.code + ") WITH ORDINALITY AS " + right + "(value,ord)"
-	aggregateOrder := " ORDER BY " + result + ".segment," + result + ".ord"
-	if b.orderBlind[n] {
-		aggregateOrder = ""
+	leftEmpty, err := b.staticallyEmptyJSONList(leftNode)
+	if err != nil {
+		return expression{}, err
 	}
-	code := "(CASE WHEN " + r.code + " IS NULL OR " + arg.code + " IS NULL THEN NULL ELSE (SELECT COALESCE(json_agg(" + result + ".value" + aggregateOrder + "),'[]'::json) FROM (" + rows + ") AS " + result + ") END)"
+	rightEmpty, err := b.staticallyEmptyJSONList(rightNode)
+	if err != nil {
+		return expression{}, err
+	}
+	var payload string
+	if leftEmpty && rightEmpty {
+		payload = "'[]'::json"
+	} else if leftEmpty {
+		payload = arg.code
+	} else if rightEmpty {
+		payload = r.code
+	} else {
+		left, right, result := b.nextAlias(), b.nextAlias(), b.nextAlias()
+		// Converting a jsonb element to json changes its physical format only;
+		// its HFF scalar subtype remains determined by the list's schema.
+		rows := "SELECT 0 AS segment," + left + ".ord," + left + ".value::json AS value FROM " + string(format) + "_array_elements(" + r.code + ") WITH ORDINALITY AS " + left + "(value,ord) UNION ALL SELECT 1," + right + ".ord," + right + ".value::json FROM " + string(rf) + "_array_elements(" + arg.code + ") WITH ORDINALITY AS " + right + "(value,ord)"
+		aggregateOrder := " ORDER BY " + result + ".segment," + result + ".ord"
+		if b.orderBlind[n] {
+			aggregateOrder = ""
+		}
+		payload = "(SELECT COALESCE(json_agg(" + result + ".value" + aggregateOrder + "),'[]'::json) FROM (" + rows + ") AS " + result + ")"
+	}
+	code := "(CASE WHEN " + r.code + " IS NULL OR " + arg.code + " IS NULL THEN NULL ELSE " + payload + " END)"
 	stored := b.jsonStoredType(n)
 	stable := true
 	for _, schema := range schemas {

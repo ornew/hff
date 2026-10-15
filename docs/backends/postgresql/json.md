@@ -1564,6 +1564,10 @@ JSON- or JSONB-backed lists can be concatenated with schema-compatible list
 values, including a list from the other physical format, or query-side list
 literals. A null argument produces a typed JSON null, so subsequent indexing or
 list methods propagate null; no-value propagates by the ordinary HFF rules.
+For statically empty arms in supported concat pipelines, PostgreSQL lowering
+can omit the empty row stream and forward a sole surviving stream after it has
+validated every operand. This changes SQL shape only; generic deferred-list
+arms keep their existing lowering.
 
 `map()` preserves input order and retains null callback results as elements. A
 guarded no-value result propagates to the whole method. `flatmap()` appends

@@ -42,6 +42,8 @@ func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, er
 // those callbacks from running, but must not erase an input map's no-value.
 type jsonPipelineRows struct {
 	query      string
+	empty      bool
+	emptyValue expression
 	tracked    bool
 	checkpoint func() string
 	advance    func() error
@@ -51,6 +53,28 @@ type jsonPipelineRows struct {
 }
 
 func (b *builder) jsonMapPipelineFrom(n hff.Node, name string, source hff.Node, stages []hff.Node, input *jsonPipelineRows) (expression, error) {
+	if input != nil {
+		empty, err := b.staticallyEmptyJSONList(source)
+		if err != nil {
+			return expression{}, err
+		}
+		if empty {
+			// Preserve source evaluation and its state in the real query. All
+			// callbacks still advance in expression order, but their unused
+			// SQL and arguments belong only to this validation environment.
+			value, err := b.expression(source)
+			if err != nil {
+				return expression{}, err
+			}
+			validation := b.validationBuilder()
+			input.empty, input.emptyValue = true, value
+			return validation.jsonMapPipelineRows(n, name, source, stages, input)
+		}
+	}
+	return b.jsonMapPipelineRows(n, name, source, stages, input)
+}
+
+func (b *builder) jsonMapPipelineRows(n hff.Node, name string, source hff.Node, stages []hff.Node, input *jsonPipelineRows) (expression, error) {
 	callbacks := make([]hff.Node, 0, len(stages)+1)
 	for _, stage := range stages {
 		callback, _ := stage.Child(1)

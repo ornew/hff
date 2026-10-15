@@ -113,7 +113,7 @@ func (t *jsonConcatPipelineTree) state(b *builder, streams []jsonPipelineRows, r
 	if len(t.checkpoints) > 0 {
 		var valid []string
 		for j, i := range t.leaves {
-			if column := t.checkpoints[j]; column != "" {
+			if column := t.checkpoints[j]; column != "" && rows[i] != "" {
 				valid = append(valid, "(SELECT COALESCE(bool_and(COALESCE("+column+",FALSE)),TRUE) FROM "+rows[i]+")")
 			}
 		}
