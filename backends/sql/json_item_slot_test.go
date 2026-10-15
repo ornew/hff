@@ -2,6 +2,7 @@ package sql_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/ornew/hff"
@@ -99,6 +100,11 @@ func TestJSONItemSlotObserversBuild(t *testing.T) {
 					_, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(itemRoleBindings(format, true)...))
 					if err == nil {
 						t.Error("native Any invented tagged identity", format, source)
+					} else {
+						var diagnostic *hff.Error
+						if !errors.As(err, &diagnostic) || diagnostic.Code != hff.BackendError {
+							t.Error("rejection bypassed the backend check", format, source, err)
+						}
 					}
 				}
 			}
@@ -112,20 +118,40 @@ func TestJSONItemSlotGuardsRejectErasedTagIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, source := range []string{
-		`labels:items[0][1]:[any]:type="string"`,
-		`labels:items[0][1]:[string|bytes]:type="string"`,
-		`labels:items[0][labels:size-1]:[any]:exists`,
+	for _, tc := range []struct {
+		source    string
+		wantError bool
+	}{
+		{`labels:items[0][0]:type="string"`, false},
+		{`labels:items[0][1]:[any]:type="string"`, true},
+		{`labels:items[0][1]:[string|bytes]:type="string"`, true},
+		{`labels:items[0][labels:size-1]:[any]:exists`, true},
 	} {
-		p, err := e.Compile(ctx, source)
+		p, err := e.Compile(ctx, tc.source)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
-			_, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(itemRoleBindings(format, true)...))
-			if err == nil {
-				t.Error("guard erased selected String/Bytes identity", format, source)
+			_, err := hffsql.Build(ctx, p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(itemSlotSourceBinding(format)))
+			if (err != nil) != tc.wantError {
+				t.Error("guard erased selected String/Bytes identity", format, tc.source, err)
+			}
+			if err != nil {
+				var diagnostic *hff.Error
+				if !errors.As(err, &diagnostic) || diagnostic.Code != hff.BackendError {
+					t.Error("rejection bypassed the backend check", format, tc.source, err)
+				}
 			}
 		}
 	}
+}
+
+// Standalone slot-contract tests declare only labels, unlike the shared
+// record matrix. Avoid masking a rejection with unrelated binding errors.
+func itemSlotSourceBinding(format hffsql.JSONFormat) hffsql.Binding {
+	var options []hffsql.JSONBindingOption
+	if format == hffsql.JSONB {
+		options = append(options, hffsql.WithTypeMetadata(hffsql.Column("records", "labels_meta")))
+	}
+	return hffsql.BindJSON(hff.Path{"labels"}, hffsql.Column("records", "labels"), format, options...)
 }

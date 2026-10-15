@@ -385,9 +385,12 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 			// failed guard whose contextual target is a list or object.
 			return value, nil
 		}
-		kind, ok := computedScalarKind(n.Type())
+		kind, ok := computedScalarKind(b.jsonStoredType(n))
 		if !ok {
 			return expression{}, b.failure(n, "SQL type guards require a supported scalar result")
+		}
+		if kind == hff.NullType {
+			return expression{"NULL", value.present, hff.NullType}, nil
 		}
 		if kind != value.kind {
 			// A disjoint non-null guard can only yield no-value (or null when

@@ -629,11 +629,18 @@ distinct from ordinary null. The ordinary null guard `!` remains supported.
 Role-aware guards and slot observations still require a source whose element
 identity is recoverable from its schema and stored representation. A guard
 does not make an unguarded carrier with ambiguous String/tagged alternatives
-recoverable; a guarded union whose inferred result still merges String and
-Bytes may also be rejected. Native JSON `Any` cannot infer tagged identity from
-a string alone. Proven item-pair roles continue through the supported
-map/flatmap/fold/concat transformations described below; broader or
-key-dependent transformations retain their existing limits.
+recoverable. Consecutive guards on the same observed slot retain its original
+per-key source role, narrowing from the source schema at each step. Thus
+`type()` or `exists()` can observe an otherwise ambiguous union without
+returning that union as a general value, and a final typed guard can produce a
+recoverable carrier when it narrows the possible type sufficiently. A failed
+guard remains no-value: a later guard that accepts null cannot revive it;
+`exists()` is false and `type()` remains no-value. Key-only guard chains retain
+their direct path and need no numeric metadata. Native JSON `Any` still cannot
+infer tagged identity from a string alone. Proven item-pair roles continue
+through the supported map/flatmap/fold/concat transformations described below;
+broader transformations and ambiguous general carriers retain their existing
+limits.
 
 The [runnable items example](https://github.com/ornew/hff/tree/main/examples/sql-json-items)
 uses a `Map<Bytes|null>` to select a named nonempty attachment. Its key and

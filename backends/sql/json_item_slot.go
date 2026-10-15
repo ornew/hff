@@ -15,14 +15,11 @@ type jsonItemSlot struct {
 	raw, pair, key, value, present string
 	format                         JSONFormat
 	roles                          *jsonItemRoles
+	constraints                    []hff.Type
 }
 
 func (b *builder) jsonItemSlot(n hff.Node) (jsonItemSlot, bool, error) {
-	nonnull := false
-	for n.Kind() == hff.GuardNode {
-		nonnull = true
-		n, _ = n.Child(0)
-	}
+	n, guards := itemSlotOrigin(n)
 	if n.Kind() != hff.IndexNode {
 		return jsonItemSlot{}, false, nil
 	}
@@ -82,10 +79,32 @@ func (b *builder) jsonItemSlot(n hff.Node) (jsonItemSlot, bool, error) {
 		}
 		slot.raw = b.project("(" + pair.code + " -> " + position + ")")
 	}
-	if nonnull {
-		slot.present = both(slot.present, "(NOT "+slot.null()+")")
+	for i := len(guards) - 1; i >= 0; i-- {
+		guard := guards[i]
+		if guard.Kind() == hff.GuardNode {
+			slot.present = both(slot.present, "(NOT "+slot.null()+")")
+			continue
+		}
+		target, _ := guard.Constraint()
+		test, err := b.jsonItemSlotTest(guard, slot, target)
+		if err != nil {
+			return jsonItemSlot{}, true, err
+		}
+		slot.present = both(slot.present, "COALESCE("+test+",FALSE)")
+		slot.constraints = append(slot.constraints, target)
 	}
 	return slot, true, nil
+}
+
+// Guards preserve the selected value. Keep the original slot available to a
+// final observer instead of forcing each intermediate union into a carrier.
+func itemSlotOrigin(n hff.Node) (hff.Node, []hff.Node) {
+	var guards []hff.Node
+	for n.Kind() == hff.GuardNode || n.Kind() == hff.TypeGuardNode {
+		guards = append(guards, n)
+		n, _ = n.Child(0)
+	}
+	return n, guards
 }
 
 func (slot jsonItemSlot) null() string {
@@ -93,16 +112,22 @@ func (slot jsonItemSlot) null() string {
 }
 
 func (b *builder) jsonItemSlotOperation(n hff.Node, slot jsonItemSlot, nullResult string, operation func(hff.Type) (string, error)) (string, error) {
+	apply := func(source hff.Type) (string, error) {
+		for _, target := range slot.constraints {
+			source = intersectItemType(source, target)
+		}
+		return operation(source)
+	}
 	key, value := nullResult, nullResult
 	var err error
 	if slot.key != "FALSE" {
-		key, err = operation(itemKeyType(slot.roles))
+		key, err = apply(itemKeyType(slot.roles))
 		if err != nil {
 			return "", err
 		}
 	}
 	if slot.value != "FALSE" {
-		value, err = b.jsonItemValueOperation(n, slot.pair, slot.roles, operation)
+		value, err = b.jsonItemValueOperation(n, slot.pair, slot.roles, apply)
 		if err != nil {
 			return "", err
 		}
@@ -129,13 +154,7 @@ func (b *builder) jsonItemSlotGuard(n hff.Node) (expression, bool, error) {
 	if err := b.checkJSONStringSchemas(n, hff.NewUnionType(types...)); err != nil {
 		return expression{}, true, err
 	}
-	nullResult := "FALSE"
-	if acceptsKind(target, hff.NullType) {
-		nullResult = "TRUE"
-	}
-	test, err := b.jsonItemSlotOperation(n, slot, nullResult, func(source hff.Type) (string, error) {
-		return b.jsonMatches(n, slot.raw, slot.format, source, target)
-	})
+	test, err := b.jsonItemSlotTest(n, slot, target)
 	if err != nil {
 		return expression{}, true, err
 	}
@@ -145,14 +164,22 @@ func (b *builder) jsonItemSlotGuard(n hff.Node) (expression, bool, error) {
 	return result, true, err
 }
 
+func (b *builder) jsonItemSlotTest(n hff.Node, slot jsonItemSlot, target hff.Type) (string, error) {
+	nullResult := "FALSE"
+	if acceptsKind(target, hff.NullType) {
+		nullResult = "TRUE"
+	}
+	return b.jsonItemSlotOperation(n, slot, nullResult, func(source hff.Type) (string, error) {
+		return b.jsonMatches(n, slot.raw, slot.format, source, target)
+	})
+}
+
 // Preserve the recovered alternatives before inference absorbs Any. Literal
 // positions can discard the unobserved slot; dynamic positions must keep both.
 func (b *builder) jsonItemSlotGuardTypes(n hff.Node) ([]hff.Type, bool) {
 	target, _ := n.Constraint()
 	child, _ := n.Child(0)
-	for child.Kind() == hff.GuardNode {
-		child, _ = child.Child(0)
-	}
+	child, guards := itemSlotOrigin(child)
 	if child.Kind() != hff.IndexNode {
 		return nil, false
 	}
@@ -164,15 +191,23 @@ func (b *builder) jsonItemSlotGuardTypes(n hff.Node) ([]hff.Type, bool) {
 	index, _ := child.Child(1)
 	x, literal := itemLiteralIndex(index)
 	var types []hff.Type
+	narrow := func(source hff.Type) hff.Type {
+		for i := len(guards) - 1; i >= 0; i-- {
+			if prior, ok := guards[i].Constraint(); ok {
+				source = intersectItemType(source, prior)
+			}
+		}
+		return intersectItemType(source, target)
+	}
 	if !literal || x == 0 || x == -2 {
-		types = append(types, intersectItemType(itemKeyType(roles), target))
+		types = append(types, narrow(itemKeyType(roles)))
 	}
 	if !literal || x == 1 || x == -1 {
 		shape := makeComparisonShape(roles.object)
 		for _, key := range shape.keys {
-			types = append(types, intersectItemType(intersectItemType(schemaObjectValue(shape, key), roles.value), target))
+			types = append(types, narrow(intersectItemType(schemaObjectValue(shape, key), roles.value)))
 		}
-		types = append(types, intersectItemType(intersectItemType(schemaObjectFallback(shape), roles.value), target))
+		types = append(types, narrow(intersectItemType(schemaObjectFallback(shape), roles.value)))
 	}
 	return types, true
 }

@@ -84,6 +84,14 @@ func TestPostgreSQLJSONItemSlotsMatchLocal(t *testing.T) {
 	runPostgreSQLJSONItemRoleSources(t, itemSlotSources, itemSlotFixtures()...)
 }
 
+func TestPostgreSQLJSONItemGuardChainsMatchLocal(t *testing.T) {
+	runPostgreSQLJSONItemRoleSources(t, itemChainSources, itemSlotFixtures()...)
+}
+
+func TestPostgreSQLJSONItemKeyGuardChainsWithoutMetadata(t *testing.T) {
+	runPostgreSQLJSONItemRoleSources(t, itemKeyChainSources, keyOnlyValueFixtures()...)
+}
+
 func TestPostgreSQLJSONItemKeysWithoutMetadata(t *testing.T) {
 	runPostgreSQLJSONItemRoleSources(t, itemKeyOnlySources, keyOnlyValueFixtures()...)
 }

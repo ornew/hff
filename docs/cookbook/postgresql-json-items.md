@@ -87,6 +87,24 @@ incompatible index types remain compile errors. If evaluating the index
 produces guarded no-value, that state remains distinct; a null pair receiver
 masks a later index guard.
 
+Consecutive guards can inspect and narrow an ambiguous value slot while
+retaining its original per-key role:
+
+```hff
+attachments:items:any(pair=>pair[1]:[string|bytes|null]:type="bytes")
+attachments:items:any(pair=>pair[1]:[string|bytes|null]:[bytes]:len>0)
+attachments:items:any(pair=>pair[1]:[null]:[any]:type="null")
+```
+
+The first matches rows 1–3, where the payload is Bytes. The second narrows the
+same slot to Bytes before checking its length and matches rows 1 and 2. The
+third matches only row 4, whose payload is null. A failed guard produces
+no-value, which a later null-accepting guard cannot revive. `exists()` reports
+false and `type()` remains no-value after that failure. These observation-local
+chains do not make an ambiguous slot safe to return as a general value; the
+source schema and representation must still recover the original key/value
+roles.
+
 The backend preserves this positional information when the source `items()`
 result and schema establish the key/value roles. Constant indexes `0` and
 `-2` select the String key; `1` and `-1` select the value. Identity `map()` and
