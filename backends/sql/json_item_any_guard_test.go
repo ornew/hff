@@ -2,7 +2,6 @@ package sql_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 
@@ -50,21 +49,11 @@ func unconstrainedItemGuardFixtures() []itemRoleFixture {
 	return append(itemSlotFixtures(), itemAnyFixtures()...)
 }
 
-func rejectedUnconstrainedItemGuard(tc itemRoleFixture, source string) bool {
-	return tc.mixed && !tc.metadata && (source == `labels:items:map(p=>p:[list]![1]):json=values_json` || source == `labels:items:[list[list]]:map(p=>p[1]):json=values_json`)
+func unconstrainedItemGuardSources(itemRoleFixture) []string {
+	return allUnconstrainedItemGuardSources()
 }
 
-func unconstrainedItemGuardSources(tc itemRoleFixture) []string {
-	var accepted []string
-	for _, source := range allUnconstrainedItemGuardSources() {
-		if !rejectedUnconstrainedItemGuard(tc, source) {
-			accepted = append(accepted, source)
-		}
-	}
-	return accepted
-}
-
-func TestUnconstrainedItemGuardsPreserveBuildBoundaries(t *testing.T) {
+func TestUnconstrainedItemGuardsBuild(t *testing.T) {
 	for _, tc := range unconstrainedItemGuardFixtures() {
 		e, err := engine.New(engine.WithSchema(itemRoleSchema(tc)), engine.WithCapabilities(capabilities.Standard()))
 		if err != nil {
@@ -77,14 +66,7 @@ func TestUnconstrainedItemGuardsPreserveBuildBoundaries(t *testing.T) {
 			}
 			for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
 				q, err := hffsql.Build(context.Background(), p, hffsql.WithDialect(hffsql.PostgreSQL), hffsql.WithBindings(itemRoleBindings(format, tc.metadata)...))
-				if rejectedUnconstrainedItemGuard(tc, source) {
-					// The direct guarded value-slot materialization remains an
-					// unsupported boundary for mixed tagged sibling schemas.
-					var diagnostic *hff.Error
-					if !errors.As(err, &diagnostic) || diagnostic.Code != hff.BackendError {
-						t.Error("accepted unsupported identity boundary", tc.name, format, source, err)
-					}
-				} else if err != nil {
+				if err != nil {
 					t.Error(tc.name, format, source, err)
 				} else {
 					requireConcatArgsUsed(t, q)

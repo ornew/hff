@@ -472,6 +472,9 @@ func (b *builder) deferredExpression(n hff.Node) (expression, bool, error) {
 					}
 					return result, true, err
 				}
+				if method.Name() == "json" {
+					return b.jsonMappedSlotSerialization(n)
+				}
 			}
 		}
 	}

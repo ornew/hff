@@ -692,8 +692,33 @@ attachments:items:any(pair=>pair:[list]:exists)
 With a nonempty `Map<Bytes|null>`, each item is a two-element list and the
 guard is true; an empty map has no items. A guard that inspects a specific
 payload type continues to use the ordinary per-key checks. This simplification
-does not make a mixed String/tagged payload recoverable when a later operation
-materializes it; those cases can still be rejected by `Build`.
+does not change general carrier recovery. A narrow `json()` path can serialize
+the selected values after eligible guarded item pipelines; the next section
+describes that support.
+
+### Serialize guarded per-key item values
+
+For a schema-known object whose item values have different declared types,
+PostgreSQL can retain each value's per-key type through an eligible map/filter
+pipeline ending in `json()`. For example, if `labels` has `app:String` and
+`asset:Bytes` fields, the stored JSON object `{"app":"auth","asset":"YQ=="}`
+contains the string `auth` and the base64 representation of the byte `a`.
+Both queries serialize those values in key order:
+
+```hff
+labels:items:map(pair=>pair:[list]![1]):json="[\"auth\",\"YQ==\"]"
+labels:items:[list[list]]:map(pair=>pair[1]):json="[\"auth\",\"YQ==\"]"
+```
+
+The first guards each pair before selecting its value; the second guards the
+complete pair list before mapping. The guard does not convert Bytes to String:
+`json()` serializes the Bytes value using its canonical base64 representation.
+Missing keys, ordinary null, and guard-produced no-value keep their existing
+behavior. This support is limited to the proven item-value pipeline and the
+`json()` observer; other operations that require an ambiguous materialized
+value can still be rejected by `Build`. Native JSON `Any` strings do not gain
+tagged identity from their spelling, and JSONB numeric recovery still follows
+the existing metadata requirements.
 
 Role-aware guards and slot observations still require a source whose element
 identity is recoverable from its schema and stored representation. A guard

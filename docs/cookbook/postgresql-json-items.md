@@ -202,6 +202,25 @@ expression that produces no-value remains no-value. In contrast,
 the declared, category-disjoint alternatives and does not recover an
 ambiguous field or infer a tagged type from a string inside `Any`.
 
+## Serialize guarded item values
+
+The `typed_events` object has a String `app` field and a Bytes `asset` field.
+These queries keep the value's per-key type through a list guard, then serialize
+the selected values in key order:
+
+```hff
+labels:items:map(pair=>pair:[list]![1]):json="[\"auth\",\"YQ==\"]"
+labels:items:[list[list]]:map(pair=>pair[1]):json="[\"auth\",\"YQ==\"]"
+```
+
+Both match row 1. The first guards each pair before reading its value; the
+second guards the complete item list before mapping. `json()` writes Bytes in
+canonical base64 form, so `asset` serializes as `"YQ=="` without becoming a
+String during the guard. Rows 3 and 4 have non-object roots and do not match.
+Missing keys, ordinary null, and guard-produced no-value retain their distinct
+behavior. This bounded item-value path does not make an ambiguous materialized
+value recoverable; see the [PostgreSQL JSON guide](../backends/postgresql/json.md#serialize-guarded-per-key-item-values).
+
 ## Guard recovered pair shapes
 
 The fixed roles also let a type guard inspect a pair without treating its two

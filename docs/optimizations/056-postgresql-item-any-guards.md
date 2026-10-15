@@ -23,7 +23,7 @@ normalization, Float, or representation rules.
 
 ## Reproduction
 
-The baseline is [2c2f7ed](https://github.com/ornew/hff/commit/2c2f7edfbc310d165b15851be570c6b4b44df4a6). The comparison uses Go 1.27.1. Save this program as `/private/tmp/hff-item-any-guard-audit.go`:
+The baseline is [2c2f7ed](https://github.com/ornew/hff/commit/2c2f7edfbc310d165b15851be570c6b4b44df4a6), and the candidate SQL-size and Build-boundary observations are pinned to snapshot [9826ad8](https://github.com/ornew/hff/commit/9826ad83debb71ad4dea4753c4ca780124f79d56). The comparison uses Go 1.27.1. Save this program as `/private/tmp/hff-item-any-guard-audit.go`:
 
 ```go
 package main
@@ -135,10 +135,12 @@ establish runtime performance.
 
 The final related PostgreSQL run logged 208,912 query/record outputs across
 609 groups. The new item-guard matrix covered 15,044 outputs across 36 groups.
-The unit suite retained 28 source cases. Twelve Build-only assertions cover two
-mixed String/tagged materialization queries across three tagged families and
-both JSON formats; those rejected queries were not executed by PostgreSQL.
-These materialization boundaries are not changed by this optimization.
+The unit suite retained 28 source cases at the candidate snapshot. Twelve
+Build-only assertions covered two mixed String/tagged materialization query
+families across three tagged types and both JSON formats; those rejected
+queries were not executed by PostgreSQL. A later schema-aware path supports
+these bounded guarded `json()` materializations; see [Serialize guarded
+per-key item values](../backends/postgresql/json.md#serialize-guarded-per-key-item-values).
 
 ## Correctness and tradeoffs
 
@@ -146,9 +148,11 @@ The rewrite is safe only when the guard accepts `Any` for every pair element.
 It retains declared-key text validation, pair and outer-list null behavior,
 source evaluation, and fallback lowering for payload-specific guards. The
 omitted per-key payload dispatch does not remove the pair/list scans or their
-validation work. Some guarded mixed String/tagged values still cannot be
-materialized because their original per-key identity is not retained; that is
-a separate support gap.
+validation work. Outside the bounded immediate `json()` path documented in the
+[PostgreSQL JSON guide](../backends/postgresql/json.md#serialize-guarded-per-key-item-values),
+some guarded mixed String/tagged values still cannot be materialized because
+their original per-key identity is not retained; that remains a separate
+support gap.
 
 ## Decision and limits
 
