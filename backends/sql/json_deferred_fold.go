@@ -54,20 +54,36 @@ func (b *builder) jsonDeferredInputFold(n hff.Node, name string) (expression, bo
 	if err != nil {
 		return expression{}, true, err
 	}
-	if prune {
+	var fields map[string]bool
+	if !prune {
+		fields, err = b.observedDeferredFoldFields(n, name)
+		if err != nil {
+			return expression{}, true, err
+		}
+		if fields != nil {
+			eligible, err := b.hasUnobservedDeferredFoldFields(plan, fields)
+			if err != nil {
+				return expression{}, true, err
+			}
+			if !eligible {
+				fields = nil
+			}
+		}
+	}
+	if prune || fields != nil {
 		// Validate the complete original packet, seed and callback path in
 		// receiver-first order before omitting an unobserved payload. Keep
 		// nested folds on their original validation path as well.
 		probe := b.validationBuilder()
 		probe.disableDeferredFoldPruning = true
-		if _, _, err := probe.jsonDeferredFoldPlan(n, name, plan, false); err != nil {
+		if _, _, err := probe.jsonDeferredFoldPlan(n, name, plan, false, nil); err != nil {
 			return expression{}, true, err
 		}
 	}
-	return b.jsonDeferredFoldPlan(n, name, plan, prune)
+	return b.jsonDeferredFoldPlan(n, name, plan, prune, fields)
 }
 
-func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferredList, prune bool) (expression, bool, error) {
+func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferredList, prune bool, fields map[string]bool) (expression, bool, error) {
 	receiver, _ := n.Child(0)
 	if len(plan.arms) == 0 {
 		// An always-empty/null stream still validates its callback, without
@@ -86,8 +102,10 @@ func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferre
 			var err error
 			if prune {
 				packet = unusedDeferredFoldPacket(arm.value.typ)
+			} else if value := deferredLeaf(arm.value); fields != nil && value.object != nil {
+				packet, err = b.packDeferredObject(n, value, fields)
 			} else {
-				packet, err = b.packDeferredValue(n, deferredLeaf(arm.value))
+				packet, err = b.packDeferredValue(n, value)
 			}
 			return err
 		})

@@ -71,31 +71,7 @@ func (b *builder) packDeferredValue(n hff.Node, value *jsonDeferredValue) (jsonD
 		return b.packDeferredList(n, value)
 	}
 	if value.object != nil {
-		fields := append([]jsonDeferredField(nil), (*value.object)...)
-		names := make([]string, len(fields))
-		packets := make([]jsonDeferredPacket, len(fields))
-		codes := make([]string, len(fields))
-		for i, field := range fields {
-			packet, err := b.packDeferredValue(n, field.value)
-			if err != nil {
-				return jsonDeferredPacket{}, err
-			}
-			names[i], codes[i] = field.name, packet.code
-			packet.code = ""
-			packets[i] = packet
-		}
-		return jsonDeferredPacket{code: "array_to_json(ARRAY[" + strings.Join(codes, ",") + "]::json[])", typ: typ,
-			decode: func(b *builder, n hff.Node, code string) (*jsonDeferredValue, error) {
-				output := make([]jsonDeferredField, len(names))
-				for i, name := range names {
-					child, err := packets[i].decode(b, n, "("+code+"->"+strconv.Itoa(i)+")")
-					if err != nil {
-						return nil, err
-					}
-					output[i] = jsonDeferredField{name, child}
-				}
-				return &jsonDeferredValue{typ: typ, present: "TRUE", object: &output}, nil
-			}}, nil
+		return b.packDeferredObject(n, value, nil)
 	}
 	parameter := *value.leaf
 	if parameter.itemSlot != nil {
@@ -219,5 +195,46 @@ func (b *builder) packDeferredList(n hff.Node, value *jsonDeferredValue) (jsonDe
 				plan.arms = append(plan.arms, arm)
 			}
 			return &jsonDeferredValue{typ: typ, present: "TRUE", list: plan}, nil
+		}}, nil
+}
+
+// Project only this constructed object's transport payload. Selected child
+// descriptors retain their complete subtrees; names, positions and the
+// original type are preserved even for unobserved fields.
+func (b *builder) packDeferredObject(n hff.Node, value *jsonDeferredValue, observed map[string]bool) (jsonDeferredPacket, error) {
+	typ := value.typ
+	fields := append([]jsonDeferredField(nil), (*value.object)...)
+	names := make([]string, len(fields))
+	packets := make([]jsonDeferredPacket, len(fields))
+	codes := make([]string, len(fields))
+	for i, field := range fields {
+		var packet jsonDeferredPacket
+		var err error
+		if observed != nil && !observed[field.name] {
+			if err := checkContext(b.ctx); err != nil {
+				return jsonDeferredPacket{}, err
+			}
+			packet = unusedDeferredFoldPacket(field.value.typ)
+		} else {
+			packet, err = b.packDeferredValue(n, field.value)
+		}
+		if err != nil {
+			return jsonDeferredPacket{}, err
+		}
+		names[i], codes[i] = field.name, packet.code
+		packet.code = ""
+		packets[i] = packet
+	}
+	return jsonDeferredPacket{code: "array_to_json(ARRAY[" + strings.Join(codes, ",") + "]::json[])", typ: typ,
+		decode: func(b *builder, n hff.Node, code string) (*jsonDeferredValue, error) {
+			output := make([]jsonDeferredField, len(names))
+			for i, name := range names {
+				child, err := packets[i].decode(b, n, "("+code+"->"+strconv.Itoa(i)+")")
+				if err != nil {
+					return nil, err
+				}
+				output[i] = jsonDeferredField{name, child}
+			}
+			return &jsonDeferredValue{typ: typ, present: "TRUE", object: &output}, nil
 		}}, nil
 }

@@ -88,6 +88,18 @@ dynamic index, or return pairs keep generic lowering. See [direct object-key
 traversal](../../optimizations/052-postgresql-direct-object-item-keys.md) for
 the supported proof and SQL-shape evidence; no runtime-speed claim follows.
 
+### Omit unobserved fields from deferred fold packets
+
+For a deferred fold over constructed-object items, a direct item-field read or
+literal-string index can retain only the complete child subtree the callback
+uses. The lowering keeps the original object fields, order, types, source
+state, and full validation; whole-item reads, whole/root-item guards,
+dynamic-index, custom-translator, or otherwise unproven cases retain ordinary
+packet lowering. See
+[observed fold fields](../../optimizations/062-postgresql-observed-fold-fields.md)
+for the bounded rules and SQL-shape evidence. SQL-shape observations are not
+runtime-speed claims.
+
 ### Compare native Timestamp bindings by their physical columns
 
 For eligible native `BindTimestamp` filter comparisons against a Timestamp

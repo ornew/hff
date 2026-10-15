@@ -1742,6 +1742,24 @@ callback body, keeps the ordinary lowering path. Existing native and safe
 identity-fold paths remain preferred; this bounded case does not replace the
 fold with a count or prune accumulator state.
 
+When a fold item is a constructed object, PostgreSQL can avoid carrying the
+payloads of fields that the callback never observes. A direct field read or
+literal-string index on the item binding retains the complete selected child
+value, including nested lists or objects, while preserving the original field
+names, order, and types.
+For example, a callback can read only the `used` child here:
+
+```hff
+labels:items:map(p=>{"used":p[1],"unused":[p[1],p[1]]}):foldl(0,(a,v)=>a+v.used:string:len)>5
+```
+
+Whole-item reads, guards on the whole/root item, dynamic indexes, and custom
+translators in the source, seed, or callback body use the ordinary packet path;
+a guard on a selected child remains eligible. Validation, source order,
+presence, null, and no-value behavior remain unchanged; the optimization does
+not infer types for ambiguous stored values. See the [observed fold fields](../../optimizations/062-postgresql-observed-fold-fields.md)
+record for the bounded behavior and SQL-shape evidence.
+
 For eligible deferred `items()` streams, fold callbacks can inspect each
 input value using its recovered per-key schema without first materializing the
 mixed input list as ordinary JSON. The accumulator still follows the normal
