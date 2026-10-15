@@ -423,6 +423,10 @@ func nonnullJSONType(t hff.Type) hff.Type {
 	return t
 }
 func (b *builder) jsonTypeGuard(n hff.Node, value expression, format JSONFormat, source, target hff.Type) (expression, error) {
+	return b.jsonTypeGuardResult(n, value, format, source, target, true)
+}
+
+func (b *builder) jsonTypeGuardResult(n hff.Node, value expression, format JSONFormat, source, target hff.Type, normalize bool) (expression, error) {
 	receiver, _ := n.Child(0)
 	source = b.jsonStoredType(receiver)
 	test, handled, err := b.jsonItemGuard(n, value.code, format, receiver, target)
@@ -436,7 +440,7 @@ func (b *builder) jsonTypeGuard(n hff.Node, value expression, format JSONFormat,
 	// a definite false so later null tests still produce ordinary false.
 	present := both(value.present, "COALESCE(("+test+"), FALSE)")
 	guarded := "CASE WHEN " + present + " THEN " + value.code + " ELSE NULL END"
-	if target.Kind() == hff.ListType || target.Kind() == hff.MapType || target.Kind() == hff.UnionType {
+	if normalize && (target.Kind() == hff.ListType || target.Kind() == hff.MapType || target.Kind() == hff.UnionType) {
 		guarded, err = b.jsonGuardResult(n, guarded, format, source, target)
 		if err != nil {
 			return expression{}, err

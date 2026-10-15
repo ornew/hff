@@ -6,6 +6,11 @@ import "github.com/ornew/hff"
 // Validate discarded callbacks separately before a shape-only observation so
 // unused payload parameters and row work do not escape into the real query.
 func (b *builder) deferredObserverReceiver(n hff.Node, name string) (*jsonDeferredValue, bool, error) {
+	if name == "type" || name == "exists" || name == "size" || name == "count" {
+		if value, handled, err := b.deferredNumericGuardRoot(n); handled || err != nil {
+			return value, handled, err
+		}
+	}
 	if name == "len" {
 		return b.typedValueDescriptor(n)
 	}
@@ -19,6 +24,55 @@ func (b *builder) deferredObserverReceiver(n hff.Node, name string) (*jsonDeferr
 	}
 	value, err := b.deferredOuterShape(n)
 	return value, true, err
+}
+
+// Numeric recovery may replace child values with null, but cannot change a
+// matched container's outer category or cardinality. This descriptor is used
+// only by the immediate root observer; it must not escape to value consumers.
+func (b *builder) deferredNumericGuardRoot(n hff.Node) (*jsonDeferredValue, bool, error) {
+	if n.Kind() != hff.TypeGuardNode {
+		return nil, false, nil
+	}
+	target, _ := n.Constraint()
+	if (target.Kind() != hff.ListType && target.Kind() != hff.MapType) || !guardTargetRecoversNumbers(target) {
+		return nil, false, nil
+	}
+	// Keep normal lowering as the validation authority, including callbacks,
+	// storage ambiguity and metadata checks. Its SQL and arguments are not
+	// adopted, so payload reconstruction cannot leak into the actual query.
+	validation := b.validationBuilder()
+	if _, err := validation.expression(n); err != nil {
+		if fatal := b.typedFallbackError(err); fatal != nil {
+			return nil, true, fatal
+		}
+		return nil, false, nil
+	}
+	probe := b.validationBuilder()
+	receiver, _ := n.Child(0)
+	value, err := probe.expression(receiver)
+	if err != nil {
+		if fatal := b.typedFallbackError(err); fatal != nil {
+			return nil, true, fatal
+		}
+		return nil, false, nil
+	}
+	// A declared identical guard already avoids element validation. Preserve
+	// that stronger input-contract proof instead of adding a fresh scan.
+	if receiver.Type().Equal(target) && (probe.nonnullScalarInput(receiver, value) || probe.identicalInputGuard(receiver)) {
+		return nil, false, nil
+	}
+	format := probe.jsonValues[value.code]
+	if format == "" {
+		return nil, false, nil
+	}
+	result, err := probe.jsonTypeGuardResult(n, value, format, receiver.Type(), target, false)
+	if err != nil {
+		return nil, true, err
+	}
+	typ := probe.jsonStoredType(n)
+	parameter := jsonParameter{typ: typ, direct: &result, lossy: probe.losesFloat(n, nil)}
+	b.adoptDeferredProbe(probe)
+	return deferredLeaf(parameter), true, nil
 }
 
 // Only filter and concat have the outer-state identities used here. In

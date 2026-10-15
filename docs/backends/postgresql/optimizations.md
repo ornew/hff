@@ -8,6 +8,16 @@ other schemas and data.
 
 ## SQL translation choices
 
+### Avoid rebuilding guarded payloads for root observers
+
+After one numeric-containing List/Map type guard, immediate root `type()`,
+`exists()`, `size()`, and list `count()` can omit the normalized payload that
+the observer does not consume. The source expression and full guard still
+run; other guards and value consumers retain ordinary normalization. See
+[guarded root observers](../../optimizations/054-postgresql-root-guard-observers.md)
+for the bounded applicability and SQL-shape evidence. No runtime-speed claim
+follows from these observations.
+
 ### Traverse object keys directly for key-only `items()` consumers
 
 When an `items()` callback or transformation observes only the fixed key

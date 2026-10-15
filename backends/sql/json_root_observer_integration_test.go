@@ -59,6 +59,12 @@ func TestPostgreSQLRootObserverFloatGuardChains(t *testing.T) {
 						{`data:[list[float]]:[list[float]]:exists`, !invalid},
 						{`data:[list[float]]:[list[null]]:json="[null]"`, invalid},
 						{`data:[list[float]]:[list[null]]:count=1`, invalid},
+						{`data:[list[float]]:exists`, true},
+						{`data:[list[float]]:size=1`, true},
+						{`data:[list[float]]:type="list"`, true},
+						{`data:[list[float]]:exists data:[list[float]]:json="[null]"`, invalid},
+						{`data:[list[float]]:size=1 data:[list[float]]:json="[null]"`, invalid},
+						{`data:[list[float]]:count(v=>v=null)=1`, invalid},
 					} {
 						p, err := e.Compile(ctx, tc.source)
 						if err != nil {
@@ -237,5 +243,72 @@ INSERT INTO projection_events VALUES
 		}
 	}
 	t.Logf("%d cookbook results", len(expected))
+	runSQLBooleanParityScript(t, ctx, container, script.String(), expected, labels)
+}
+
+func TestPostgreSQLRootNumericGuardObservers(t *testing.T) {
+	container := os.Getenv("HFF_POSTGRES_CONTAINER")
+	if container == "" {
+		t.Fatal("integration tests require HFF_POSTGRES_CONTAINER")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Any("data"))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	records := []hff.Value{
+		hff.Null(), hff.Int(1), hff.String("text"), hff.List(), hff.Object(nil),
+		hff.List(hff.Float(1), hff.Float(2)), hff.List(hff.Int(1), hff.Int(2)), hff.List(hff.Null()),
+		hff.List(hff.String("1"), hff.Float(2)), hff.List(hff.List(hff.Float(1))),
+		hff.Object(map[string]hff.Value{"a": hff.Float(1), "b": hff.Float(2)}),
+		hff.Object(map[string]hff.Value{"a": hff.Int(1), "b": hff.Int(2)}),
+		hff.Object(map[string]hff.Value{"a": hff.Null()}),
+		hff.Object(map[string]hff.Value{"a": hff.List(hff.Float(1)), "b": hff.List()}),
+	}
+	sources := []string{
+		`data:[list[float]]:exists`, `data:[list[int]]:size=2`, `data:[list[float]]:count=2`,
+		`data:[list[float]]:type="list"`, `data:[list[float]]:type="null"`,
+		`!(data:[list[float]]:exists)`, `data:[list[float]]=null`,
+		`data:[map[float]]:exists`, `data:[map[float]]:type="object"`, `data:[map[int]]:size=2`,
+		`data:[map[list[float]]]:size=2`, `data:[list[list[float]]]:size=1`,
+		`data:[list[float]]:exists data:[list[float]]:json:exists`,
+		`data:[list[float]]:size=2 data:[list[float]]:json:exists`,
+		`data:[list[float]]:[list[null]]:exists`, `data:[list[float]]:count(x=>x=null)>0`,
+		`data:[object]:get("a"):[list[float]]:exists`,
+		`[data]:any(x=>x:[list[float]]:exists)`,
+		`[data]:any(x=>[1]:any(x=>x=1) data:[map[float]]:exists)`,
+	}
+	var script strings.Builder
+	script.WriteString("SET application_name='hff-numeric-guard-observer';SET jit=off;SET statement_timeout='20s';\n")
+	var expected []bool
+	var labels []string
+	for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
+		for _, source := range sources {
+			p, err := e.Compile(ctx, source)
+			if err != nil {
+				t.Fatal(source, err)
+			}
+			filter, err := local.Build(ctx, p)
+			if err != nil {
+				t.Fatal(source, err)
+			}
+			q, err := hffsql.Build(ctx, p, unionProjectionOptions(format, format == hffsql.JSONB)...)
+			if err != nil {
+				t.Fatal(format, source, err)
+			}
+			for i, value := range records {
+				want, err := filter.Match(ctx, hff.Object(map[string]hff.Value{"data": value}))
+				if err != nil {
+					t.Fatal(source, err)
+				}
+				from := fmt.Sprintf("(VALUES(%s::%s,%s::jsonb)) records(data,metadata)", sqlFixtureString(taggedCollectionJSON(t, value)), format, sqlFixtureString(pairTypeMetadata(t, value)))
+				appendAggregateProfileQuery(t, &script, q, from, len(expected))
+				expected = append(expected, want)
+				labels = append(labels, fmt.Sprintf("%s %s row%d", format, source, i))
+			}
+		}
+	}
+	t.Logf("%d root numeric guard results", len(expected))
 	runSQLBooleanParityScript(t, ctx, container, script.String(), expected, labels)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/ornew/hff"
@@ -12,6 +13,58 @@ import (
 	"github.com/ornew/hff/engine"
 	"github.com/ornew/hff/schema"
 )
+
+func TestRootNumericGuardObserversDoNotRebuildPayload(t *testing.T) {
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Any("data"))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range []string{
+		`data:[list[float]]:exists`, `data:[list[int]]:size=2`,
+		`data:[map[float]]:type="object"`, `data:[map[list[float]]]:size=2`,
+	} {
+		p, err := e.Compile(context.Background(), source)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		for _, format := range []hffsql.JSONFormat{hffsql.JSON, hffsql.JSONB} {
+			q, err := hffsql.Build(context.Background(), p, unionProjectionOptions(format, format == hffsql.JSONB)...)
+			if err != nil {
+				t.Fatal(format, source, err)
+			}
+			for _, rebuild := range []string{"json_agg(", "jsonb_agg(", "json_object_agg(", "jsonb_object_agg("} {
+				if strings.Contains(q.Where(), rebuild) {
+					t.Errorf("%s %s rebuilds a payload for a root-only observation", format, source)
+				}
+			}
+		}
+	}
+}
+
+func TestRootNumericGuardObserversPreserveValueConsumers(t *testing.T) {
+	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Any("data"))), engine.WithCapabilities(capabilities.Standard()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, source := range []string{
+		`data:[list[float]]:exists data:[list[float]]:json:exists`,
+		`data:[list[float]]:size=1 data:[list[float]]:json:exists`,
+		`data:[list[float]]:[list[null]]:exists`,
+		`data:[list[float]]:count(x=>x=null)>0`,
+	} {
+		p, err := e.Compile(context.Background(), source)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		q, err := hffsql.Build(context.Background(), p, unionProjectionOptions(hffsql.JSON, false)...)
+		if err != nil {
+			t.Fatal(source, err)
+		}
+		if !strings.Contains(q.Where(), "json_agg(") {
+			t.Errorf("%s discarded normalization required by a value consumer", source)
+		}
+	}
+}
 
 func rootObserverSources() []string {
 	return []string{
@@ -169,7 +222,7 @@ func TestRootObserversCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, source := range []string{`data:type="object"`, `data:[object|list[float]]:exists`, `data:[map[float]|list[any]]:exists`} {
+	for _, source := range []string{`data:type="object"`, `data:[object|list[float]]:exists`, `data:[map[float]|list[any]]:exists`, `data:[map[float]]:size=0`, `data:[list[float]]:exists`} {
 		p, err := e.Compile(context.Background(), source)
 		if err != nil {
 			t.Fatal(source, err)
@@ -199,6 +252,7 @@ func TestRootObserversValidateUnusedCallbacks(t *testing.T) {
 	for _, source := range []string{
 		`data:filter(x=>false):map(x=>x:[object].safe:concat("\u0000")):json:exists`,
 		`data:filter(x=>false):map(x=>x:[map[any]]:get("safe")):any(v=>v:concat("\u0000"))`,
+		`data:filter(x=>false):map(x=>x:string:concat("\u0000")):[list[float]]:size=0`,
 	} {
 		p, err := e.Compile(context.Background(), source)
 		if err != nil {

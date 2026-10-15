@@ -239,6 +239,24 @@ guards inspect them. Ordinary decoder failures still become null. An `Any`
 position remains JSON-native and is not given a Bytes or Timestamp tag based
 on string contents.
 
+For a single numeric-containing List or Map type guard, an immediate root
+`type()`, `exists()`, `size()`, or zero-argument `count()` can use the validated
+guarded container without rebuilding its normalized JSON payload. For example,
+these root observers preserve the full guard result while observing only the
+container:
+
+```hff
+data:[list[float]]:exists
+data:[list[int]]:size=2
+data:[map[float]]:type="object"
+data:[map[list[float]]]:size=2
+```
+
+This does not change the result or skip source evaluation and guard checks.
+JSONB still needs numeric type metadata when the guard observes an Int/Float
+distinction that storage erased. Other guards and value consumers, including
+`json()` and predicate `count()`, retain ordinary normalization.
+
 ### Tagged scalar alternatives with containers
 
 The supported category-disjoint subset permits one schema-known Bytes,
