@@ -12,6 +12,12 @@ func TestInferredIntersectionRetainsEmptyCollectionsAndFields(t *testing.T) {
 		{NewStructType(Field{Name: "a", Type: anyType}), NewMapType(str), NewStructType(Field{Name: "a", Type: str, Optional: true})},
 		{NewUnionType(str, integer), str, str},
 		{anyType, NewListType(str), NewListType(str)},
+		{NewUnionType(anyType, PrimitiveType(NullType)), str, str},
+		{str, NewUnionType(anyType, PrimitiveType(NullType)), str},
+		{NewListType(NewUnionType(anyType, integer)), NewListType(str), NewListType(str)},
+		{NewMapType(str), NewMapType(NewUnionType(anyType, integer)), NewMapType(str)},
+		{NewUnionType(anyType, integer), NewUnionType(str, PrimitiveType(BytesType)), NewUnionType(str, PrimitiveType(BytesType))},
+		{NewStructType(Field{Name: "a", Type: NewUnionType(anyType, PrimitiveType(NullType))}), NewMapType(str), NewStructType(Field{Name: "a", Type: str, Optional: true})},
 	} {
 		if got := IntersectTypes(tc.actual, tc.target); !got.Equal(tc.want) {
 			t.Errorf("%s intersect %s = %s; want %s", tc.actual.Key(), tc.target.Key(), got.Key(), tc.want.Key())

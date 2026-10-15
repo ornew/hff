@@ -112,7 +112,7 @@ func TestJSONItemSlotObserversBuild(t *testing.T) {
 	}
 }
 
-func TestJSONItemSlotGuardsRejectErasedTagIdentity(t *testing.T) {
+func TestJSONItemSlotGuardsKeepPerKeyAnyIdentity(t *testing.T) {
 	ctx := context.Background()
 	e, err := engine.New(engine.WithSchema(schema.Struct(schema.Field("labels", schema.Struct(schema.Field("app", schema.AnyType), schema.Bytes("z"))))), engine.WithCapabilities(capabilities.Standard()))
 	if err != nil {
@@ -123,9 +123,9 @@ func TestJSONItemSlotGuardsRejectErasedTagIdentity(t *testing.T) {
 		wantError bool
 	}{
 		{`labels:items[0][0]:type="string"`, false},
-		{`labels:items[0][1]:[any]:type="string"`, true},
+		{`labels:items[0][1]:[any]:type="string"`, false},
 		{`labels:items[0][1]:[string|bytes]:type="string"`, true},
-		{`labels:items[0][labels:size-1]:[any]:exists`, true},
+		{`labels:items[0][labels:size-1]:[any]:exists`, false},
 	} {
 		p, err := e.Compile(ctx, tc.source)
 		if err != nil {

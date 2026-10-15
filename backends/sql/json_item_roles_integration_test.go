@@ -88,6 +88,10 @@ func TestPostgreSQLJSONItemGuardChainsMatchLocal(t *testing.T) {
 	runPostgreSQLJSONItemRoleSources(t, itemChainSources, itemSlotFixtures()...)
 }
 
+func TestPostgreSQLJSONItemAnyFieldObserversMatchLocal(t *testing.T) {
+	runPostgreSQLJSONItemRoleSources(t, itemAnySources, itemAnyFixtures()...)
+}
+
 func TestPostgreSQLJSONItemKeyGuardChainsWithoutMetadata(t *testing.T) {
 	runPostgreSQLJSONItemRoleSources(t, itemKeyChainSources, keyOnlyValueFixtures()...)
 }

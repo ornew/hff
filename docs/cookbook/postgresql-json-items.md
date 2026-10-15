@@ -105,16 +105,74 @@ chains do not make an ambiguous slot safe to return as a general value; the
 source schema and representation must still recover the original key/value
 roles.
 
-The backend preserves this positional information when the source `items()`
-result and schema establish the key/value roles. Constant indexes `0` and
-`-2` select the String key; `1` and `-1` select the value. Identity `map()` and
-pair-only `flatmap()` callbacks can preserve those roles, including when they
-duplicate pairs. Same-JSON-category alternatives whose identity cannot be
-recovered and `Any` strings requiring Bytes identity remain unsupported.
-Missing keys, stored null, and guard-produced no-value retain their separate
-HFF behavior. See the
+The backend preserves these positional roles when the source `items()` result
+and schema establish them. Constant indexes `0` and `-2` select the String
+key; `1` and `-1` select the value. Identity `map()` and pair-only `flatmap()`
+callbacks can preserve the roles, including when they duplicate pairs. Same-
+category alternatives whose identity cannot be recovered and `Any` strings
+requiring Bytes identity remain unsupported. Missing keys, stored null, and
+guard-produced no-value retain their separate HFF behavior. See the
 [PostgreSQL JSON guide](../backends/postgresql/json.md#bytes-in-json-documents)
 for the supported subset and its limits.
+
+## Keep `Any` strings distinct from tagged fields
+
+Per-key schema identity also lets an `Any` field sit beside fields with tagged
+string representations. In this example `app` is `Any|null`, while the other
+fields retain their declared types:
+
+```sql
+CREATE TABLE events (
+    id bigint PRIMARY KEY,
+    labels jsonb,
+    labels_meta jsonb NOT NULL DEFAULT '{"version":1,"types":{}}'::jsonb
+);
+
+INSERT INTO events (id, labels) VALUES
+    (1, '{"app":"YQ==","asset":"YQ==","elapsed":"0.000000001s","recorded":"2026-10-15T00:00:00Z"}'),
+    (2, '{"app":"2026-10-15T00:00:00Z","asset":"Yg==","elapsed":"1s","recorded":"2026-10-15T00:00:01Z"}'),
+    (3, '{"app":"","asset":null,"elapsed":"2s","recorded":"2026-10-15T00:00:02Z"}'),
+    (4, '{"app":null,"asset":null,"elapsed":null,"recorded":null}');
+```
+
+Use this schema and binding (with the usual engine and PostgreSQL setup):
+
+```go
+schema.Struct(schema.Nullable(schema.Field("labels", schema.Struct(
+	schema.Nullable(schema.Field("app", schema.AnyType)),
+	schema.Nullable(schema.Bytes("asset")),
+	schema.Nullable(schema.Duration("elapsed")),
+	schema.Nullable(schema.Timestamp("recorded")),
+))))
+
+hffsql.BindJSON(
+	hff.Path{"labels"},
+	hffsql.Column("events", "labels"),
+	hffsql.JSONB,
+	hffsql.WithTypeMetadata(hffsql.Column("events", "labels_meta")),
+)
+```
+
+The empty version-1 metadata is valid for these string and null values. If
+`app` contains numbers, populate its metadata with their numeric subtypes;
+an empty `types` map cannot restore those subtypes from JSONB. The first two
+queries inspect the `app` value as `Any`, then narrow it to String. The third
+observes the separate declared Bytes field; it checks its HFF type, not its
+length:
+
+```hff
+labels:items:any(pair=>pair[0]="app" pair[1]:[any]:type="string")
+labels:items:any(pair=>pair[0]="app" pair[1]:[any]:[string]:len>0)
+labels:items:any(pair=>pair[0]="asset" pair[1]:[any]:type="bytes")
+```
+
+The first matches rows 1–3 because their non-null `app` values are strings.
+The second matches rows 1 and 2: the base64-looking and Timestamp-looking
+texts in `Any` are still Strings, while the empty string in row 3 has length
+zero. The third matches rows 1 and 2 because their `asset` fields are declared
+Bytes; row 4's null field does not match. An `Any` string does not
+acquire Bytes, Duration, or Timestamp identity from its spelling; identity
+comes from the separate field's schema.
 
 ## Consume object keys without reading values
 

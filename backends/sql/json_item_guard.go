@@ -176,10 +176,10 @@ func (b *builder) jsonItemValueMatches(n hff.Node, code string, format JSONForma
 // merges several JSON string families. Never recover a tag from its spelling.
 func (b *builder) jsonItemValueOperation(n hff.Node, code string, roles *jsonItemRoles, operation func(hff.Type) (string, error)) (string, error) {
 	shape := makeComparisonShape(roles.object)
-	apply := func(source hff.Type) (string, error) {
-		return operation(intersectItemType(source, roles.value))
-	}
-	fallback, err := apply(schemaObjectFallback(shape))
+	// The selector already includes each whole-pair guard. The homogeneous
+	// value summary joins other keys' types, so intersecting it back into a
+	// field would invent tagged alternatives for an unrelated Any field.
+	fallback, err := operation(schemaObjectFallback(shape))
 	if err != nil {
 		return "", err
 	}
@@ -188,7 +188,7 @@ func (b *builder) jsonItemValueOperation(n hff.Node, code string, roles *jsonIte
 	}
 	parts := []string{"CASE"}
 	for _, field := range shape.keys {
-		test, err := apply(schemaObjectValue(shape, field))
+		test, err := operation(schemaObjectValue(shape, field))
 		if err != nil {
 			return "", err
 		}

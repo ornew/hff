@@ -46,6 +46,17 @@ func IntersectTypes(actual, target Type) Type {
 	var results []Type
 	for _, a := range branches(actual) {
 		for _, t := range branches(target) {
+			// Literal schemas retain Any inside unions such as Any|null.
+			// It remains the universal type at this branch, not a concrete
+			// kind that can only intersect another Any branch.
+			if a.Kind() == AnyType {
+				results = append(results, t)
+				continue
+			}
+			if t.Kind() == AnyType {
+				results = append(results, a)
+				continue
+			}
 			if a.Kind() == ListType && t.Kind() == ListType {
 				results = append(results, NewListType(IntersectTypes(a.Element(), t.Element())))
 				continue

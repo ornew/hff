@@ -205,9 +205,9 @@ func (b *builder) jsonItemSlotGuardTypes(n hff.Node) ([]hff.Type, bool) {
 	if !literal || x == 1 || x == -1 {
 		shape := makeComparisonShape(roles.object)
 		for _, key := range shape.keys {
-			types = append(types, narrow(intersectItemType(schemaObjectValue(shape, key), roles.value)))
+			types = append(types, narrow(schemaObjectValue(shape, key)))
 		}
-		types = append(types, narrow(intersectItemType(schemaObjectFallback(shape), roles.value)))
+		types = append(types, narrow(schemaObjectFallback(shape)))
 	}
 	return types, true
 }

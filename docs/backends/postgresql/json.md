@@ -611,6 +611,16 @@ Same-category alternatives that cannot be recovered from the declared schema
 and JSON representation remain unsupported. Missing keys, stored nulls, and
 guard-produced no-value remain distinct.
 
+Per-key identity also applies when a Struct has an `Any` field beside tagged
+fields. A string in `Any|null` remains a String even when its text looks like
+base64 or a Timestamp; a separate Bytes, Duration, or Timestamp field keeps
+the type declared for that field. An observer-local chain can inspect an `Any`
+slot as `Any` and then narrow it to String for a typed operation. This does not
+infer tagged identity inside `Any`: a native JSON `Any` guard targeting a
+tagged string type, or a same-position `Any|Bytes` alternative, remains
+unsupported. JSONB numeric subtype recovery still follows the existing
+metadata rules.
+
 When a Struct has different field value types, the key at slot `[0]` remains
 String, and the backend can use each actual key for per-field equality and
 serialization. Passing slot `[1]` as a general value can lose that
