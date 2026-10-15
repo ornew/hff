@@ -20,6 +20,17 @@ other deferred-list consumers retain their existing lowering. See [empty concat
 arms](../../optimizations/055-postgresql-empty-concat-arms.md) for the bounded
 proof, parity scope, and plan observations. No runtime-speed claim follows.
 
+### Share repeated flatmap parameter rows
+
+In eligible JSON/JSONB `flatmap()` callbacks, PostgreSQL can use one ordered
+row source when a nonempty literal list or strict built-in `concat()` tree
+repeats the same bare lexical parameter in every leaf. It retains the original
+value descriptor, order, null values, and no-value behavior. Validation still
+runs first. Computed values, guards, indexes, method results, and equal SQL
+text from distinct expressions do not qualify. See [repeated flatmap
+parameters](../../optimizations/059-postgresql-repeated-flatmap-parameters.md)
+for the bounded SQL-shape observations; they do not establish runtime speed.
+
 ### Simplify unconstrained JSON item-payload guards
 
 When a recovered object-item pair guard accepts `Any` at the value slot,

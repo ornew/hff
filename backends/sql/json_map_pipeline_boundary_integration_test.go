@@ -41,6 +41,10 @@ func TestPostgreSQLItemMapPipelineFloatBoundaries(t *testing.T) {
 			want   bool
 		}{
 			{`labels:items:map(p=>p[1]):flatmap(v=>[v]):map(v=>v:[float]):map(v=>v:type):contains("null")`, false, invalid},
+			{`labels:items:map(p=>p[1]):flatmap(v=>[v,v]):map(v=>v:[float]):map(v=>v:type):contains("null")`, false, invalid},
+			{`labels:items:map(p=>p[1]):flatmap(v=>[v]:concat([v])):map(v=>v:[float]):map(v=>v:type):contains("null")`, false, invalid},
+			{`labels:items:map(p=>p[1]):flatmap(v=>[v,v])[1]:[float]:type="null"`, false, invalid},
+			{`labels:items:map(p=>p[1]):flatmap(v=>[v,v]):map(v=>v:[float]):filter(v=>false):all(v=>true)`, false, true},
 			{`labels:items:map(p=>p[1]):flatmap(v=>[v])[0]:[float]:type="null"`, false, invalid},
 			{`labels:items:map(p=>p[1]):flatmap(v=>[v])[0]:[float]:[float]:exists`, false, !invalid},
 			{`labels:items:map(p=>p[1]):map(v=>[v]):flatmap(v=>[v])[0]:[list[float]][0]:type="null"`, false, invalid},

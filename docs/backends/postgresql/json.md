@@ -803,6 +803,15 @@ literal-list indexing and guards, object field or `get()` access, and `type()`,
 type, ordinary null, and guarded no-value remain distinct through these
 wrappers.
 
+For a `flatmap()` callback that repeats the same parameter unchanged in every
+literal-list leaf, PostgreSQL can share the parameter's ordered input rows.
+For example, `labels:items:map(p=>p[1]):flatmap(v=>[v,v])` duplicates each
+selected value in order; a strict built-in `concat()` tree of such leaves can
+use the same path. Null remains repeated data, and no-value still fails the
+whole list. Guards, indexes, method calls, computed expressions, and merely
+equal-looking SQL expressions do not qualify; they keep their ordinary
+lowering.
+
 An eligible deferred list can also be indexed before materialization. Its
 indices count retained rows in full ordinal order, including after filters and
 `flatmap()` expansion. Negative integral indexes count from the end; fractional

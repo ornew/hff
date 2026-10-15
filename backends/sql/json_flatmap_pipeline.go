@@ -261,53 +261,11 @@ func (b *builder) deferredList(n hff.Node) (jsonDeferredList, error) {
 	if err := checkContext(b.ctx); err != nil {
 		return jsonDeferredList{}, err
 	}
-	if n.Kind() == hff.ListNode {
-		plan := jsonDeferredList{null: "FALSE", present: "TRUE", literal: true}
-		if n.ChildCount() == 0 {
-			// Keep a typed, zero-row scope so subsequent callbacks still pass
-			// through ordinary Build validation. Its output type cannot occur
-			// and must not make another arm's value identity ambiguous.
-			alias := b.nextAlias()
-			value := expression{code: "NULL", present: "TRUE", kind: hff.NullType}
-			plan.arms = append(plan.arms, jsonDeferredArm{empty: true, from: "(SELECT 1 AS n WHERE FALSE) AS " + alias,
-				ordinal: []string{"0"}, selected: "TRUE", value: jsonParameter{typ: hff.PrimitiveType(hff.NeverType), direct: &value}, parameters: copyJSONParameters(b.parameters)})
+	if n.Kind() == hff.ListNode || builtinListCall(n, "concat") {
+		if plan, handled, err := b.repeatedDeferredList(n); handled || err != nil {
+			return plan, err
 		}
-		for i := 0; i < n.ChildCount(); i++ {
-			child, _ := n.Child(i)
-			value, err := b.deferredValue(child)
-			if err != nil {
-				return jsonDeferredList{}, err
-			}
-			plan.present = both(plan.present, deferredParameterPresence(value))
-			seed := b.nextAlias()
-			plan.arms = append(plan.arms, jsonDeferredArm{from: "(VALUES (1)) AS " + seed + "(n)", ordinal: []string{strconv.Itoa(i)}, selected: "TRUE", value: value, parameters: copyJSONParameters(b.parameters)})
-		}
-		return plan, nil
-	}
-	if builtinListCall(n, "concat") {
-		left, _ := n.Child(0)
-		right, _ := n.Child(1)
-		l, err := b.deferredList(left)
-		if err != nil {
-			return jsonDeferredList{}, err
-		}
-		r, err := b.deferredList(right)
-		if err != nil {
-			return jsonDeferredList{}, err
-		}
-		for i := range l.arms {
-			if err := checkContext(b.ctx); err != nil {
-				return jsonDeferredList{}, err
-			}
-			l.arms[i].ordinal = append([]string{"0"}, l.arms[i].ordinal...)
-		}
-		for i := range r.arms {
-			if err := checkContext(b.ctx); err != nil {
-				return jsonDeferredList{}, err
-			}
-			r.arms[i].ordinal = append([]string{"1"}, r.arms[i].ordinal...)
-		}
-		return jsonDeferredList{null: "(" + l.null + " OR " + r.null + ")", present: both(l.present, "("+l.null+" OR "+r.present+")"), arms: append(l.arms, r.arms...), literal: l.literal && r.literal}, nil
+		return b.deferredListConstructor(n)
 	}
 	for _, name := range []string{"map", "filter", "flatmap"} {
 		if builtinListCall(n, name) {
@@ -649,4 +607,61 @@ func (b *builder) materializeDeferredList(n hff.Node, plan jsonDeferredList) (ex
 	}
 	value, err := b.finishDeferredList(n, "map", plan, rows, types)
 	return value, err
+}
+
+// Lower constructors without branch sharing. This also supplies the complete
+// original validation path before a repeated-parameter plan is compressed.
+func (b *builder) deferredListConstructor(n hff.Node) (jsonDeferredList, error) {
+	if err := checkContext(b.ctx); err != nil {
+		return jsonDeferredList{}, err
+	}
+	if n.Kind() == hff.ListNode {
+		plan := jsonDeferredList{null: "FALSE", present: "TRUE", literal: true}
+		if n.ChildCount() == 0 {
+			// Keep a typed, zero-row scope so subsequent callbacks still pass
+			// through ordinary Build validation. Its output type cannot occur
+			// and must not make another arm's value identity ambiguous.
+			alias := b.nextAlias()
+			value := expression{code: "NULL", present: "TRUE", kind: hff.NullType}
+			plan.arms = append(plan.arms, jsonDeferredArm{empty: true, from: "(SELECT 1 AS n WHERE FALSE) AS " + alias,
+				ordinal: []string{"0"}, selected: "TRUE", value: jsonParameter{typ: hff.PrimitiveType(hff.NeverType), direct: &value}, parameters: copyJSONParameters(b.parameters)})
+		}
+		for i := 0; i < n.ChildCount(); i++ {
+			child, _ := n.Child(i)
+			value, err := b.deferredValue(child)
+			if err != nil {
+				return jsonDeferredList{}, err
+			}
+			plan.present = both(plan.present, deferredParameterPresence(value))
+			seed := b.nextAlias()
+			plan.arms = append(plan.arms, jsonDeferredArm{from: "(VALUES (1)) AS " + seed + "(n)", ordinal: []string{strconv.Itoa(i)}, selected: "TRUE", value: value, parameters: copyJSONParameters(b.parameters)})
+		}
+		return plan, nil
+	}
+	if builtinListCall(n, "concat") {
+		left, _ := n.Child(0)
+		right, _ := n.Child(1)
+		l, err := b.deferredListConstructor(left)
+		if err != nil {
+			return jsonDeferredList{}, err
+		}
+		r, err := b.deferredListConstructor(right)
+		if err != nil {
+			return jsonDeferredList{}, err
+		}
+		for i := range l.arms {
+			if err := checkContext(b.ctx); err != nil {
+				return jsonDeferredList{}, err
+			}
+			l.arms[i].ordinal = append([]string{"0"}, l.arms[i].ordinal...)
+		}
+		for i := range r.arms {
+			if err := checkContext(b.ctx); err != nil {
+				return jsonDeferredList{}, err
+			}
+			r.arms[i].ordinal = append([]string{"1"}, r.arms[i].ordinal...)
+		}
+		return jsonDeferredList{null: "(" + l.null + " OR " + r.null + ")", present: both(l.present, "("+l.null+" OR "+r.present+")"), arms: append(l.arms, r.arms...), literal: l.literal && r.literal}, nil
+	}
+	return b.deferredList(n)
 }
