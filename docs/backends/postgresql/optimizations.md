@@ -427,6 +427,17 @@ dynamic presence from null/type guards remains explicit. The barriers describe
 translation structure and do not constrain PostgreSQL's physical execution
 order.
 
+For `items()` callback pipelines, row-dependent built-in work after a filter
+can be placed behind a per-row gate when it depends on the current item; nested
+local bindings may also be used. The callback body must contain a method call
+or explicit type guard; trivial value or Boolean forwarding adds no gate.
+Nested-only work on constant data, root or outer captures, custom methods, and
+independent call subtrees are not moved. The gate includes type checks and
+normalization. It may add overhead when most rows pass. Plain `EXPLAIN`
+verifies placement only, not runtime execution counts or speed. See the
+[filtered pipeline stage record](../../optimizations/053-postgresql-filtered-pipeline-stages.md)
+for tested profiles and SQL-shape limits.
+
 ### Share plain paths within each projection scope
 
 Repeated unguarded paths from scalar columns, schema-bound JSON/JSONB,

@@ -91,6 +91,14 @@ func TestJSONItemMapPipelinesBuild(t *testing.T) {
 func itemFilteredMapPipelineSources(tc itemRoleFixture) []string {
 	values := `labels:items:map(p=>p[1])`
 	return []string{
+		values + `:filter(v=>v:exists):map(v=>v:[string]:matches("^a")):any(v=>v)`,
+		values + `:filter(v=>v:exists):filter(v=>v:[string]:startswith("a")):map(v=>v:type):contains("string")`,
+		values + `:filter(v=>v:type="string"):map(v=>v:[string]:fromjson):map(v=>v:type):contains("null")`,
+		values + `:filter(v=>v:type="string"):map(v=>[v:[string]:len]):map(a=>a[0])[0]>0`,
+		values + `:filter(v=>v:exists):any(v=>v:[string]:matches("^a"))`,
+		values + `:filter(v=>v:exists):all(v=>v:[string]:matches("^a"))`,
+		values + `:filter(v=>v:exists):count(v=>v:[string]:matches("^a"))>0`,
+		values + `:filter(v=>v:exists):map(v=>v:[string]:len+"[]":fromjson:size):exists`,
 		values + `:filter(v=>v:exists):map(v=>v:type)[0]="string"`,
 		values + `:filter(v=>v:exists):map(v=>v:type):contains("` + tc.tag + `")`,
 		values + `:filter(v=>v:exists):any(v=>v:type="` + tc.tag + `")`,

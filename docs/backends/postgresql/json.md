@@ -685,6 +685,16 @@ its source. Between map/filter stages, `concat()`, `flatmap()`, and folds end
 this bounded transport. This path does not make an independently ambiguous
 constructed carrier recoverable.
 
+For eligible `items()` pipelines, PostgreSQL can place row-dependent built-in
+callback work behind a filter's row gate when it depends on the current item;
+nested local bindings can also be used. A body must contain a method call or
+explicit type guard; trivial value or Boolean forwarding gets no extra gate.
+Nested-only work on constant data does not qualify. Root or outer captures,
+custom methods, and independent call subtrees keep their original placement.
+This SQL-placement choice does not imply physical execution counts. See the
+[filtered pipeline stage record](../../optimizations/053-postgresql-filtered-pipeline-stages.md)
+for the plan assertions and limits.
+
 The schema-known `Bytes|Int|Float|Null` and
 `Bytes|Bool|Int|Float|Null` unions are supported for native JSON and for JSONB
 with numeric type metadata when Int/Float identity is needed. The

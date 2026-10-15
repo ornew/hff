@@ -51,6 +51,7 @@ func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, er
 	valid, selected := "TRUE", "TRUE"
 	var result expression
 	var body hff.Node
+	terminalRaw := ""
 	for i, callback := range callbacks {
 		parameters, ok := callback.Parameters()
 		if !ok || len(parameters) != 1 {
@@ -62,6 +63,7 @@ func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, er
 		// role memo cannot be reused under a new callback environment.
 		b.itemRoleMemo = nil
 		body, _ = callback.Child(0)
+		scope := b.beginPipelineStage(callback, &selected)
 		if i < len(stages) {
 			method, _ := stages[i].Method()
 			if method.Name() == "filter" {
@@ -71,7 +73,11 @@ func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, er
 				}
 				// Filtering changes which rows reach later maps, but cannot
 				// erase a failure in an earlier materialized map.
-				selected = both(selected, b.truth(body, predicate))
+				truth := b.truth(body, predicate)
+				if scope != nil {
+					truth = "COALESCE(" + scope.finish(b, truth)[0] + ",FALSE)"
+				}
+				selected = both(selected, truth)
 				continue
 			}
 		}
@@ -86,7 +92,13 @@ func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, er
 					if err != nil {
 						return expression{}, true, err
 					}
+					if scope != nil {
+						terminalRaw = scope.finish(b, b.truth(body, result))[0]
+					}
 					break
+				}
+				if scope != nil {
+					slot = scope.exportSlot(b, slot)
 				}
 				valid = both(valid, pipelineRowPresence(selected, slot.present))
 				parameter = jsonParameter{typ: b.jsonStoredType(body), format: slot.format,
@@ -98,11 +110,7 @@ func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, er
 		if err != nil {
 			return expression{}, true, err
 		}
-		if i < len(callbacks)-1 || name == "map" {
-			// A prior map must finish successfully even when the next body
-			// ignores its parameter or its predicate would match earlier.
-			valid = both(valid, pipelineRowPresence(selected, result.present))
-		}
+
 		if i < len(callbacks)-1 {
 			// Match a materialized map's normalization boundary before the
 			// next callback. A container or dynamic carrier may still hold
@@ -120,16 +128,38 @@ func (b *builder) jsonMapPipeline(n hff.Node, name string) (expression, bool, er
 					return expression{}, true, err
 				}
 			}
+			if scope != nil {
+				result = scope.exportValue(b, result)
+			}
+			valid = both(valid, pipelineRowPresence(selected, result.present))
 			copy := result
 			parameter = jsonParameter{typ: stored, lossy: b.losesFloat(body, nil),
 				format: b.jsonValues[result.code], direct: &copy,
 				itemRoles: b.jsonItemRoles(body), itemListRoles: b.jsonItemsRoles(body)}
+		} else {
+			if scope != nil {
+				if name == "map" {
+					terminalRaw, err = b.computedJSONDocument(body, result, b.jsonStoredType(body))
+					if err != nil {
+						return expression{}, true, err
+					}
+				} else {
+					terminalRaw = b.truth(body, result)
+				}
+				values := scope.finish(b, terminalRaw, result.present)
+				terminalRaw, result.present = values[0], values[1]
+			}
+			if name == "map" {
+				valid = both(valid, pipelineRowPresence(selected, result.present))
+			}
 		}
 	}
 
 	stored := b.jsonStoredType(body)
 	var raw string
-	if name == "map" {
+	if terminalRaw != "" {
+		raw = terminalRaw
+	} else if name == "map" {
 		raw, err = b.computedJSONDocument(body, result, stored)
 		if err != nil {
 			return expression{}, true, err
