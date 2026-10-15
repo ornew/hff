@@ -15,6 +15,7 @@ type jsonParameter struct {
 	itemListRoles *jsonItemRoles
 	itemKey       string
 	direct        *expression
+	declared      bool // schema-valid stored field; raw observers need no scalar round trip
 	itemSlot      *jsonItemSlot
 	deferred      *jsonDeferredValue
 }

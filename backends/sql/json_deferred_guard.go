@@ -73,6 +73,12 @@ func (b *builder) deferredMatches(n hff.Node, value *jsonDeferredValue, target h
 		if value.leaf.itemSlot != nil {
 			return b.jsonItemSlotTest(n, *value.leaf.itemSlot, target)
 		}
+		if jsonHasTaggedString(target) {
+			target = jsonNativeCarrierType(target, value.typ)
+		}
+		if value.leaf.declared && value.leaf.direct == nil && !jsonRootHasKind(value.typ, hff.FloatType) {
+			return b.jsonMatches(n, value.leaf.code, value.leaf.format, value.typ, target)
+		}
 		carrier, err := b.deferredLeafExpression(n, *value.leaf)
 		if err != nil {
 			return "", err
@@ -134,6 +140,11 @@ func (b *builder) narrowDeferredValue(n hff.Node, value *jsonDeferredValue, targ
 		return b.mapDeferredSelection(n, value, func(child *jsonDeferredValue) (*jsonDeferredValue, error) {
 			return b.narrowDeferredValue(n, child, target)
 		})
+	}
+	if value.leaf != nil && value.leaf.itemSlot == nil && jsonHasTaggedString(target) {
+		// A native JSON Any child has no tagged scalar identity. Bound the
+		// guard before normalization, including nested collection targets.
+		target = jsonNativeCarrierType(target, value.typ)
 	}
 	test, err := b.deferredMatches(n, value, target)
 	if err != nil {

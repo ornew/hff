@@ -102,6 +102,20 @@ func (b *builder) observeDeferredValue(n hff.Node, value *jsonDeferredValue, nam
 
 func (b *builder) observeDeferredLeaf(n hff.Node, value *jsonDeferredValue, name string) (expression, error) {
 	parameter := *value.leaf
+	// Float decoding can produce ordinary null even for a declared field.
+	// Preserve that boundary before observing the root category or presence.
+	if parameter.declared && parameter.direct == nil && !jsonRootHasKind(value.typ, hff.FloatType) {
+		if name == "type" {
+			code, err := b.jsonRuntimeTypeName(n, parameter.code, parameter.format, value.typ)
+			return expression{code, value.present, hff.StringType}, err
+		}
+		if name == "exists" {
+			if err := b.checkJSONStringSchemas(n, value.typ); err != nil {
+				return expression{}, err
+			}
+			return boolean(both(value.present, "("+parameter.code+" IS NOT NULL AND "+string(parameter.format)+"_typeof("+parameter.code+")<>'null')")), nil
+		}
+	}
 	if name == "len" {
 		return b.deferredLength(n, value)
 	}

@@ -159,6 +159,9 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 	if err := checkContext(b.ctx); err != nil {
 		return nil, false, err
 	}
+	if value, handled, err := b.deferredDynamicStructAccess(n); handled || err != nil {
+		return value, handled, err
+	}
 	if binding, ok := n.Binding(); ok {
 		if parameter, exists := b.parameters[binding.ID()]; exists && parameter.deferred != nil {
 			return parameter.deferred, true, nil
@@ -268,6 +271,12 @@ func (b *builder) deferredDescriptor(n hff.Node) (*jsonDeferredValue, bool, erro
 				}
 				if !needed && !b.keepDeferredValues {
 					needed, err = b.hasDeferredConstructor(n)
+					if err != nil {
+						return nil, true, err
+					}
+				}
+				if !needed && !b.keepDeferredValues {
+					needed, err = b.hasDeferredStructAccess(n)
 					if err != nil {
 						return nil, true, err
 					}

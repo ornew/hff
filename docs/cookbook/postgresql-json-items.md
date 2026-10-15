@@ -192,6 +192,24 @@ from the two declared fields, not from their JSON string spellings. This
 bounded support does not infer tagged identity from an `Any` string or make an
 ambiguous stored union recoverable.
 
+### Select a declared field with a dynamic key
+
+A single declared Struct can select a field using a String key supplied by a
+callback. These examples try the `asset` and `elapsed` fields with both
+`get(key)` and dynamic bracket access:
+
+```hff
+["asset","elapsed"]:any(key=>labels:get(key):type="bytes")
+["asset","elapsed"]:map(key=>labels[key]:type):json=["bytes","duration"]:json
+```
+
+Both match rows 1 and 2. The first query finds the Bytes `asset` field; the
+second observes the declared Bytes and Duration types in order. Rows 3 and 4
+do not match because `asset` is null. The key is evaluated once, and the
+selected field keeps its own declared type. This applies to a schema-known
+single or nullable Struct and explicit objects, not to unresolved Struct
+unions or same-position ambiguous alternatives.
+
 ## Continue a selected slot through a map chain
 
 A direct map/filter sequence can retain each selected value's field identity

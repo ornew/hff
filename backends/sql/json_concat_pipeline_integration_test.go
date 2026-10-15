@@ -171,6 +171,8 @@ INSERT INTO events(id,labels) VALUES
 		`[labels.asset,labels.elapsed][0]:type="bytes"`,
 		`[labels.asset,labels.elapsed]:map(value=>value:type):json=["bytes","duration"]:json`,
 		`labels.asset:exists [labels.asset,labels.elapsed]:contains(labels.asset)`,
+		`["asset","elapsed"]:any(key=>labels:get(key):type="bytes")`,
+		`["asset","elapsed"]:map(key=>labels[key]:type):json=["bytes","duration"]:json`,
 	} {
 		p, err := e.Compile(ctx, source)
 		if err != nil {

@@ -258,6 +258,17 @@ func (b *builder) accessDeferredIndex(n hff.Node, value *jsonDeferredValue, inde
 		if !structured {
 			return withDeferredPresence(deferredNull(), value.present), b.validateDeferredIndex(index)
 		}
+		if !index.knownKey {
+			if typ, known := deferredStructType(value.typ); known {
+				needed, err := b.deferredStructAlternatives(typ)
+				if err != nil {
+					return nil, err
+				}
+				if needed {
+					return b.accessDeferredStruct(n, value, parent, format, typ, index)
+				}
+			}
+		}
 		object := "TRUE"
 		if get {
 			shape := makeComparisonShape(value.typ)

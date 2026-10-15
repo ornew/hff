@@ -109,6 +109,9 @@ func (b *builder) deferredComparison(n hff.Node) (expression, bool, error) {
 // Avoid cloning builder state when there is no deferred value source. Row
 // parameters, folds and explicit constructors can carry lexical typed values.
 func (b *builder) hasDeferredValueSource(n hff.Node) (bool, error) {
+	if _, needed, err := b.dynamicStructAccessType(n); needed || err != nil {
+		return needed, err
+	}
 	if needed, err := b.deferredConstructorRoot(n); needed || err != nil {
 		return needed, err
 	}

@@ -1358,14 +1358,18 @@ Known Map/Struct carriers also avoid a redundant receiver-category check under
 the declared storage contract. Existing JSON-null normalization preserves
 nullable and guarded-key behavior.
 
-Dynamic `get(key)` on heterogeneous Struct alternatives and `values()` still
-normalize the complete source object for per-key dispatch or because they
-observe multiple values. `items()` also normalizes the complete source object
-before constructing pairs, but PostgreSQL retains the String key and each
-value's declared role in the produced native JSON. That provenance supports
-per-key equality and
-serialization; after pairs are combined, value-slot extraction from a mixed
-Struct can still be ambiguous as described above. Native JSON retains
+`values()` still normalizes the complete source object because it observes
+multiple values. `items()` also normalizes the complete source object before
+constructing pairs, but PostgreSQL retains the String key and each value's
+declared role in the produced native JSON. That provenance supports per-key
+equality and serialization; after pairs are combined, value-slot extraction
+from a mixed Struct can still be ambiguous as described above. For a
+schema-known single or nullable Struct, and for an explicit object value, a
+recoverable String key can select among the declared field descriptors without
+merging their types. PostgreSQL lowers the key once and retains the selected
+child's declared type for later operations. This does not make dynamic access
+across Struct union alternatives or same-position ambiguous alternatives
+recoverable; those cases may still be rejected by `Build`. Native JSON retains
 JSON-native runtime types for `Any`; JSONB `Any` requires metadata when a
 selected or enumerated numeric
 subtype must be restored. Metadata restores numeric representations only; it
