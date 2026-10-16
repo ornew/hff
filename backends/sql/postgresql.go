@@ -433,6 +433,8 @@ func (b *builder) lower(n hff.Node) (expression, error) {
 				value.code = "NULL::boolean"
 			case hff.StringType:
 				value.code = "NULL::text"
+			case hff.BytesType:
+				value.code = "NULL::bytea"
 			}
 			value.kind = kind
 		}

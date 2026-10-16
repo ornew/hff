@@ -630,6 +630,19 @@ leaf remain unsupported when they require Bytes identity that the runtime tree
 does not carry. A statically known Bytes field can coexist with unrelated
 `Any` fields in the same fold.
 
+An explicit Bytes guard on a schema-known non-Bytes value produces no-value
+when the guard fails. For example, if `n` is declared as Int, this predicate
+does not match:
+
+```hff
+n:[bytes]:base64="YQ=="
+```
+
+In PostgreSQL, the guarded conversion retains its Bytes type even when the
+declared Int makes that branch unreachable. This preserves the no-value result
+and lets `base64()` use the PostgreSQL `bytea` overload rather than resolving
+an untyped null as text.
+
 Typed map operations including `size()`, `has()`, `get()`, `keys()`, and
 `values()` work with Bytes values, and callbacks can process those values as
 Bytes. For schema-known Map and Struct `items()`, PostgreSQL retains the fixed
