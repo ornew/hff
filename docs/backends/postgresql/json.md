@@ -1795,24 +1795,55 @@ for the bounded applicability and SQL-shape observations.
 
 ### Carry native numeric inputs into deferred folds
 
-Some deferred folds can pass their numeric input arms as native SQL values
-instead of encoding and decoding them through JSON. Eligibility is checked per
-arm: its stored HFF family must be a single numeric kind matching the SQL
-expression (`Int` as `bigint`, or `Float` as `double precision`); nullable
-values are allowed. Separate arms may have different kinds. For example, this
-callback emits an Int length and a Float half-length:
+Direct Int and Float input arms can retain their native `bigint` and
+`double precision` representations through deferred folds. Each arm must
+have one matching stored HFF family; nullable forms are allowed. For example:
 
 ```hff
 labels:items:map(p=>p[1]):flatmap(v=>[v:type:len,v:type:len/2]):foldl(0.0,(a,n)=>a+n)>0
 ```
 
-The accumulator keeps its existing representation, and established native or
-safe identity-fold paths remain preferred. An arm with `Any`, a wider numeric
-union, or an SQL expression whose kind does not match its single stored family
-uses the existing JSON path. JSONB metadata and Float-loss requirements are
-unchanged. This private transport does not change the public binding format;
-see the [native numeric fold input record](../../optimizations/064-postgresql-native-numeric-fold-inputs.md)
-for its bounded SQL-shape evidence.
+See the [numeric input record](../../optimizations/064-postgresql-native-numeric-fold-inputs.md)
+for the numeric workload and its SQL-shape evidence.
+
+### Carry native scalar inputs into deferred folds
+
+Some deferred folds pass emitted scalar inputs through native PostgreSQL
+columns instead of encoding and decoding them through JSON. An emitted arm is
+eligible only when its direct SQL expression kind matches its single stored
+HFF family; nullable values are allowed. Different arms can use different
+families and remain in separate columns:
+
+| HFF input family | PostgreSQL column type |
+|:--|:--|
+| Int | `bigint` |
+| Float | `double precision` |
+| Bool | `boolean` |
+| String | `text` |
+| Bytes | `bytea` |
+| Duration | `bigint` in a distinct typed column |
+| Timestamp | `numeric` containing exact epoch nanoseconds |
+
+For example, the following fold emits a String and a Bool arm from each
+schema-known object item:
+
+```hff
+labels:items:map(p=>p[1]):flatmap(v=>[v:type,v:type:len>4]):foldl("",(a,n)=>a:concat(n:string)):len>0
+```
+
+Every nonempty emitted arm must pass the proof. If any arm has `Any`, a
+multi-family or otherwise unrecoverable type, or a SQL kind that differs from
+its stored family, the whole fold retains the original JSON input transport.
+Selected object fields and fixed-list positions that still use packet transport
+remain on that path. Established native and safe identity-fold paths retain
+priority; empty arms keep their existing validation path. The source, seed,
+and callback remain fully validated, and custom translators anywhere in them
+remain outside this optimization. The accumulator keeps its existing JSON
+representation. JSONB metadata and Float-loss requirements are unchanged, and
+the private columns do not change the public binding format. See the
+[native numeric fold input record](../../optimizations/064-postgresql-native-numeric-fold-inputs.md)
+and the [native scalar fold input record](../../optimizations/065-postgresql-native-scalar-fold-inputs.md)
+for applicability and SQL-shape observations.
 
 For eligible deferred `items()` streams, fold callbacks can inspect each
 input value using its recovered per-key schema without first materializing the

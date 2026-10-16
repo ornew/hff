@@ -30,11 +30,11 @@ func TestNativeNumericFoldFamilyProof(t *testing.T) {
 		{"mismatched float", schema.FloatType, hff.IntType, "source.value", false},
 		{"mismatched int", schema.IntType, hff.FloatType, "source.value", false},
 		{"registered JSON", schema.IntType, hff.IntType, "registered", false},
-		{"bool", schema.BoolType, hff.BoolType, "source.value", false},
-		{"string", schema.StringType, hff.StringType, "source.value", false},
+		{"bool", schema.BoolType, hff.BoolType, "source.value", true},
+		{"string", schema.StringType, hff.StringType, "source.value", true},
 	} {
 		p := jsonParameter{typ: tc.typ, lossy: true, direct: &expression{tc.code, "source.present", tc.kind}}
-		got, ok := b.nativeNumericDeferredFoldParameter(p)
+		got, ok := b.nativeScalarDeferredFoldParameter(p)
 		if ok != tc.want || ok && !reflect.DeepEqual(got, p) {
 			t.Fatal(tc.name, ok, got)
 		}
@@ -46,7 +46,7 @@ func TestNativeNumericFoldFamilyProof(t *testing.T) {
 		{typ: schema.IntType, deferred: &jsonDeferredValue{typ: schema.IntType, runtime: &jsonRuntimeValue{}}},
 		{typ: schema.IntType, deferred: &jsonDeferredValue{typ: schema.IntType, choices: []jsonDeferredChoice{{"TRUE", deferredNull()}}}},
 	} {
-		if _, ok := b.nativeNumericDeferredFoldParameter(p); ok {
+		if _, ok := b.nativeScalarDeferredFoldParameter(p); ok {
 			t.Fatal("non-native descriptor admitted", p)
 		}
 	}
@@ -57,7 +57,9 @@ func TestNativeNumericFoldTransportKeepsKindAndScope(t *testing.T) {
 		typ := schema.NullableType(hff.PrimitiveType(kind))
 		original := jsonParameter{typ: typ, lossy: true, direct: &expression{"source.value", "source.present", kind}}
 		transport := jsonDeferredFoldTransport{native: &original}
-		columns := transport.columns()
+		intColumn, _ := nativeDeferredFoldColumn(hff.IntType)
+		floatColumn, _ := nativeDeferredFoldColumn(hff.FloatType)
+		columns := transport.columns([]jsonDeferredFoldColumn{intColumn, floatColumn})
 		if strings.Count(columns, "source.value") != 1 || !strings.Contains(columns, " AS int_value") || !strings.Contains(columns, " AS float_value") {
 			t.Fatal("typed columns changed", columns)
 		}
@@ -88,13 +90,13 @@ func TestNativeNumericFoldRequiresEveryEmittedArm(t *testing.T) {
 		{[]jsonDeferredArm{native, {empty: true, value: other.value}}, true},
 		{[]jsonDeferredArm{{empty: true, value: native.value}}, false},
 	} {
-		got, err := b.nativeNumericDeferredFoldInputs(fold, jsonDeferredList{arms: tc.arms})
+		got, err := b.nativeScalarDeferredFoldInputs(fold, jsonDeferredList{arms: tc.arms})
 		if err != nil || got != tc.want {
 			t.Fatal(tc.arms, got, err)
 		}
 	}
 	b.disableDeferredFoldPruning = true
-	if got, err := b.nativeNumericDeferredFoldInputs(fold, jsonDeferredList{arms: []jsonDeferredArm{native}}); got || err != nil {
+	if got, err := b.nativeScalarDeferredFoldInputs(fold, jsonDeferredList{arms: []jsonDeferredArm{native}}); got || err != nil {
 		t.Fatal("validation reentered native input transport", got, err)
 	}
 }

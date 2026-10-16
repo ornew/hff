@@ -86,14 +86,14 @@ func (b *builder) jsonDeferredInputFold(n hff.Node, name string) (expression, bo
 			}
 		}
 	}
-	numeric := false
+	native := false
 	if !prune && fields == nil && indexes == nil {
-		numeric, err = b.nativeNumericDeferredFoldInputs(n, plan)
+		native, err = b.nativeScalarDeferredFoldInputs(n, plan)
 		if err != nil {
 			return expression{}, true, err
 		}
 	}
-	if prune || fields != nil || indexes != nil || numeric {
+	if prune || fields != nil || indexes != nil || native {
 		// Validate the complete original packet, seed and callback path in
 		// receiver-first order before omitting an unobserved payload. Keep
 		// nested folds on their original validation path as well.
@@ -103,10 +103,10 @@ func (b *builder) jsonDeferredInputFold(n hff.Node, name string) (expression, bo
 			return expression{}, true, err
 		}
 	}
-	return b.jsonDeferredFoldPlan(n, name, plan, prune, fields, indexes, numeric)
+	return b.jsonDeferredFoldPlan(n, name, plan, prune, fields, indexes, native)
 }
 
-func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferredList, prune bool, fields map[string]bool, indexes []float64, numeric bool) (expression, bool, error) {
+func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferredList, prune bool, fields map[string]bool, indexes []float64, native bool) (expression, bool, error) {
 	receiver, _ := n.Child(0)
 	if len(plan.arms) == 0 {
 		// An always-empty/null stream still validates its callback, without
@@ -116,14 +116,22 @@ func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferre
 		plan.arms = []jsonDeferredArm{{empty: true, from: "(SELECT 1 WHERE FALSE) AS " + alias,
 			ordinal: []string{"0"}, selected: "TRUE", value: jsonParameter{typ: hff.PrimitiveType(hff.NeverType), direct: &null}, parameters: copyJSONParameters(b.parameters)}}
 	}
+	var layout []jsonDeferredFoldColumn
+	if native {
+		var err error
+		layout, err = b.nativeDeferredFoldColumns(plan)
+		if err != nil {
+			return expression{}, true, err
+		}
+	}
 	var transports []jsonDeferredFoldTransport
 	var empty []bool
 	var rows []string
 	for i, arm := range plan.arms {
 		var transport jsonDeferredFoldTransport
 		steps, _, err := b.inDeferredArm(arm, hff.Node{}, func() error {
-			if numeric && !arm.empty {
-				parameter, _ := b.nativeNumericDeferredFoldParameter(arm.value)
+			if native && !arm.empty {
+				parameter, _ := b.nativeScalarDeferredFoldParameter(arm.value)
 				transport.native = &parameter
 				return nil
 			}
@@ -154,7 +162,7 @@ func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferre
 		}
 		arm.steps = steps
 		if !arm.empty {
-			rows = append(rows, "SELECT "+strconv.Itoa(i)+" AS arm,"+deferredOrdinal(arm)+" AS ord,"+transport.columns()+" FROM "+deferredFrom(arm)+" WHERE "+arm.selected)
+			rows = append(rows, "SELECT "+strconv.Itoa(i)+" AS arm,"+deferredOrdinal(arm)+" AS ord,"+transport.columns(layout)+" FROM "+deferredFrom(arm)+" WHERE "+arm.selected)
 		}
 		transports = append(transports, transport)
 		empty = append(empty, arm.empty)
@@ -228,8 +236,11 @@ func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferre
 		order = "DESC"
 	}
 	columns := "arm,value"
-	if numeric {
-		columns = "arm,int_value,float_value"
+	if native {
+		columns = "arm"
+		for _, column := range layout {
+			columns += "," + column.name
+		}
 	}
 	cte := "WITH RECURSIVE " + items + " AS MATERIALIZED (SELECT " + columns + ",row_number() OVER(ORDER BY ord " + order + ") AS pos FROM (" + strings.Join(rows, " UNION ALL ") + ") AS " + inputs + ")," + state + "(pos,acc,p) AS (SELECT 0::bigint," + rawSeed + "::json," + initial.present + " UNION ALL SELECT " + previous + ".pos+1," + result + ".v," + result + ".p FROM " + state + " AS " + previous + " JOIN " + items + " AS " + item + " ON " + item + ".pos=" + previous + ".pos+1 CROSS JOIN LATERAL (" + strings.Join(successors, " UNION ALL ") + ") AS " + result + " WHERE " + previous + ".p)"
 	b.steps = append(b.steps, "("+cte+" SELECT acc,p FROM "+state+" ORDER BY pos DESC LIMIT 1 OFFSET 0) AS "+final)

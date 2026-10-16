@@ -112,14 +112,23 @@ for its bounded proof and SQL-shape evidence. No runtime-speed claim follows.
 
 ### Carry native numeric inputs into deferred folds
 
-For eligible deferred folds, PostgreSQL can carry each numeric input arm as
-its native `bigint` or `double precision` value instead of encoding it in the
-JSON packet. Each arm must have one stored numeric family matching its SQL
-kind; different arms can independently be Int or Float, and nullable arms
-remain eligible. The accumulator and ineligible inputs keep their existing
-lowering. See the [native numeric fold input record](../../optimizations/064-postgresql-native-numeric-fold-inputs.md)
-for the bounded applicability and SQL-shape evidence. No runtime-speed claim
-follows.
+Eligible direct Int and Float arms retain separate `bigint` and
+`double precision` input columns, preserving their stored HFF families.
+See the [numeric input record](../../optimizations/064-postgresql-native-numeric-fold-inputs.md)
+for applicability and SQL-shape evidence.
+
+### Carry native scalar inputs into deferred folds
+
+Eligible deferred folds can carry direct Int, Float, Bool, String, Bytes,
+Duration, or Timestamp input arms in distinct native PostgreSQL columns. Each
+arm must have one stored HFF family matching its SQL kind; different arms may
+use different families, and nullable arms remain eligible. If any emitted arm
+does not meet the proof, the whole fold retains its JSON input transport. The
+accumulator remains JSON, and existing native or safe identity-fold paths keep
+priority. The [numeric input record](../../optimizations/064-postgresql-native-numeric-fold-inputs.md)
+and the [scalar input record](../../optimizations/065-postgresql-native-scalar-fold-inputs.md)
+describe the bounded cases and SQL-shape evidence. These changes make no
+runtime-speed claim.
 
 ### Compare native Timestamp bindings by their physical columns
 
