@@ -130,6 +130,18 @@ and the [scalar input record](../../optimizations/065-postgresql-native-scalar-f
 describe the bounded cases and SQL-shape evidence. These changes make no
 runtime-speed claim.
 
+### Project selected children into native fold inputs
+
+Deferred folds can carry children selected from constructed objects or fixed
+lists in native SQL columns when each nonempty root and observed child has a
+matching schema proof. Object field/literal-key reads and finite integral
+literal list indexes qualify; unselected child positions do not widen the
+typed layout. Source presence, order, null/no-value behavior, full validation,
+and the JSON accumulator remain unchanged. Unproven roots or selected children
+keep the whole fold on its JSON input path. See the
+[selected fold-child projection record](../../optimizations/066-postgresql-native-fold-child-projections.md)
+for the bounded rules and SQL-shape evidence. No runtime-speed claim follows.
+
 ### Compare native Timestamp bindings by their physical columns
 
 For eligible native `BindTimestamp` filter comparisons against a Timestamp

@@ -106,8 +106,9 @@ func (b *builder) nativeDeferredFoldColumns(plan jsonDeferredList) ([]jsonDeferr
 // use separate typed columns, so UNION cannot coerce their physical families.
 // Empty validation arms retain their original JSON packet and decoder.
 type jsonDeferredFoldTransport struct {
-	packet jsonDeferredPacket
-	native *jsonParameter
+	packet     jsonDeferredPacket
+	native     *jsonParameter
+	projection *jsonDeferredFoldProjection
 }
 
 func (t jsonDeferredFoldTransport) nativeColumn() string {
@@ -116,6 +117,9 @@ func (t jsonDeferredFoldTransport) nativeColumn() string {
 }
 
 func (t jsonDeferredFoldTransport) columns(layout []jsonDeferredFoldColumn) string {
+	if t.projection != nil {
+		return t.projection.columns(layout)
+	}
 	if t.native == nil {
 		return t.packet.code + " AS value"
 	}

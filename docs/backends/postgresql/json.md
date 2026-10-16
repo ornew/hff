@@ -1845,6 +1845,43 @@ the private columns do not change the public binding format. See the
 and the [native scalar fold input record](../../optimizations/065-postgresql-native-scalar-fold-inputs.md)
 for applicability and SQL-shape observations.
 
+### Project selected children into native fold inputs
+
+Deferred folds can also carry selected children from constructed objects and
+fixed lists in typed SQL columns. A callback may read a first-level field or
+literal-string key from an object, or a finite integral literal position from
+a fixed list. Every nonempty root must match the corresponding constructor,
+and each selected child must have one stored HFF family matching its SQL kind.
+Separate selected children can use different native types; unselected
+positions do not widen the column layout. At least one selected child must
+qualify for native projection; a missing-only or out-of-range-only observation
+keeps the packet path.
+
+For example, this fold reads the `used` field and leaves the nested `unused`
+field unobserved:
+
+```hff
+labels:items:map(p=>{"used":p[1]:type:len,"unused":[p[1],p[1]]}):foldl(0,(a,v)=>a+v.used)>0
+```
+
+The same proof applies to fixed-list positions, including negative indexes
+that resolve against the literal list length:
+
+```hff
+labels:items:map(p=>[p[1]:type:len,{"unused":p[1]}]):foldl(0,(a,v)=>a+v[0]:[int])>0
+```
+
+The selected value keeps its type and required Float-loss metadata. Missing
+object keys and out-of-range positions remain ordinary null when another
+selected child qualifies for projection. Source presence, order, and no-value
+failures remain observable even when an unselected child is not carried. The
+source, seed, and callback keep full validation; custom
+translators anywhere in them use the existing packet path. If any root or
+observed child lacks the proof, the entire fold retains JSON input transport.
+The accumulator remains JSON and the private columns do not change the public
+binding format. See the [selected fold-child projection record](../../optimizations/066-postgresql-native-fold-child-projections.md)
+for its bounded applicability and SQL-shape evidence.
+
 For eligible deferred `items()` streams, fold callbacks can inspect each
 input value using its recovered per-key schema without first materializing the
 mixed input list as ordinary JSON. The accumulator still follows the normal

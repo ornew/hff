@@ -55,11 +55,13 @@ func (b *builder) jsonDeferredInputFold(n hff.Node, name string) (expression, bo
 		return expression{}, true, err
 	}
 	var fields map[string]bool
+	var nativeFields map[string]bool
 	if !prune {
 		fields, err = b.observedDeferredFoldFields(n, name)
 		if err != nil {
 			return expression{}, true, err
 		}
+		nativeFields = fields
 		if fields != nil {
 			eligible, err := b.hasUnobservedDeferredFoldFields(plan, fields)
 			if err != nil {
@@ -86,27 +88,31 @@ func (b *builder) jsonDeferredInputFold(n hff.Node, name string) (expression, bo
 			}
 		}
 	}
+	projections, err := b.nativeDeferredFoldProjections(plan, nativeFields, indexes)
+	if err != nil {
+		return expression{}, true, err
+	}
 	native := false
-	if !prune && fields == nil && indexes == nil {
+	if !prune && fields == nil && indexes == nil && projections == nil {
 		native, err = b.nativeScalarDeferredFoldInputs(n, plan)
 		if err != nil {
 			return expression{}, true, err
 		}
 	}
-	if prune || fields != nil || indexes != nil || native {
+	if prune || fields != nil || indexes != nil || native || projections != nil {
 		// Validate the complete original packet, seed and callback path in
 		// receiver-first order before omitting an unobserved payload. Keep
 		// nested folds on their original validation path as well.
 		probe := b.validationBuilder()
 		probe.disableDeferredFoldPruning = true
-		if _, _, err := probe.jsonDeferredFoldPlan(n, name, plan, false, nil, nil, false); err != nil {
+		if _, _, err := probe.jsonDeferredFoldPlan(n, name, plan, false, nil, nil, false, nil); err != nil {
 			return expression{}, true, err
 		}
 	}
-	return b.jsonDeferredFoldPlan(n, name, plan, prune, fields, indexes, native)
+	return b.jsonDeferredFoldPlan(n, name, plan, prune, fields, indexes, native, projections)
 }
 
-func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferredList, prune bool, fields map[string]bool, indexes []float64, native bool) (expression, bool, error) {
+func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferredList, prune bool, fields map[string]bool, indexes []float64, native bool, projections []*jsonDeferredFoldProjection) (expression, bool, error) {
 	receiver, _ := n.Child(0)
 	if len(plan.arms) == 0 {
 		// An always-empty/null stream still validates its callback, without
@@ -124,12 +130,23 @@ func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferre
 			return expression{}, true, err
 		}
 	}
+	if projections != nil {
+		var err error
+		layout, err = b.projectedDeferredFoldColumns(projections)
+		if err != nil {
+			return expression{}, true, err
+		}
+	}
 	var transports []jsonDeferredFoldTransport
 	var empty []bool
 	var rows []string
 	for i, arm := range plan.arms {
 		var transport jsonDeferredFoldTransport
 		steps, _, err := b.inDeferredArm(arm, hff.Node{}, func() error {
+			if projections != nil && !arm.empty {
+				transport.projection = projections[i]
+				return nil
+			}
 			if native && !arm.empty {
 				parameter, _ := b.nativeScalarDeferredFoldParameter(arm.value)
 				transport.native = &parameter
@@ -200,7 +217,7 @@ func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferre
 		err := b.validateEmptyDeferredWork(empty[i], func() error {
 			var err error
 			value, steps, _, err = b.jsonFoldBodyInput(callback, parameters, acc, previous, item, accumulatorType, seedType, receiver, seed, JSON, proof, func() (jsonParameter, error) {
-				return transport.decode(b, n, gate+".value")
+				return transport.decodeInput(b, n, gate)
 			})
 			return err
 		})
@@ -211,10 +228,7 @@ func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferre
 			continue
 		}
 		raw := value.code
-		column := item + ".value"
-		if transport.native != nil {
-			column = item + "." + transport.nativeColumn() + " AS value"
-		}
+		column := transport.gateColumns(item)
 		from := "(SELECT " + column + " WHERE " + item + ".arm=" + strconv.Itoa(i) + " OFFSET 0) AS " + gate
 		if len(steps) > 0 {
 			from += " CROSS JOIN LATERAL " + strings.Join(steps, " CROSS JOIN LATERAL ")
@@ -236,8 +250,11 @@ func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferre
 		order = "DESC"
 	}
 	columns := "arm,value"
-	if native {
+	if native || projections != nil {
 		columns = "arm"
+		if projections != nil {
+			columns += ",input_null"
+		}
 		for _, column := range layout {
 			columns += "," + column.name
 		}
