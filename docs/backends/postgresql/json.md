@@ -1780,6 +1780,27 @@ binding format, and custom translators in the source, seed, or callback body
 remain outside this path. See the [fixed-list fold transport record](../../optimizations/063-postgresql-fixed-list-fold-transport.md)
 for the bounded applicability and SQL-shape observations.
 
+### Carry native numeric inputs into deferred folds
+
+Some deferred folds can pass their numeric input arms as native SQL values
+instead of encoding and decoding them through JSON. Eligibility is checked per
+arm: its stored HFF family must be a single numeric kind matching the SQL
+expression (`Int` as `bigint`, or `Float` as `double precision`); nullable
+values are allowed. Separate arms may have different kinds. For example, this
+callback emits an Int length and a Float half-length:
+
+```hff
+labels:items:map(p=>p[1]):flatmap(v=>[v:type:len,v:type:len/2]):foldl(0.0,(a,n)=>a+n)>0
+```
+
+The accumulator keeps its existing representation, and established native or
+safe identity-fold paths remain preferred. An arm with `Any`, a wider numeric
+union, or an SQL expression whose kind does not match its single stored family
+uses the existing JSON path. JSONB metadata and Float-loss requirements are
+unchanged. This private transport does not change the public binding format;
+see the [native numeric fold input record](../../optimizations/064-postgresql-native-numeric-fold-inputs.md)
+for its bounded SQL-shape evidence.
+
 For eligible deferred `items()` streams, fold callbacks can inspect each
 input value using its recovered per-key schema without first materializing the
 mixed input list as ordinary JSON. The accumulator still follows the normal

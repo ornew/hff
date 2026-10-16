@@ -86,20 +86,27 @@ func (b *builder) jsonDeferredInputFold(n hff.Node, name string) (expression, bo
 			}
 		}
 	}
-	if prune || fields != nil || indexes != nil {
+	numeric := false
+	if !prune && fields == nil && indexes == nil {
+		numeric, err = b.nativeNumericDeferredFoldInputs(n, plan)
+		if err != nil {
+			return expression{}, true, err
+		}
+	}
+	if prune || fields != nil || indexes != nil || numeric {
 		// Validate the complete original packet, seed and callback path in
 		// receiver-first order before omitting an unobserved payload. Keep
 		// nested folds on their original validation path as well.
 		probe := b.validationBuilder()
 		probe.disableDeferredFoldPruning = true
-		if _, _, err := probe.jsonDeferredFoldPlan(n, name, plan, false, nil, nil); err != nil {
+		if _, _, err := probe.jsonDeferredFoldPlan(n, name, plan, false, nil, nil, false); err != nil {
 			return expression{}, true, err
 		}
 	}
-	return b.jsonDeferredFoldPlan(n, name, plan, prune, fields, indexes)
+	return b.jsonDeferredFoldPlan(n, name, plan, prune, fields, indexes, numeric)
 }
 
-func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferredList, prune bool, fields map[string]bool, indexes []float64) (expression, bool, error) {
+func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferredList, prune bool, fields map[string]bool, indexes []float64, numeric bool) (expression, bool, error) {
 	receiver, _ := n.Child(0)
 	if len(plan.arms) == 0 {
 		// An always-empty/null stream still validates its callback, without
@@ -109,12 +116,18 @@ func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferre
 		plan.arms = []jsonDeferredArm{{empty: true, from: "(SELECT 1 WHERE FALSE) AS " + alias,
 			ordinal: []string{"0"}, selected: "TRUE", value: jsonParameter{typ: hff.PrimitiveType(hff.NeverType), direct: &null}, parameters: copyJSONParameters(b.parameters)}}
 	}
-	var packets []jsonDeferredPacket
+	var transports []jsonDeferredFoldTransport
 	var empty []bool
 	var rows []string
 	for i, arm := range plan.arms {
-		var packet jsonDeferredPacket
+		var transport jsonDeferredFoldTransport
 		steps, _, err := b.inDeferredArm(arm, hff.Node{}, func() error {
+			if numeric && !arm.empty {
+				parameter, _ := b.nativeNumericDeferredFoldParameter(arm.value)
+				transport.native = &parameter
+				return nil
+			}
+			var packet jsonDeferredPacket
 			var err error
 			if prune {
 				packet = unusedDeferredFoldPacket(arm.value.typ)
@@ -133,6 +146,7 @@ func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferre
 			} else {
 				packet, err = b.packDeferredValue(n, value)
 			}
+			transport.packet = packet
 			return err
 		})
 		if err != nil {
@@ -140,9 +154,9 @@ func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferre
 		}
 		arm.steps = steps
 		if !arm.empty {
-			rows = append(rows, "SELECT "+strconv.Itoa(i)+" AS arm,"+deferredOrdinal(arm)+" AS ord,"+packet.code+" AS value FROM "+deferredFrom(arm)+" WHERE "+arm.selected)
+			rows = append(rows, "SELECT "+strconv.Itoa(i)+" AS arm,"+deferredOrdinal(arm)+" AS ord,"+transport.columns()+" FROM "+deferredFrom(arm)+" WHERE "+arm.selected)
 		}
-		packets = append(packets, packet)
+		transports = append(transports, transport)
 		empty = append(empty, arm.empty)
 	}
 	seed, _ := n.Child(1)
@@ -171,18 +185,14 @@ func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferre
 	proof := b.jsonFoldItemProvenance(n)
 	items, state, previous, item, result, final, inputs := b.nextAlias(), b.nextAlias(), b.nextAlias(), b.nextAlias(), b.nextAlias(), b.nextAlias(), b.nextAlias()
 	var successors []string
-	for i, packet := range packets {
+	for i, transport := range transports {
 		gate := b.nextAlias()
 		var value expression
 		var steps []string
 		err := b.validateEmptyDeferredWork(empty[i], func() error {
 			var err error
 			value, steps, _, err = b.jsonFoldBodyInput(callback, parameters, acc, previous, item, accumulatorType, seedType, receiver, seed, JSON, proof, func() (jsonParameter, error) {
-				descriptor, err := packet.decode(b, n, gate+".value")
-				if err != nil {
-					return jsonParameter{}, err
-				}
-				return deferredValueParameter(descriptor), nil
+				return transport.decode(b, n, gate+".value")
 			})
 			return err
 		})
@@ -193,7 +203,11 @@ func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferre
 			continue
 		}
 		raw := value.code
-		from := "(SELECT " + item + ".value WHERE " + item + ".arm=" + strconv.Itoa(i) + " OFFSET 0) AS " + gate
+		column := item + ".value"
+		if transport.native != nil {
+			column = item + "." + transport.nativeColumn() + " AS value"
+		}
+		from := "(SELECT " + column + " WHERE " + item + ".arm=" + strconv.Itoa(i) + " OFFSET 0) AS " + gate
 		if len(steps) > 0 {
 			from += " CROSS JOIN LATERAL " + strings.Join(steps, " CROSS JOIN LATERAL ")
 		}
@@ -213,7 +227,11 @@ func (b *builder) jsonDeferredFoldPlan(n hff.Node, name string, plan jsonDeferre
 	if name == "foldr" {
 		order = "DESC"
 	}
-	cte := "WITH RECURSIVE " + items + " AS MATERIALIZED (SELECT arm,value,row_number() OVER(ORDER BY ord " + order + ") AS pos FROM (" + strings.Join(rows, " UNION ALL ") + ") AS " + inputs + ")," + state + "(pos,acc,p) AS (SELECT 0::bigint," + rawSeed + "::json," + initial.present + " UNION ALL SELECT " + previous + ".pos+1," + result + ".v," + result + ".p FROM " + state + " AS " + previous + " JOIN " + items + " AS " + item + " ON " + item + ".pos=" + previous + ".pos+1 CROSS JOIN LATERAL (" + strings.Join(successors, " UNION ALL ") + ") AS " + result + " WHERE " + previous + ".p)"
+	columns := "arm,value"
+	if numeric {
+		columns = "arm,int_value,float_value"
+	}
+	cte := "WITH RECURSIVE " + items + " AS MATERIALIZED (SELECT " + columns + ",row_number() OVER(ORDER BY ord " + order + ") AS pos FROM (" + strings.Join(rows, " UNION ALL ") + ") AS " + inputs + ")," + state + "(pos,acc,p) AS (SELECT 0::bigint," + rawSeed + "::json," + initial.present + " UNION ALL SELECT " + previous + ".pos+1," + result + ".v," + result + ".p FROM " + state + " AS " + previous + " JOIN " + items + " AS " + item + " ON " + item + ".pos=" + previous + ".pos+1 CROSS JOIN LATERAL (" + strings.Join(successors, " UNION ALL ") + ") AS " + result + " WHERE " + previous + ".p)"
 	b.steps = append(b.steps, "("+cte+" SELECT acc,p FROM "+state+" ORDER BY pos DESC LIMIT 1 OFFSET 0) AS "+final)
 	code := "(CASE WHEN " + plan.null + " THEN NULL ELSE " + final + ".acc END)"
 	present := both(plan.present, "("+plan.null+" OR "+final+".p)")

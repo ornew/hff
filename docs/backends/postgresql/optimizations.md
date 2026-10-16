@@ -110,6 +110,17 @@ reads or guards, dynamic or fractional indexes, and custom translators retain
 ordinary lowering. See the [fixed-list fold transport record](../../optimizations/063-postgresql-fixed-list-fold-transport.md)
 for its bounded proof and SQL-shape evidence. No runtime-speed claim follows.
 
+### Carry native numeric inputs into deferred folds
+
+For eligible deferred folds, PostgreSQL can carry each numeric input arm as
+its native `bigint` or `double precision` value instead of encoding it in the
+JSON packet. Each arm must have one stored numeric family matching its SQL
+kind; different arms can independently be Int or Float, and nullable arms
+remain eligible. The accumulator and ineligible inputs keep their existing
+lowering. See the [native numeric fold input record](../../optimizations/064-postgresql-native-numeric-fold-inputs.md)
+for the bounded applicability and SQL-shape evidence. No runtime-speed claim
+follows.
+
 ### Compare native Timestamp bindings by their physical columns
 
 For eligible native `BindTimestamp` filter comparisons against a Timestamp
