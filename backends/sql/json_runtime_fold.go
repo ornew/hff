@@ -7,6 +7,10 @@ import (
 )
 
 func (b *builder) runtimeFoldDescriptor(n hff.Node, name string) (*jsonDeferredValue, error) {
+	chunk, reverseChunks, err := b.listBuildingFoldProof(n, name)
+	if err != nil {
+		return nil, err
+	}
 	// Preserve the established SQL for ordinary and closed positional state.
 	// The probe owns all aliases, arguments and scope maps until it succeeds.
 	probe := b.validationBuilder()
@@ -68,6 +72,23 @@ func (b *builder) runtimeFoldDescriptor(n hff.Node, name string) (*jsonDeferredV
 	provenance, err := b.runtimeItemProvenance(n)
 	if err != nil {
 		return nil, err
+	}
+	if chunk.Valid() {
+		// Validate the original recursive callback before discarding its
+		// accumulator work. Its aliases and arguments must not enter the
+		// adopted aggregate, and nested folds must not repeat this probe.
+		probe := b.validationBuilder()
+		probe.disableListBuildingFold = true
+		var loss bool
+		err := probe.validateEmptyDeferredWork(len(rows) == 0, func() error {
+			var err error
+			_, _, loss, err = probe.runtimeFoldBody(callback, parameters, acc, previous+".acc", item+".value", n.Type(), receiver, seed, receiverLoss, deferredValueLoss(deferredLeaf(initial)), provenance)
+			return err
+		})
+		if err != nil {
+			return nil, err
+		}
+		return b.runtimeListBuildingFold(n, chunk, parameters[1-acc], receiver, plan, rows, items, item, final, reverseChunks, receiverLoss, loss, provenance)
 	}
 	var result expression
 	var steps []string

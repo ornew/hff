@@ -130,6 +130,18 @@ and the [scalar input record](../../optimizations/065-postgresql-native-scalar-f
 describe the bounded cases and SQL-shape evidence. These changes make no
 runtime-speed claim.
 
+### Build list-valued deferred folds with ordered aggregation
+
+For a restricted list-building callback, PostgreSQL can replace the growing
+recursive list accumulator with ordered aggregation after the ordinary JSON
+fold path declines. The seed must be `[]`; the callback must append or prepend
+a nonempty list literal with built-in `concat()`, and each list element must be
+independent of the accumulator binding. Full source, seed, and callback
+validation remains in place; other shapes retain the recursive fallback. See
+the [list-building fold record](../../optimizations/067-postgresql-list-building-runtime-folds.md)
+for the four direction/order cases and SQL-shape observations. This is not a
+runtime-speed claim.
+
 ### Project selected children into native fold inputs
 
 Deferred folds can carry children selected from constructed objects or fixed

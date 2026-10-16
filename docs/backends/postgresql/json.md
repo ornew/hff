@@ -1882,6 +1882,36 @@ The accumulator remains JSON and the private columns do not change the public
 binding format. See the [selected fold-child projection record](../../optimizations/066-postgresql-native-fold-child-projections.md)
 for its bounded applicability and SQL-shape evidence.
 
+### Build list-valued folds with ordered aggregation
+
+After the ordinary JSON fold path declines a query, a deferred fold can build
+a list from an empty `[]` seed when its callback only appends or prepends a
+nonempty list literal with built-in `concat()`. Each expression in that literal
+must be independent of the accumulator binding, including inside nested
+callbacks. The four fold directions preserve their ordinary result order:
+
+| Fold direction | Callback result | Result chunk order |
+|:--|:--|:--|
+| `foldl()` | `acc:concat([value])` | Input order |
+| `foldr()` | `[value]:concat(acc)` | Input order |
+| `foldl()` | `[value]:concat(acc)` | Reverse input order |
+| `foldr()` | `acc:concat([value])` | Reverse input order |
+
+For example, this fold appends each value and then observes its type:
+
+```hff
+labels:items:map(p=>p[1]):foldl([], (acc,value)=>acc:concat([value])):map(value=>value:type):json:exists
+```
+
+Literal elements stay in their original order within each chunk. Null remains
+list data; a reached no-value still invalidates the fold, and source null or
+no-value retains its usual precedence. The source, seed, and callback are
+validated through the ordinary path first. A custom translator anywhere in
+them, a nonempty or computed seed, another accumulator use, or any other
+callback shape retains the recursive JSON fallback. See the
+[list-building fold record](../../optimizations/067-postgresql-list-building-runtime-folds.md)
+for the exact scope.
+
 For eligible deferred `items()` streams, fold callbacks can inspect each
 input value using its recovered per-key schema without first materializing the
 mixed input list as ordinary JSON. The accumulator still follows the normal
